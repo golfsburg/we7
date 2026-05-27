@@ -6,6 +6,7 @@
 <title>PV Tracker — Pinggau 800W</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root {
   --bg: #0e0f11;
@@ -238,6 +239,25 @@ tr:hover td { background: rgba(255,255,255,0.02); }
 }
 .toast.show { opacity: 1; transform: translateY(0); }
 
+/* Supabase status indicator */
+.sb-status { display: flex; align-items: center; gap: 6px; font-size: 10px; padding: 6px 10px; border-radius: 6px; margin: 8px 12px 0; }
+.sb-status.connected { background: rgba(63,207,142,0.1); color: var(--green); border: 1px solid rgba(63,207,142,0.2); }
+.sb-status.disconnected { background: rgba(255,255,255,0.04); color: var(--text3); border: 1px solid var(--border); }
+.sb-status.syncing { background: rgba(91,156,246,0.1); color: var(--blue); border: 1px solid rgba(91,156,246,0.2); }
+.sb-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.sb-dot.on { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.sb-dot.off { background: var(--text3); }
+.sb-dot.pulse { background: var(--blue); animation: pulse 1s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+/* Setup wizard */
+.wizard-step { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px; margin-bottom: 16px; }
+.wizard-step-num { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: #1a1200; font-size: 11px; font-weight: 700; margin-right: 8px; }
+.wizard-step-title { font-family: var(--font-display); font-size: 14px; font-weight: 600; display: flex; align-items: center; margin-bottom: 12px; }
+.code-block { background: var(--bg); border: 1px solid var(--border2); border-radius: 8px; padding: 12px 14px; font-family: var(--font-mono); font-size: 11px; color: var(--blue); margin: 8px 0; line-height: 1.8; white-space: pre; overflow-x: auto; }
+.copy-btn { font-size: 10px; padding: 3px 8px; background: transparent; border: 1px solid var(--border2); color: var(--text2); border-radius: 4px; cursor: pointer; float: right; margin-top: -4px; }
+.copy-btn:hover { border-color: var(--accent); color: var(--accent); }
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: var(--bg); }
@@ -274,7 +294,12 @@ tr:hover td { background: rgba(255,255,255,0.02); }
     <button class="nav-btn" onclick="showPage('averages')"><span class="icon">∅</span> Durchschnitte</button>
     <div class="nav-label">Verwaltung</div>
     <button class="nav-btn" onclick="showPage('import')"><span class="icon">↑</span> Import / Export</button>
+    <button class="nav-btn" onclick="showPage('supabase')"><span class="icon">☁</span> Supabase Sync</button>
     <button class="nav-btn" onclick="showPage('settings')"><span class="icon">⚙</span> Einstellungen</button>
+  </div>
+  <div id="sb-sidebar-status" class="sb-status disconnected">
+    <span class="sb-dot off" id="sb-sidebar-dot"></span>
+    <span id="sb-sidebar-text">Nicht verbunden</span>
   </div>
   <div class="sidebar-stats">
     <div class="sidebar-stat">
@@ -621,6 +646,108 @@ month,2025-05,95.4,,,45,50,☀️,,Guter Monat"></textarea>
   </div>
 </div>
 
+<!-- SUPABASE -->
+<div id="page-supabase" class="page" style="display:none">
+  <div class="page-header">
+    <div>
+      <div class="page-title">☁ Supabase Sync</div>
+      <div class="page-subtitle">Cloud-Backup & Sync via supabase.com</div>
+    </div>
+    <div id="sb-header-status" class="sb-status disconnected" style="margin:0">
+      <span class="sb-dot off" id="sb-header-dot"></span>
+      <span id="sb-header-text">Nicht verbunden</span>
+    </div>
+  </div>
+
+  <!-- Connection form -->
+  <div class="form-card" id="sb-connect-card">
+    <div class="form-title">🔑 Verbindung einrichten</div>
+    <div class="form-grid" style="grid-template-columns:1fr 1fr">
+      <div class="field" style="grid-column:1/-1">
+        <label>Supabase Project URL</label>
+        <input type="text" id="sb-url" placeholder="https://xxxxxxxxxxxx.supabase.co" autocomplete="off">
+      </div>
+      <div class="field" style="grid-column:1/-1">
+        <label>Anon / Publishable Key</label>
+        <input type="password" id="sb-key" placeholder="sb_publishable_... oder eyJ..." autocomplete="off">
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn-primary" onclick="sbConnect()">Verbinden & Testen</button>
+      <button class="btn-secondary" onclick="sbDisconnect()">Trennen</button>
+      <a href="https://supabase.com/dashboard" target="_blank" class="btn-secondary" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border-radius:8px;border:1px solid var(--border2);color:var(--text2);font-size:12px;font-family:var(--font-mono)">↗ Supabase Dashboard</a>
+    </div>
+    <div class="note" style="margin-top:14px">
+      🔒 URL und Key werden nur in deinem <strong>localStorage</strong> gespeichert — niemals an Dritte übertragen.<br>
+      Verwende den <strong>anon/publishable Key</strong> (nicht den service_role Key). Zu finden unter:<br>
+      Supabase Dashboard → Dein Projekt → Project Settings → API
+    </div>
+  </div>
+
+  <!-- Sync actions — shown when connected -->
+  <div id="sb-actions-card" class="form-card" style="display:none">
+    <div class="form-title">⚡ Synchronisierung</div>
+    <div class="btn-row" style="margin-bottom:14px">
+      <button class="btn-primary" onclick="sbPush()">↑ Lokal → Supabase hochladen</button>
+      <button class="btn-secondary" onclick="sbPull()">↓ Supabase → Lokal herunterladen</button>
+      <button class="btn-secondary" onclick="sbSync()">⇄ Zusammenführen (Merge)</button>
+    </div>
+    <div id="sb-sync-log" style="font-size:11px;color:var(--text2);background:var(--bg);border-radius:8px;padding:10px 14px;min-height:40px;font-family:var(--font-mono);line-height:1.9"></div>
+  </div>
+
+  <!-- Setup wizard -->
+  <div class="form-card">
+    <div class="form-title">📋 Einrichtungsanleitung</div>
+
+    <div class="wizard-step">
+      <div class="wizard-step-title"><span class="wizard-step-num">1</span> Supabase-Projekt erstellen</div>
+      <p style="font-size:12px;color:var(--text2);margin-bottom:8px">Gehe zu <a href="https://supabase.com/dashboard" target="_blank" style="color:var(--accent)">supabase.com/dashboard</a>, klicke auf <strong>New Project</strong> und wähle einen Namen wie <em>pv-tracker</em>. Region: <strong>eu-central-1</strong> (Frankfurt) für beste Latenz aus Österreich.</p>
+    </div>
+
+    <div class="wizard-step">
+      <div class="wizard-step-title"><span class="wizard-step-num">2</span> Tabelle anlegen (SQL Editor)</div>
+      <p style="font-size:12px;color:var(--text2);margin-bottom:8px">Im Supabase Dashboard → <strong>SQL Editor</strong> → diesen Code ausführen:</p>
+      <button class="copy-btn" onclick="copyCode('sql-create')">Kopieren</button>
+      <div class="code-block" id="sql-create">create table if not exists pv_entries (
+  id          text primary key,
+  type        text not null,
+  date        date not null,
+  kwh         numeric not null,
+  peak        numeric,
+  hours       numeric,
+  self_kwh    numeric,
+  feed_kwh    numeric,
+  weather     text,
+  temp        numeric,
+  note        text,
+  created_at  timestamptz default now(),
+  updated_at  timestamptz default now()
+);
+
+-- Row Level Security aktivieren (empfohlen)
+alter table pv_entries enable row level security;
+
+-- Öffentlichen Lese-/Schreibzugriff erlauben (für anon key)
+create policy "allow_all" on pv_entries
+  for all using (true) with check (true);</div>
+    </div>
+
+    <div class="wizard-step">
+      <div class="wizard-step-title"><span class="wizard-step-num">3</span> API-Zugangsdaten holen</div>
+      <p style="font-size:12px;color:var(--text2)">Dashboard → <strong>Project Settings</strong> → <strong>API</strong><br>
+      Kopiere: <strong>Project URL</strong> und <strong>anon / publishable key</strong><br>
+      → Oben in die Felder einfügen und auf <em>Verbinden</em> klicken.</p>
+    </div>
+
+    <div class="wizard-step">
+      <div class="wizard-step-title"><span class="wizard-step-num">4</span> Daten hochladen</div>
+      <p style="font-size:12px;color:var(--text2)">Nach erfolgreicher Verbindung: <strong>↑ Lokal → Supabase hochladen</strong> klicken.<br>
+      Alle lokalen Einträge werden in die Cloud synchronisiert.<br>
+      Mit <strong>⇄ Merge</strong> werden Cloud- und Lokaldaten zusammengeführt (kein Datenverlust).</p>
+    </div>
+  </div>
+</div>
+
 </main>
 </div>
 <div class="toast" id="toast"></div>
@@ -753,6 +880,7 @@ function showPage(id) {
   if(id==='table') renderTable();
   if(id==='averages') renderAverages();
   if(id==='settings') loadSettingsUI();
+  if(id==='supabase') { const el=document.getElementById('sb-sync-log'); if(el&&!el.textContent) sbLog('Bereit. Verbinde dich mit deinem Supabase-Projekt.'); }
 }
 
 function renderAll() { renderDashboard(); updateSidebar(); }
@@ -1263,8 +1391,214 @@ function clearAll() {
 }
 
 // ============================================================
-// TOAST
+// SUPABASE INTEGRATION
 // ============================================================
+let sbClient = null;
+const SB_TABLE = 'pv_entries';
+
+function sbLog(msg, type='info') {
+  const el = document.getElementById('sb-sync-log');
+  if(!el) return;
+  const color = type==='ok'?'var(--green)':type==='err'?'var(--red)':type==='warn'?'var(--accent)':'var(--text2)';
+  const ts = new Date().toLocaleTimeString('de-AT');
+  el.innerHTML += `<span style="color:${color}">[${ts}] ${msg}</span>\n`;
+  el.scrollTop = el.scrollHeight;
+}
+
+function sbSetStatus(state) {
+  // state: 'connected' | 'disconnected' | 'syncing'
+  const configs = {
+    connected:    { cls:'connected', dotCls:'on',  text:'Verbunden' },
+    disconnected: { cls:'disconnected', dotCls:'off', text:'Nicht verbunden' },
+    syncing:      { cls:'syncing', dotCls:'pulse', text:'Synchronisiert…' }
+  };
+  const c = configs[state] || configs.disconnected;
+  ['sb-sidebar-status','sb-header-status'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) { el.className = 'sb-status '+c.cls; }
+  });
+  ['sb-sidebar-dot','sb-header-dot'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) { el.className = 'sb-dot '+c.dotCls; }
+  });
+  ['sb-sidebar-text','sb-header-text'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.textContent = c.text;
+  });
+  const actCard = document.getElementById('sb-actions-card');
+  if(actCard) actCard.style.display = state!=='disconnected'?'block':'none';
+}
+
+async function sbConnect() {
+  const url = document.getElementById('sb-url').value.trim();
+  const key  = document.getElementById('sb-key').value.trim();
+  if(!url || !key) { showToast('URL und Key eintragen', 'error'); return; }
+  try {
+    const { createClient } = supabase;
+    sbClient = createClient(url, key);
+    sbSetStatus('syncing');
+    sbLog('Verbindung wird getestet…');
+    // Test with a simple count query
+    const { error } = await sbClient.from(SB_TABLE).select('id', { count: 'exact', head: true });
+    if(error) throw error;
+    // Save credentials
+    localStorage.setItem('pv_sb_url', url);
+    localStorage.setItem('pv_sb_key', key);
+    sbSetStatus('connected');
+    sbLog('✓ Verbindung erfolgreich! Tabelle "'+SB_TABLE+'" erreichbar.', 'ok');
+    showToast('✓ Supabase verbunden');
+  } catch(err) {
+    sbSetStatus('disconnected');
+    sbClient = null;
+    sbLog('✗ Fehler: '+err.message, 'err');
+    showToast('Verbindung fehlgeschlagen — siehe Log', 'error');
+  }
+}
+
+function sbDisconnect() {
+  sbClient = null;
+  localStorage.removeItem('pv_sb_url');
+  localStorage.removeItem('pv_sb_key');
+  sbSetStatus('disconnected');
+  document.getElementById('sb-url').value = '';
+  document.getElementById('sb-key').value = '';
+  sbLog('Verbindung getrennt.');
+  showToast('Supabase getrennt');
+}
+
+function entryToRow(e) {
+  return {
+    id: e.id,
+    type: e.type,
+    date: e.date,
+    kwh: e.kwh,
+    peak: e.peak || null,
+    hours: e.hours || null,
+    self_kwh: e.self || null,
+    feed_kwh: e.feed || null,
+    weather: e.weather || null,
+    temp: e.temp || null,
+    note: e.note || null,
+    updated_at: new Date().toISOString()
+  };
+}
+
+function rowToEntry(r) {
+  return {
+    id: r.id,
+    type: r.type,
+    date: r.date,
+    kwh: parseFloat(r.kwh),
+    peak: r.peak ? parseFloat(r.peak) : null,
+    hours: r.hours ? parseFloat(r.hours) : null,
+    self: r.self_kwh ? parseFloat(r.self_kwh) : null,
+    feed: r.feed_kwh ? parseFloat(r.feed_kwh) : null,
+    weather: r.weather || '',
+    temp: r.temp ? parseFloat(r.temp) : null,
+    note: r.note || ''
+  };
+}
+
+async function sbPush() {
+  if(!sbClient) { showToast('Nicht verbunden', 'error'); return; }
+  if(entries.length === 0) { showToast('Keine lokalen Daten', 'error'); return; }
+  sbSetStatus('syncing');
+  sbLog('Uploading '+entries.length+' Einträge…');
+  try {
+    const rows = entries.map(entryToRow);
+    // Upsert in chunks of 100
+    let uploaded = 0;
+    for(let i=0; i<rows.length; i+=100) {
+      const chunk = rows.slice(i, i+100);
+      const { error } = await sbClient.from(SB_TABLE).upsert(chunk, { onConflict: 'id' });
+      if(error) throw error;
+      uploaded += chunk.length;
+      sbLog(`  ${uploaded}/${rows.length} hochgeladen…`);
+    }
+    sbSetStatus('connected');
+    sbLog('✓ '+uploaded+' Einträge erfolgreich hochgeladen.', 'ok');
+    showToast('✓ '+uploaded+' Einträge in Supabase gespeichert');
+  } catch(err) {
+    sbSetStatus('connected');
+    sbLog('✗ Fehler beim Upload: '+err.message, 'err');
+    showToast('Upload fehlgeschlagen', 'error');
+  }
+}
+
+async function sbPull() {
+  if(!sbClient) { showToast('Nicht verbunden', 'error'); return; }
+  sbSetStatus('syncing');
+  sbLog('Lade Daten von Supabase…');
+  try {
+    const { data, error } = await sbClient.from(SB_TABLE).select('*').order('date', { ascending: true });
+    if(error) throw error;
+    entries = data.map(rowToEntry);
+    saveToStorage();
+    renderAll();
+    sbSetStatus('connected');
+    sbLog('✓ '+entries.length+' Einträge geladen und lokal gespeichert.', 'ok');
+    showToast('✓ '+entries.length+' Einträge von Supabase geladen');
+  } catch(err) {
+    sbSetStatus('connected');
+    sbLog('✗ Fehler beim Download: '+err.message, 'err');
+    showToast('Download fehlgeschlagen', 'error');
+  }
+}
+
+async function sbSync() {
+  if(!sbClient) { showToast('Nicht verbunden', 'error'); return; }
+  sbSetStatus('syncing');
+  sbLog('Merge startet: lokal '+entries.length+' Einträge…');
+  try {
+    // Pull remote
+    const { data, error } = await sbClient.from(SB_TABLE).select('*');
+    if(error) throw error;
+    sbLog('  '+data.length+' Einträge von Supabase geladen.');
+    // Merge: remote wins for same id (use updated_at if available)
+    const remoteMap = {};
+    data.forEach(r => remoteMap[r.id] = r);
+    const localMap = {};
+    entries.forEach(e => localMap[e.id] = e);
+    // Add local entries not in remote
+    const newLocal = entries.filter(e => !remoteMap[e.id]);
+    if(newLocal.length > 0) {
+      const { error: pushErr } = await sbClient.from(SB_TABLE).upsert(newLocal.map(entryToRow), { onConflict: 'id' });
+      if(pushErr) throw pushErr;
+      sbLog('  ↑ '+newLocal.length+' neue lokale Einträge hochgeladen.', 'ok');
+    }
+    // Merge all into local
+    const merged = {};
+    entries.forEach(e => merged[e.id] = e);
+    data.forEach(r => merged[r.id] = rowToEntry(r));
+    entries = Object.values(merged).sort((a,b) => a.date.localeCompare(b.date));
+    saveToStorage();
+    renderAll();
+    sbSetStatus('connected');
+    sbLog('✓ Merge abgeschlossen: '+entries.length+' Einträge gesamt.', 'ok');
+    showToast('✓ Merge: '+entries.length+' Einträge synchronisiert');
+  } catch(err) {
+    sbSetStatus('connected');
+    sbLog('✗ Merge Fehler: '+err.message, 'err');
+    showToast('Merge fehlgeschlagen', 'error');
+  }
+}
+
+function copyCode(id) {
+  const el = document.getElementById(id);
+  navigator.clipboard.writeText(el.textContent).then(() => showToast('✓ SQL kopiert'));
+}
+
+function sbAutoConnect() {
+  const url = localStorage.getItem('pv_sb_url');
+  const key = localStorage.getItem('pv_sb_key');
+  if(url && key) {
+    document.getElementById('sb-url').value = url;
+    document.getElementById('sb-key').value = key;
+    sbConnect();
+  }
+}
+
+
 function showToast(msg, type='success') {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -1277,7 +1611,7 @@ function showToast(msg, type='success') {
 // ============================================================
 // START
 // ============================================================
-window.addEventListener('load', init);
+window.addEventListener('load', () => { init(); sbAutoConnect(); });
 document.getElementById('av-range').addEventListener('change', function() {
   const custom = this.value==='custom';
   document.getElementById('av-from').style.display=custom?'inline':'none';
