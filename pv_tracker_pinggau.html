@@ -9,14 +9,14 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root {
-  --bg: #0e0f11;
-  --bg2: #161719;
-  --bg3: #1e2023;
-  --border: rgba(255,255,255,0.07);
-  --border2: rgba(255,255,255,0.12);
-  --text: #f0f0ee;
-  --text2: #8a8d94;
-  --text3: #555860;
+  --bg: #08090a;
+  --bg2: #111314;
+  --bg3: #1a1d20;
+  --border: rgba(255,255,255,0.10);
+  --border2: rgba(255,255,255,0.18);
+  --text: #f5f5f2;
+  --text2: #a8acb5;
+  --text3: #6b7080;
   --accent: #f5c842;
   --accent2: #e8a020;
   --green: #3fcf8e;
@@ -29,16 +29,16 @@
   --radius-lg: 16px;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-html { font-size: 14px; }
+html { font-size: 15px; }
 body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-mono);
   min-height: 100vh;
-  line-height: 1.6;
+  line-height: 1.65;
 }
 /* Layout */
-.app { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
+.app { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
 .sidebar {
   background: var(--bg2);
   border-right: 1px solid var(--border);
@@ -46,126 +46,126 @@ body {
   display: flex; flex-direction: column;
   position: sticky; top: 0; height: 100vh; overflow-y: auto;
 }
-.main { padding: 28px 32px; overflow-y: auto; }
+.main { padding: 32px 36px; overflow-y: auto; }
 
 /* Sidebar */
-.logo { padding: 0 20px 24px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
-.logo-title { font-family: var(--font-display); font-size: 15px; font-weight: 700; color: var(--text); letter-spacing: -0.3px; }
-.logo-sub { font-size: 10px; color: var(--text3); letter-spacing: 0.5px; text-transform: uppercase; margin-top: 2px; }
-.logo-dot { display: inline-block; width: 6px; height: 6px; background: var(--accent); border-radius: 50%; margin-right: 6px; }
+.logo { padding: 0 22px 26px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+.logo-title { font-family: var(--font-display); font-size: 17px; font-weight: 700; color: var(--text); letter-spacing: -0.3px; }
+.logo-sub { font-size: 11px; color: var(--text3); letter-spacing: 0.5px; text-transform: uppercase; margin-top: 3px; }
+.logo-dot { display: inline-block; width: 7px; height: 7px; background: var(--accent); border-radius: 50%; margin-right: 7px; }
 
 .nav-section { padding: 0 12px; margin-bottom: 4px; }
-.nav-label { font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text3); padding: 0 8px; margin-bottom: 6px; margin-top: 16px; }
+.nav-label { font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text3); padding: 0 10px; margin-bottom: 6px; margin-top: 18px; }
 .nav-btn {
   display: flex; align-items: center; gap: 10px;
-  padding: 8px 10px; border-radius: var(--radius);
-  font-family: var(--font-mono); font-size: 12px;
+  padding: 10px 12px; border-radius: var(--radius);
+  font-family: var(--font-mono); font-size: 13px;
   color: var(--text2); cursor: pointer; border: none;
   background: transparent; width: 100%; text-align: left;
   transition: all .15s;
 }
 .nav-btn:hover { background: var(--bg3); color: var(--text); }
-.nav-btn.active { background: rgba(245,200,66,0.1); color: var(--accent); }
-.nav-btn .icon { font-size: 14px; width: 16px; text-align: center; }
+.nav-btn.active { background: rgba(245,200,66,0.12); color: var(--accent); }
+.nav-btn .icon { font-size: 15px; width: 18px; text-align: center; }
 
-.sidebar-stats { margin-top: auto; padding: 16px 20px; border-top: 1px solid var(--border); }
-.sidebar-stat { margin-bottom: 12px; }
-.sidebar-stat-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.8px; }
-.sidebar-stat-value { font-size: 18px; font-weight: 500; color: var(--text); }
-.sidebar-stat-unit { font-size: 11px; color: var(--text2); margin-left: 3px; }
+.sidebar-stats { margin-top: auto; padding: 18px 22px; border-top: 1px solid var(--border); }
+.sidebar-stat { margin-bottom: 14px; }
+.sidebar-stat-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.8px; }
+.sidebar-stat-value { font-size: 20px; font-weight: 500; color: var(--text); }
+.sidebar-stat-unit { font-size: 12px; color: var(--text2); margin-left: 3px; }
 
 /* Header */
-.page-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 24px; gap: 16px; flex-wrap: wrap; }
-.page-title { font-family: var(--font-display); font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
-.page-subtitle { font-size: 11px; color: var(--text2); margin-top: 3px; }
+.page-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 26px; gap: 16px; flex-wrap: wrap; }
+.page-title { font-family: var(--font-display); font-size: 26px; font-weight: 700; letter-spacing: -0.5px; }
+.page-subtitle { font-size: 12px; color: var(--text2); margin-top: 4px; }
 
 /* Filter bar */
 .filter-bar {
-  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
   background: var(--bg2); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 8px 12px; margin-bottom: 24px;
+  border-radius: var(--radius); padding: 10px 14px; margin-bottom: 26px;
 }
-.filter-bar label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.8px; margin-right: 4px; }
+.filter-bar label { font-size: 12px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.8px; margin-right: 4px; }
 .filter-bar input, .filter-bar select {
   background: var(--bg3); border: 1px solid var(--border2);
-  color: var(--text); border-radius: 6px; padding: 5px 10px;
-  font-family: var(--font-mono); font-size: 12px; outline: none;
+  color: var(--text); border-radius: 6px; padding: 6px 11px;
+  font-family: var(--font-mono); font-size: 13px; outline: none;
 }
 .filter-bar input:focus, .filter-bar select:focus { border-color: var(--accent); }
 .filter-sep { color: var(--border2); }
 .btn-filter {
   background: var(--accent); color: #1a1200; border: none;
-  padding: 5px 14px; border-radius: 6px; font-family: var(--font-mono);
-  font-size: 12px; font-weight: 500; cursor: pointer; transition: .15s;
+  padding: 6px 16px; border-radius: 6px; font-family: var(--font-mono);
+  font-size: 13px; font-weight: 500; cursor: pointer; transition: .15s;
 }
 .btn-filter:hover { background: var(--accent2); }
-.btn-clear { background: transparent; border: 1px solid var(--border2); color: var(--text2); padding: 5px 10px; border-radius: 6px; font-family: var(--font-mono); font-size: 12px; cursor: pointer; }
+.btn-clear { background: transparent; border: 1px solid var(--border2); color: var(--text2); padding: 6px 12px; border-radius: 6px; font-family: var(--font-mono); font-size: 13px; cursor: pointer; }
 .btn-clear:hover { border-color: var(--text2); color: var(--text); }
 
 /* Metric cards */
-.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-bottom: 26px; }
 .metric-card {
   background: var(--bg2); border: 1px solid var(--border);
-  border-radius: var(--radius-lg); padding: 16px;
+  border-radius: var(--radius-lg); padding: 18px;
   transition: border-color .2s;
 }
 .metric-card:hover { border-color: var(--border2); }
-.metric-card.accent { border-color: rgba(245,200,66,0.3); }
-.mc-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; }
-.mc-value { font-size: 26px; font-weight: 500; color: var(--text); line-height: 1; }
-.mc-unit { font-size: 12px; color: var(--text2); margin-left: 3px; }
-.mc-delta { font-size: 11px; margin-top: 6px; }
+.metric-card.accent { border-color: rgba(245,200,66,0.35); }
+.mc-label { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 10px; }
+.mc-value { font-size: 30px; font-weight: 500; color: var(--text); line-height: 1; }
+.mc-unit { font-size: 13px; color: var(--text2); margin-left: 4px; }
+.mc-delta { font-size: 12px; margin-top: 8px; }
 .mc-delta.pos { color: var(--green); }
 .mc-delta.neg { color: var(--red); }
 .mc-delta.neu { color: var(--text2); }
 
 /* Charts */
-.chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+.chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 26px; }
 .chart-card {
   background: var(--bg2); border: 1px solid var(--border);
-  border-radius: var(--radius-lg); padding: 18px;
+  border-radius: var(--radius-lg); padding: 20px;
 }
 .chart-card.full { grid-column: 1 / -1; }
-.chart-title { font-family: var(--font-display); font-size: 13px; font-weight: 600; margin-bottom: 4px; }
-.chart-sub { font-size: 11px; color: var(--text3); margin-bottom: 14px; }
+.chart-title { font-family: var(--font-display); font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+.chart-sub { font-size: 12px; color: var(--text3); margin-bottom: 14px; }
 .chart-wrap { position: relative; width: 100%; }
 .legend { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 10px; }
-.legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text2); }
-.legend-dot { width: 8px; height: 8px; border-radius: 2px; }
+.legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text2); }
+.legend-dot { width: 9px; height: 9px; border-radius: 2px; }
 
 /* Table */
 .table-card {
   background: var(--bg2); border: 1px solid var(--border);
-  border-radius: var(--radius-lg); overflow: hidden; margin-bottom: 24px;
+  border-radius: var(--radius-lg); overflow: hidden; margin-bottom: 26px;
 }
-.table-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px; border-bottom: 1px solid var(--border); }
-.table-title { font-family: var(--font-display); font-size: 13px; font-weight: 600; }
-.badge { font-size: 10px; padding: 3px 8px; border-radius: 20px; font-weight: 500; }
+.table-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px; border-bottom: 1px solid var(--border); }
+.table-title { font-family: var(--font-display); font-size: 15px; font-weight: 600; }
+.badge { font-size: 11px; padding: 3px 9px; border-radius: 20px; font-weight: 500; }
 .badge.good { background: rgba(63,207,142,0.15); color: var(--green); }
 .badge.mid { background: rgba(245,200,66,0.15); color: var(--accent); }
 .badge.low { background: rgba(242,92,92,0.15); color: var(--red); }
 table { width: 100%; border-collapse: collapse; }
-th { padding: 10px 14px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text3); font-weight: 400; border-bottom: 1px solid var(--border); }
-td { padding: 10px 14px; font-size: 12px; border-bottom: 1px solid var(--border); }
+th { padding: 11px 15px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text2); font-weight: 500; border-bottom: 1px solid var(--border); background: var(--bg3); }
+td { padding: 11px 15px; font-size: 13px; border-bottom: 1px solid var(--border); }
 tr:last-child td { border-bottom: none; }
-tr:hover td { background: rgba(255,255,255,0.02); }
+tr:hover td { background: rgba(255,255,255,0.03); }
 .eff-bar-wrap { display: flex; align-items: center; gap: 8px; }
-.eff-bar { height: 4px; width: 60px; background: var(--bg3); border-radius: 2px; overflow: hidden; }
+.eff-bar { height: 5px; width: 60px; background: var(--bg3); border-radius: 2px; overflow: hidden; }
 .eff-fill { height: 100%; border-radius: 2px; }
 
 /* Entry form */
 .form-card {
   background: var(--bg2); border: 1px solid var(--border);
-  border-radius: var(--radius-lg); padding: 20px; margin-bottom: 16px;
+  border-radius: var(--radius-lg); padding: 22px; margin-bottom: 18px;
 }
-.form-title { font-family: var(--font-display); font-size: 14px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
-.form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
-.field { display: flex; flex-direction: column; gap: 5px; }
-.field label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text3); }
+.form-title { font-family: var(--font-display); font-size: 16px; font-weight: 600; margin-bottom: 18px; display: flex; align-items: center; gap: 8px; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 14px; margin-bottom: 18px; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text2); font-weight: 500; }
 .field input, .field select {
   background: var(--bg3); border: 1px solid var(--border2);
-  color: var(--text); border-radius: 8px; padding: 8px 10px;
-  font-family: var(--font-mono); font-size: 12px; outline: none;
+  color: var(--text); border-radius: 8px; padding: 9px 12px;
+  font-family: var(--font-mono); font-size: 13px; outline: none;
   transition: border-color .15s;
 }
 .field input:focus, .field select:focus { border-color: var(--accent); }
@@ -173,37 +173,37 @@ tr:hover td { background: rgba(255,255,255,0.02); }
 .btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
 .btn-primary {
   background: var(--accent); color: #1a1200; border: none;
-  padding: 9px 20px; border-radius: 8px; font-family: var(--font-mono);
-  font-size: 12px; font-weight: 500; cursor: pointer; transition: .15s;
+  padding: 10px 22px; border-radius: 8px; font-family: var(--font-mono);
+  font-size: 13px; font-weight: 600; cursor: pointer; transition: .15s;
 }
 .btn-primary:hover { background: var(--accent2); }
 .btn-secondary {
   background: transparent; border: 1px solid var(--border2);
-  color: var(--text2); padding: 9px 16px; border-radius: 8px;
-  font-family: var(--font-mono); font-size: 12px; cursor: pointer; transition: .15s;
+  color: var(--text2); padding: 10px 18px; border-radius: 8px;
+  font-family: var(--font-mono); font-size: 13px; cursor: pointer; transition: .15s;
 }
-.btn-secondary:hover { border-color: var(--text2); color: var(--text); }
-.btn-danger { border-color: rgba(242,92,92,0.3); color: var(--red); }
+.btn-secondary:hover { border-color: var(--text); color: var(--text); }
+.btn-danger { border-color: rgba(242,92,92,0.4); color: var(--red); }
 .btn-danger:hover { border-color: var(--red); background: rgba(242,92,92,0.08); }
 
 /* Mode tabs */
-.mode-tabs { display: flex; gap: 4px; background: var(--bg3); border-radius: 8px; padding: 3px; width: fit-content; margin-bottom: 20px; }
+.mode-tabs { display: flex; gap: 4px; background: var(--bg3); border-radius: 8px; padding: 4px; width: fit-content; margin-bottom: 22px; }
 .mode-tab {
-  padding: 5px 16px; border-radius: 6px; font-size: 11px;
+  padding: 7px 20px; border-radius: 6px; font-size: 13px;
   font-family: var(--font-mono); cursor: pointer; border: none;
   background: transparent; color: var(--text2); transition: .15s;
 }
 .mode-tab.active { background: var(--bg2); color: var(--text); border: 1px solid var(--border2); }
 
 /* Info/note */
-.note { font-size: 11px; color: var(--text3); padding: 10px 14px; background: var(--bg3); border-radius: 8px; border-left: 2px solid var(--accent); margin-top: 12px; line-height: 1.7; }
+.note { font-size: 12px; color: var(--text2); padding: 12px 16px; background: var(--bg3); border-radius: 8px; border-left: 3px solid var(--accent); margin-top: 14px; line-height: 1.75; }
 
 /* CSV area */
 .csv-area {
   width: 100%; min-height: 140px; background: var(--bg3);
   border: 1px solid var(--border2); border-radius: 8px;
-  color: var(--text); font-family: var(--font-mono); font-size: 11px;
-  padding: 10px; outline: none; resize: vertical; margin-bottom: 10px;
+  color: var(--text); font-family: var(--font-mono); font-size: 12px;
+  padding: 12px; outline: none; resize: vertical; margin-bottom: 10px;
 }
 .csv-area:focus { border-color: var(--accent); }
 
@@ -212,34 +212,63 @@ tr:hover td { background: rgba(255,255,255,0.02); }
 
 /* Standort info */
 .info-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
-.info-item { background: var(--bg3); border-radius: 8px; padding: 12px 14px; }
-.info-item-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 4px; }
-.info-item-value { font-size: 15px; font-weight: 500; }
+.info-item { background: var(--bg3); border-radius: 8px; padding: 14px 16px; }
+.info-item-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 4px; }
+.info-item-value { font-size: 16px; font-weight: 500; }
 
 /* Avg table */
-.avg-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 10px; }
-.avg-cell { background: var(--bg3); border-radius: 8px; padding: 10px 12px; }
-.avg-cell-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; }
-.avg-cell-val { font-size: 16px; font-weight: 500; margin-top: 2px; }
+.avg-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 12px; }
+.avg-cell { background: var(--bg3); border-radius: 8px; padding: 12px 14px; border: 1px solid var(--border); }
+.avg-cell-label { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; }
+.avg-cell-val { font-size: 18px; font-weight: 500; margin-top: 4px; }
 
 /* Empty state */
 .empty { text-align: center; padding: 48px 20px; color: var(--text3); }
 .empty-icon { font-size: 36px; margin-bottom: 12px; }
-.empty-text { font-size: 13px; color: var(--text2); margin-bottom: 6px; }
-.empty-sub { font-size: 11px; }
+.empty-text { font-size: 14px; color: var(--text2); margin-bottom: 6px; }
+.empty-sub { font-size: 12px; }
 
 /* Toast */
 .toast {
   position: fixed; bottom: 24px; right: 24px; z-index: 999;
   background: var(--bg2); border: 1px solid var(--green2);
-  color: var(--green); border-radius: 8px; padding: 10px 18px;
-  font-size: 12px; font-family: var(--font-mono);
+  color: var(--green); border-radius: 8px; padding: 12px 20px;
+  font-size: 13px; font-family: var(--font-mono);
   opacity: 0; transform: translateY(10px);
   transition: all .25s; pointer-events: none;
 }
 .toast.show { opacity: 1; transform: translateY(0); }
 
-/* Supabase status indicator */
+/* Password screen */
+.pw-screen {
+  position: fixed; inset: 0; background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 9999; flex-direction: column;
+}
+.pw-box {
+  background: var(--bg2); border: 1px solid var(--border2);
+  border-radius: var(--radius-lg); padding: 40px 44px;
+  width: 360px; text-align: center;
+}
+.pw-logo { font-family: var(--font-display); font-size: 24px; font-weight: 700; margin-bottom: 4px; }
+.pw-sub { font-size: 12px; color: var(--text3); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 30px; }
+.pw-dot { display: inline-block; width: 7px; height: 7px; background: var(--accent); border-radius: 50%; margin-right: 6px; }
+.pw-input {
+  width: 100%; background: var(--bg3); border: 1px solid var(--border2);
+  color: var(--text); border-radius: 8px; padding: 13px 16px;
+  font-family: var(--font-mono); font-size: 15px; outline: none;
+  text-align: center; letter-spacing: 2px; margin-bottom: 14px;
+  transition: border-color .15s;
+}
+.pw-input:focus { border-color: var(--accent); }
+.pw-btn {
+  width: 100%; background: var(--accent); color: #1a1200; border: none;
+  padding: 13px; border-radius: 8px; font-family: var(--font-mono);
+  font-size: 14px; font-weight: 600; cursor: pointer; transition: .15s;
+}
+.pw-btn:hover { background: var(--accent2); }
+.pw-error { font-size: 13px; color: var(--red); margin-top: 10px; min-height: 20px; }
+.pw-version { font-size: 11px; color: var(--text3); margin-top: 20px; }
 .sb-status { display: flex; align-items: center; gap: 6px; font-size: 10px; padding: 6px 10px; border-radius: 6px; margin: 8px 12px 0; }
 .sb-status.connected { background: rgba(63,207,142,0.1); color: var(--green); border: 1px solid rgba(63,207,142,0.2); }
 .sb-status.disconnected { background: rgba(255,255,255,0.04); color: var(--text3); border: 1px solid var(--border); }
@@ -278,7 +307,19 @@ tr:hover td { background: rgba(255,255,255,0.02); }
 </style>
 </head>
 <body>
-<div class="app">
+<!-- PASSWORD SCREEN -->
+<div class="pw-screen" id="pw-screen">
+  <div class="pw-box">
+    <div class="pw-logo"><span class="pw-dot"></span>PV Tracker</div>
+    <div class="pw-sub">Pinggau · 800W · SW 35°</div>
+    <input class="pw-input" type="password" id="pw-input" placeholder="Passwort" onkeydown="if(event.key==='Enter')checkPw()">
+    <button class="pw-btn" onclick="checkPw()">Entsperren</button>
+    <div class="pw-error" id="pw-error"></div>
+    <div class="pw-version">pv-tracker v2.0</div>
+  </div>
+</div>
+
+<div class="app" id="main-app" style="display:none">
 
 <!-- SIDEBAR -->
 <nav class="sidebar">
@@ -538,6 +579,7 @@ tr:hover td { background: rgba(255,255,255,0.02); }
             <th>Wetter</th>
             <th>€</th>
             <th>Notiz</th>
+            <th style="text-align:center">Aktionen</th>
           </tr>
         </thead>
         <tbody id="table-body"></tbody>
@@ -651,99 +693,48 @@ month,2025-05,95.4,,,45,50,☀️,,Guter Monat"></textarea>
   <div class="page-header">
     <div>
       <div class="page-title">☁ Supabase Sync</div>
-      <div class="page-subtitle">Cloud-Backup & Sync via supabase.com</div>
+      <div class="page-subtitle">Cloud-Backup & Synchronisierung</div>
     </div>
     <div id="sb-header-status" class="sb-status disconnected" style="margin:0">
       <span class="sb-dot off" id="sb-header-dot"></span>
-      <span id="sb-header-text">Nicht verbunden</span>
+      <span id="sb-header-text">Verbinde…</span>
     </div>
   </div>
 
-  <!-- Connection form -->
-  <div class="form-card" id="sb-connect-card">
-    <div class="form-title">🔑 Verbindung einrichten</div>
-    <div class="form-grid" style="grid-template-columns:1fr 1fr">
-      <div class="field" style="grid-column:1/-1">
-        <label>Supabase Project URL</label>
-        <input type="text" id="sb-url" placeholder="https://xxxxxxxxxxxx.supabase.co" autocomplete="off">
-      </div>
-      <div class="field" style="grid-column:1/-1">
-        <label>Anon / Publishable Key</label>
-        <input type="password" id="sb-key" placeholder="sb_publishable_... oder eyJ..." autocomplete="off">
-      </div>
-    </div>
-    <div class="btn-row">
-      <button class="btn-primary" onclick="sbConnect()">Verbinden & Testen</button>
-      <button class="btn-secondary" onclick="sbDisconnect()">Trennen</button>
-      <a href="https://supabase.com/dashboard" target="_blank" class="btn-secondary" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border-radius:8px;border:1px solid var(--border2);color:var(--text2);font-size:12px;font-family:var(--font-mono)">↗ Supabase Dashboard</a>
-    </div>
-    <div class="note" style="margin-top:14px">
-      🔒 URL und Key werden nur in deinem <strong>localStorage</strong> gespeichert — niemals an Dritte übertragen.<br>
-      Verwende den <strong>anon/publishable Key</strong> (nicht den service_role Key). Zu finden unter:<br>
-      Supabase Dashboard → Dein Projekt → Project Settings → API
-    </div>
-  </div>
-
-  <!-- Sync actions — shown when connected -->
-  <div id="sb-actions-card" class="form-card" style="display:none">
+  <div class="form-card" id="sb-actions-card">
     <div class="form-title">⚡ Synchronisierung</div>
-    <div class="btn-row" style="margin-bottom:14px">
-      <button class="btn-primary" onclick="sbPush()">↑ Lokal → Supabase hochladen</button>
-      <button class="btn-secondary" onclick="sbPull()">↓ Supabase → Lokal herunterladen</button>
-      <button class="btn-secondary" onclick="sbSync()">⇄ Zusammenführen (Merge)</button>
+    <div class="btn-row" style="margin-bottom:16px">
+      <button class="btn-primary" onclick="sbPush()">↑ Lokal → Supabase</button>
+      <button class="btn-secondary" onclick="sbPull()">↓ Supabase → Lokal</button>
+      <button class="btn-secondary" onclick="sbSync()">⇄ Merge</button>
+      <a href="https://supabase.com/dashboard" target="_blank" class="btn-secondary" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px">↗ Dashboard</a>
     </div>
-    <div id="sb-sync-log" style="font-size:11px;color:var(--text2);background:var(--bg);border-radius:8px;padding:10px 14px;min-height:40px;font-family:var(--font-mono);line-height:1.9"></div>
+    <div id="sb-sync-log" style="font-size:12px;color:var(--text2);background:var(--bg);border-radius:8px;padding:12px 16px;min-height:48px;font-family:var(--font-mono);line-height:2"></div>
   </div>
 
-  <!-- Setup wizard -->
   <div class="form-card">
-    <div class="form-title">📋 Einrichtungsanleitung</div>
-
-    <div class="wizard-step">
-      <div class="wizard-step-title"><span class="wizard-step-num">1</span> Supabase-Projekt erstellen</div>
-      <p style="font-size:12px;color:var(--text2);margin-bottom:8px">Gehe zu <a href="https://supabase.com/dashboard" target="_blank" style="color:var(--accent)">supabase.com/dashboard</a>, klicke auf <strong>New Project</strong> und wähle einen Namen wie <em>pv-tracker</em>. Region: <strong>eu-central-1</strong> (Frankfurt) für beste Latenz aus Österreich.</p>
+    <div class="form-title" style="color:var(--text2);font-size:13px">ℹ Wie funktioniert die Synchronisierung?</div>
+    <div style="font-size:13px;color:var(--text2);line-height:1.9">
+      <p style="margin-bottom:8px"><strong style="color:var(--text)">↑ Lokal → Supabase</strong> — Alle Einträge aus diesem Browser werden in die Cloud hochgeladen. Bestehende Einträge werden aktualisiert.</p>
+      <p style="margin-bottom:8px"><strong style="color:var(--text)">↓ Supabase → Lokal</strong> — Alle Cloud-Einträge werden heruntergeladen und ersetzen die lokalen Daten. Ideal für ein neues Gerät.</p>
+      <p><strong style="color:var(--text)">⇄ Merge</strong> — Lokal und Cloud werden zusammengeführt. Neue Einträge aus beiden Seiten werden kombiniert. Kein Datenverlust.</p>
     </div>
+  </div>
+</div>
 
-    <div class="wizard-step">
-      <div class="wizard-step-title"><span class="wizard-step-num">2</span> Tabelle anlegen (SQL Editor)</div>
-      <p style="font-size:12px;color:var(--text2);margin-bottom:8px">Im Supabase Dashboard → <strong>SQL Editor</strong> → diesen Code ausführen:</p>
-      <button class="copy-btn" onclick="copyCode('sql-create')">Kopieren</button>
-      <div class="code-block" id="sql-create">create table if not exists pv_entries (
-  id          text primary key,
-  type        text not null,
-  date        date not null,
-  kwh         numeric not null,
-  peak        numeric,
-  hours       numeric,
-  self_kwh    numeric,
-  feed_kwh    numeric,
-  weather     text,
-  temp        numeric,
-  note        text,
-  created_at  timestamptz default now(),
-  updated_at  timestamptz default now()
-);
-
--- Row Level Security aktivieren (empfohlen)
-alter table pv_entries enable row level security;
-
--- Öffentlichen Lese-/Schreibzugriff erlauben (für anon key)
-create policy "allow_all" on pv_entries
-  for all using (true) with check (true);</div>
+<!-- EDIT MODAL -->
+<div id="edit-modal-bg" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:500;align-items:center;justify-content:center;">
+  <div style="background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:28px 32px;width:560px;max-width:95vw;max-height:90vh;overflow-y:auto">
+    <div style="font-family:var(--font-display);font-size:18px;font-weight:700;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center">
+      <span id="em-title">Eintrag bearbeiten</span>
+      <button onclick="closeEditModal()" style="background:transparent;border:none;color:var(--text2);font-size:20px;cursor:pointer;padding:0 4px">✕</button>
     </div>
-
-    <div class="wizard-step">
-      <div class="wizard-step-title"><span class="wizard-step-num">3</span> API-Zugangsdaten holen</div>
-      <p style="font-size:12px;color:var(--text2)">Dashboard → <strong>Project Settings</strong> → <strong>API</strong><br>
-      Kopiere: <strong>Project URL</strong> und <strong>anon / publishable key</strong><br>
-      → Oben in die Felder einfügen und auf <em>Verbinden</em> klicken.</p>
-    </div>
-
-    <div class="wizard-step">
-      <div class="wizard-step-title"><span class="wizard-step-num">4</span> Daten hochladen</div>
-      <p style="font-size:12px;color:var(--text2)">Nach erfolgreicher Verbindung: <strong>↑ Lokal → Supabase hochladen</strong> klicken.<br>
-      Alle lokalen Einträge werden in die Cloud synchronisiert.<br>
-      Mit <strong>⇄ Merge</strong> werden Cloud- und Lokaldaten zusammengeführt (kein Datenverlust).</p>
+    <div class="form-grid" id="em-fields"></div>
+    <input type="hidden" id="em-id">
+    <input type="hidden" id="em-type">
+    <div class="btn-row" style="margin-top:4px">
+      <button class="btn-primary" onclick="saveEditModal()">Speichern</button>
+      <button class="btn-secondary" onclick="closeEditModal()">Abbrechen</button>
     </div>
   </div>
 </div>
@@ -751,6 +742,7 @@ create policy "allow_all" on pv_entries
 </main>
 </div>
 <div class="toast" id="toast"></div>
+</div><!-- /main-app -->
 
 <script>
 // ============================================================
@@ -1134,7 +1126,7 @@ function renderTable() {
   document.getElementById('table-count').textContent = data.length+' Einträge';
   const tbody = document.getElementById('table-body');
   if(data.length===0) {
-    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:2rem;color:var(--text3)">Keine Einträge für diesen Filter</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;padding:2rem;color:var(--text3)">Keine Einträge für diesen Filter</td></tr>';
     return;
   }
   tbody.innerHTML = data.map(e => {
@@ -1160,7 +1152,12 @@ function renderTable() {
       <td style="color:var(--text2)">${e.hours||'—'}</td>
       <td>${e.weather||'—'}</td>
       <td style="color:var(--green)">${eur} €</td>
-      <td style="color:var(--text3);font-size:11px">${e.note||''}</td>
+      <td style="color:var(--text3);font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${e.note||''}">${e.note||''}</td>
+      <td style="text-align:center;white-space:nowrap">
+        <button onclick="openEditModal('${e.id}')" title="Bearbeiten" style="background:transparent;border:1px solid rgba(91,156,246,0.4);color:var(--blue);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;margin-right:4px;font-family:var(--font-mono)">✏</button>
+        <button onclick="copyEntry('${e.id}')" title="Kopieren" style="background:transparent;border:1px solid rgba(245,200,66,0.4);color:var(--accent);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;margin-right:4px;font-family:var(--font-mono)">⧉</button>
+        <button onclick="deleteSingle('${e.id}')" title="Löschen" style="background:transparent;border:1px solid rgba(242,92,92,0.4);color:var(--red);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:var(--font-mono)">✕</button>
+      </td>
     </tr>`;
   }).join('');
 }
@@ -1176,6 +1173,117 @@ function deleteSelected() {
   saveToStorage(); renderTable(); renderAll();
   showToast('✓ '+sel.length+' Einträge gelöscht');
 }
+function deleteSingle(id) {
+  const e = entries.find(x=>x.id===id);
+  if(!e) return;
+  if(!confirm('"'+( e.date)+'" löschen?')) return;
+  entries = entries.filter(x=>x.id!==id);
+  saveToStorage(); renderTable(); renderAll();
+  showToast('✓ Eintrag gelöscht');
+}
+function copyEntry(id) {
+  const e = entries.find(x=>x.id===id);
+  if(!e) return;
+  const copy = JSON.parse(JSON.stringify(e));
+  copy.id = genId();
+  copy.note = (copy.note||'') + ' (Kopie)';
+  // Push date by 1 day for day entries
+  if(copy.type==='day') {
+    const d = new Date(copy.date); d.setDate(d.getDate()+1);
+    copy.date = d.toISOString().split('T')[0];
+  }
+  entries.push(copy);
+  entries.sort((a,b)=>a.date.localeCompare(b.date));
+  saveToStorage(); renderTable(); renderAll();
+  showToast('✓ Eintrag kopiert');
+}
+
+// ── EDIT MODAL ─────────────────────────────────────────────
+function openEditModal(id) {
+  const e = entries.find(x=>x.id===id);
+  if(!e) return;
+  document.getElementById('em-id').value = e.id;
+  document.getElementById('em-type').value = e.type;
+  document.getElementById('em-title').textContent = e.type==='day'?'Tag bearbeiten':e.type==='week'?'Woche bearbeiten':'Monat bearbeiten';
+
+  const weatherOpts = ['☀️','🌤️','⛅','☁️','🌧️','🌨️'].map(w=>`<option value="${w}"${e.weather===w?' selected':''}>${w}</option>`).join('');
+
+  let fields = '';
+  if(e.type==='day') {
+    fields = `
+      <div class="field"><label>Datum</label><input type="date" id="em-date" value="${e.date}"></div>
+      <div class="field"><label>Ertrag (kWh)</label><input type="number" id="em-kwh" value="${e.kwh}" step="0.01"></div>
+      <div class="field"><label>Spitzenleistung (W)</label><input type="number" id="em-peak" value="${e.peak||''}" step="1"></div>
+      <div class="field"><label>Betriebsstunden (h)</label><input type="number" id="em-hours" value="${e.hours||''}" step="0.1"></div>
+      <div class="field"><label>Eigenstrom (kWh)</label><input type="number" id="em-self" value="${e.self||''}" step="0.01"></div>
+      <div class="field"><label>Einspeisung (kWh)</label><input type="number" id="em-feed" value="${e.feed||''}" step="0.01"></div>
+      <div class="field"><label>Wetter</label><select id="em-weather">${weatherOpts}</select></div>
+      <div class="field"><label>Temp (°C)</label><input type="number" id="em-temp" value="${e.temp||''}" step="1"></div>
+      <div class="field" style="grid-column:1/-1"><label>Notiz</label><input type="text" id="em-note" value="${e.note||''}"></div>`;
+  } else if(e.type==='week') {
+    fields = `
+      <div class="field"><label>Woche startet</label><input type="date" id="em-date" value="${e.date}"></div>
+      <div class="field"><label>KW</label><input type="number" id="em-kw" value="${e.kw||''}" step="1" min="1" max="53"></div>
+      <div class="field"><label>Ertrag (kWh)</label><input type="number" id="em-kwh" value="${e.kwh}" step="0.01"></div>
+      <div class="field"><label>Wetter Ø</label><select id="em-weather">${weatherOpts}</select></div>
+      <div class="field" style="grid-column:1/-1"><label>Notiz</label><input type="text" id="em-note" value="${e.note||''}"></div>`;
+  } else {
+    const mOpts = MONTHS_FULL.map((m,i)=>`<option value="${i}"${new Date(e.date).getMonth()===i?' selected':''}>${m}</option>`).join('');
+    const yr = new Date(e.date).getFullYear();
+    fields = `
+      <div class="field"><label>Monat</label><select id="em-month">${mOpts}</select></div>
+      <div class="field"><label>Jahr</label><input type="number" id="em-year" value="${yr}" min="2020" max="2035"></div>
+      <div class="field"><label>Ertrag (kWh)</label><input type="number" id="em-kwh" value="${e.kwh}" step="0.1"></div>
+      <div class="field"><label>Eigenstrom (kWh)</label><input type="number" id="em-self" value="${e.self||''}" step="0.1"></div>
+      <div class="field"><label>Einspeisung (kWh)</label><input type="number" id="em-feed" value="${e.feed||''}" step="0.1"></div>
+      <div class="field"><label>Wetter Ø</label><select id="em-weather">${weatherOpts}</select></div>
+      <div class="field" style="grid-column:1/-1"><label>Notiz</label><input type="text" id="em-note" value="${e.note||''}"></div>`;
+  }
+  document.getElementById('em-fields').innerHTML = fields;
+  document.getElementById('edit-modal-bg').style.display = 'flex';
+}
+
+function saveEditModal() {
+  const id   = document.getElementById('em-id').value;
+  const type = document.getElementById('em-type').value;
+  const idx  = entries.findIndex(x=>x.id===id);
+  if(idx<0) return;
+  const kwh = parseFloat(document.getElementById('em-kwh').value);
+  if(isNaN(kwh)) { showToast('kWh ist ein Pflichtfeld','error'); return; }
+
+  let date = entries[idx].date;
+  if(type==='day'||type==='week') {
+    date = document.getElementById('em-date').value || date;
+  } else {
+    const m = parseInt(document.getElementById('em-month').value);
+    const y = parseInt(document.getElementById('em-year').value);
+    date = y+'-'+String(m+1).padStart(2,'0')+'-01';
+  }
+
+  const updated = {
+    ...entries[idx], date, kwh,
+    weather: document.getElementById('em-weather')?.value || entries[idx].weather,
+    note:    document.getElementById('em-note')?.value || '',
+    peak:    parseFloat(document.getElementById('em-peak')?.value)||null,
+    hours:   parseFloat(document.getElementById('em-hours')?.value)||null,
+    self:    parseFloat(document.getElementById('em-self')?.value)||null,
+    feed:    parseFloat(document.getElementById('em-feed')?.value)||null,
+    temp:    parseFloat(document.getElementById('em-temp')?.value)||null,
+    kw:      parseInt(document.getElementById('em-kw')?.value)||null,
+  };
+  entries[idx] = updated;
+  entries.sort((a,b)=>a.date.localeCompare(b.date));
+  saveToStorage(); closeEditModal(); renderTable(); renderAll();
+  showToast('✓ Eintrag gespeichert');
+}
+
+function closeEditModal() {
+  document.getElementById('edit-modal-bg').style.display = 'none';
+}
+// Close modal on background click
+document.getElementById('edit-modal-bg').addEventListener('click', function(e) {
+  if(e.target===this) closeEditModal();
+});
 
 // ============================================================
 // AVERAGES
@@ -1391,8 +1499,46 @@ function clearAll() {
 }
 
 // ============================================================
-// SUPABASE INTEGRATION
+// HARDCODED SUPABASE CREDENTIALS
 // ============================================================
+const SB_URL = 'https://yhbdddzmymsfyxwxoiao.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InloYmRkZHpteW1zZnl4d3hvaWFvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5MDg1MjksImV4cCI6MjA5NTQ4NDUyOX0.LqZHFcR9mbK9HQHZlIsHGGlr2RT-QzsdCbcb7zza4Z0';
+const APP_PW  = 'We7-Tracker-P!nggau';
+const PW_KEY  = 'pv_unlocked';
+
+// ============================================================
+// PASSWORD GATE
+// ============================================================
+function checkPw() {
+  const val = document.getElementById('pw-input').value;
+  const err = document.getElementById('pw-error');
+  if(val === APP_PW) {
+    sessionStorage.setItem(PW_KEY, '1');
+    document.getElementById('pw-screen').style.display = 'none';
+    document.getElementById('main-app').style.display = 'grid';
+    err.textContent = '';
+    init();
+    sbAutoConnect();
+  } else {
+    err.textContent = 'Falsches Passwort';
+    document.getElementById('pw-input').value = '';
+    document.getElementById('pw-input').focus();
+  }
+}
+
+function bootApp() {
+  // Already unlocked this session?
+  if(sessionStorage.getItem(PW_KEY) === '1') {
+    document.getElementById('pw-screen').style.display = 'none';
+    document.getElementById('main-app').style.display = 'grid';
+    init();
+    sbAutoConnect();
+  } else {
+    document.getElementById('pw-input').focus();
+  }
+}
+
+
 let sbClient = null;
 const SB_TABLE = 'pv_entries';
 
@@ -1589,13 +1735,15 @@ function copyCode(id) {
 }
 
 function sbAutoConnect() {
-  const url = localStorage.getItem('pv_sb_url');
-  const key = localStorage.getItem('pv_sb_key');
-  if(url && key) {
-    document.getElementById('sb-url').value = url;
-    document.getElementById('sb-key').value = key;
-    sbConnect();
-  }
+  const { createClient } = supabase;
+  sbClient = createClient(SB_URL, SB_KEY);
+  // Pre-fill the UI fields too
+  const urlEl = document.getElementById('sb-url');
+  const keyEl = document.getElementById('sb-key');
+  if(urlEl) urlEl.value = SB_URL;
+  if(keyEl) keyEl.value = '(fest eingebaut)';
+  sbSetStatus('connected');
+  sbLog('✓ Automatisch verbunden mit Supabase.', 'ok');
 }
 
 
@@ -1611,7 +1759,7 @@ function showToast(msg, type='success') {
 // ============================================================
 // START
 // ============================================================
-window.addEventListener('load', () => { init(); sbAutoConnect(); });
+window.addEventListener('load', bootApp);
 document.getElementById('av-range').addEventListener('change', function() {
   const custom = this.value==='custom';
   document.getElementById('av-from').style.display=custom?'inline':'none';
