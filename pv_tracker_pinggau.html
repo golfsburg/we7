@@ -1,0 +1,1288 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PV Tracker — Pinggau 800W</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+:root {
+  --bg: #0e0f11;
+  --bg2: #161719;
+  --bg3: #1e2023;
+  --border: rgba(255,255,255,0.07);
+  --border2: rgba(255,255,255,0.12);
+  --text: #f0f0ee;
+  --text2: #8a8d94;
+  --text3: #555860;
+  --accent: #f5c842;
+  --accent2: #e8a020;
+  --green: #3fcf8e;
+  --green2: #1a7a52;
+  --red: #f25c5c;
+  --blue: #5b9cf6;
+  --font-display: 'Syne', sans-serif;
+  --font-mono: 'DM Mono', monospace;
+  --radius: 10px;
+  --radius-lg: 16px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 14px; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-mono);
+  min-height: 100vh;
+  line-height: 1.6;
+}
+/* Layout */
+.app { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
+.sidebar {
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  padding: 24px 0;
+  display: flex; flex-direction: column;
+  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+}
+.main { padding: 28px 32px; overflow-y: auto; }
+
+/* Sidebar */
+.logo { padding: 0 20px 24px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+.logo-title { font-family: var(--font-display); font-size: 15px; font-weight: 700; color: var(--text); letter-spacing: -0.3px; }
+.logo-sub { font-size: 10px; color: var(--text3); letter-spacing: 0.5px; text-transform: uppercase; margin-top: 2px; }
+.logo-dot { display: inline-block; width: 6px; height: 6px; background: var(--accent); border-radius: 50%; margin-right: 6px; }
+
+.nav-section { padding: 0 12px; margin-bottom: 4px; }
+.nav-label { font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text3); padding: 0 8px; margin-bottom: 6px; margin-top: 16px; }
+.nav-btn {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border-radius: var(--radius);
+  font-family: var(--font-mono); font-size: 12px;
+  color: var(--text2); cursor: pointer; border: none;
+  background: transparent; width: 100%; text-align: left;
+  transition: all .15s;
+}
+.nav-btn:hover { background: var(--bg3); color: var(--text); }
+.nav-btn.active { background: rgba(245,200,66,0.1); color: var(--accent); }
+.nav-btn .icon { font-size: 14px; width: 16px; text-align: center; }
+
+.sidebar-stats { margin-top: auto; padding: 16px 20px; border-top: 1px solid var(--border); }
+.sidebar-stat { margin-bottom: 12px; }
+.sidebar-stat-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.8px; }
+.sidebar-stat-value { font-size: 18px; font-weight: 500; color: var(--text); }
+.sidebar-stat-unit { font-size: 11px; color: var(--text2); margin-left: 3px; }
+
+/* Header */
+.page-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 24px; gap: 16px; flex-wrap: wrap; }
+.page-title { font-family: var(--font-display); font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+.page-subtitle { font-size: 11px; color: var(--text2); margin-top: 3px; }
+
+/* Filter bar */
+.filter-bar {
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 8px 12px; margin-bottom: 24px;
+}
+.filter-bar label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.8px; margin-right: 4px; }
+.filter-bar input, .filter-bar select {
+  background: var(--bg3); border: 1px solid var(--border2);
+  color: var(--text); border-radius: 6px; padding: 5px 10px;
+  font-family: var(--font-mono); font-size: 12px; outline: none;
+}
+.filter-bar input:focus, .filter-bar select:focus { border-color: var(--accent); }
+.filter-sep { color: var(--border2); }
+.btn-filter {
+  background: var(--accent); color: #1a1200; border: none;
+  padding: 5px 14px; border-radius: 6px; font-family: var(--font-mono);
+  font-size: 12px; font-weight: 500; cursor: pointer; transition: .15s;
+}
+.btn-filter:hover { background: var(--accent2); }
+.btn-clear { background: transparent; border: 1px solid var(--border2); color: var(--text2); padding: 5px 10px; border-radius: 6px; font-family: var(--font-mono); font-size: 12px; cursor: pointer; }
+.btn-clear:hover { border-color: var(--text2); color: var(--text); }
+
+/* Metric cards */
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.metric-card {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 16px;
+  transition: border-color .2s;
+}
+.metric-card:hover { border-color: var(--border2); }
+.metric-card.accent { border-color: rgba(245,200,66,0.3); }
+.mc-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; }
+.mc-value { font-size: 26px; font-weight: 500; color: var(--text); line-height: 1; }
+.mc-unit { font-size: 12px; color: var(--text2); margin-left: 3px; }
+.mc-delta { font-size: 11px; margin-top: 6px; }
+.mc-delta.pos { color: var(--green); }
+.mc-delta.neg { color: var(--red); }
+.mc-delta.neu { color: var(--text2); }
+
+/* Charts */
+.chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+.chart-card {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 18px;
+}
+.chart-card.full { grid-column: 1 / -1; }
+.chart-title { font-family: var(--font-display); font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+.chart-sub { font-size: 11px; color: var(--text3); margin-bottom: 14px; }
+.chart-wrap { position: relative; width: 100%; }
+.legend { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 10px; }
+.legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text2); }
+.legend-dot { width: 8px; height: 8px; border-radius: 2px; }
+
+/* Table */
+.table-card {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); overflow: hidden; margin-bottom: 24px;
+}
+.table-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px; border-bottom: 1px solid var(--border); }
+.table-title { font-family: var(--font-display); font-size: 13px; font-weight: 600; }
+.badge { font-size: 10px; padding: 3px 8px; border-radius: 20px; font-weight: 500; }
+.badge.good { background: rgba(63,207,142,0.15); color: var(--green); }
+.badge.mid { background: rgba(245,200,66,0.15); color: var(--accent); }
+.badge.low { background: rgba(242,92,92,0.15); color: var(--red); }
+table { width: 100%; border-collapse: collapse; }
+th { padding: 10px 14px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text3); font-weight: 400; border-bottom: 1px solid var(--border); }
+td { padding: 10px 14px; font-size: 12px; border-bottom: 1px solid var(--border); }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: rgba(255,255,255,0.02); }
+.eff-bar-wrap { display: flex; align-items: center; gap: 8px; }
+.eff-bar { height: 4px; width: 60px; background: var(--bg3); border-radius: 2px; overflow: hidden; }
+.eff-fill { height: 100%; border-radius: 2px; }
+
+/* Entry form */
+.form-card {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 20px; margin-bottom: 16px;
+}
+.form-title { font-family: var(--font-display); font-size: 14px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text3); }
+.field input, .field select {
+  background: var(--bg3); border: 1px solid var(--border2);
+  color: var(--text); border-radius: 8px; padding: 8px 10px;
+  font-family: var(--font-mono); font-size: 12px; outline: none;
+  transition: border-color .15s;
+}
+.field input:focus, .field select:focus { border-color: var(--accent); }
+.field input::placeholder { color: var(--text3); }
+.btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.btn-primary {
+  background: var(--accent); color: #1a1200; border: none;
+  padding: 9px 20px; border-radius: 8px; font-family: var(--font-mono);
+  font-size: 12px; font-weight: 500; cursor: pointer; transition: .15s;
+}
+.btn-primary:hover { background: var(--accent2); }
+.btn-secondary {
+  background: transparent; border: 1px solid var(--border2);
+  color: var(--text2); padding: 9px 16px; border-radius: 8px;
+  font-family: var(--font-mono); font-size: 12px; cursor: pointer; transition: .15s;
+}
+.btn-secondary:hover { border-color: var(--text2); color: var(--text); }
+.btn-danger { border-color: rgba(242,92,92,0.3); color: var(--red); }
+.btn-danger:hover { border-color: var(--red); background: rgba(242,92,92,0.08); }
+
+/* Mode tabs */
+.mode-tabs { display: flex; gap: 4px; background: var(--bg3); border-radius: 8px; padding: 3px; width: fit-content; margin-bottom: 20px; }
+.mode-tab {
+  padding: 5px 16px; border-radius: 6px; font-size: 11px;
+  font-family: var(--font-mono); cursor: pointer; border: none;
+  background: transparent; color: var(--text2); transition: .15s;
+}
+.mode-tab.active { background: var(--bg2); color: var(--text); border: 1px solid var(--border2); }
+
+/* Info/note */
+.note { font-size: 11px; color: var(--text3); padding: 10px 14px; background: var(--bg3); border-radius: 8px; border-left: 2px solid var(--accent); margin-top: 12px; line-height: 1.7; }
+
+/* CSV area */
+.csv-area {
+  width: 100%; min-height: 140px; background: var(--bg3);
+  border: 1px solid var(--border2); border-radius: 8px;
+  color: var(--text); font-family: var(--font-mono); font-size: 11px;
+  padding: 10px; outline: none; resize: vertical; margin-bottom: 10px;
+}
+.csv-area:focus { border-color: var(--accent); }
+
+/* Settings */
+.settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+/* Standort info */
+.info-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+.info-item { background: var(--bg3); border-radius: 8px; padding: 12px 14px; }
+.info-item-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 4px; }
+.info-item-value { font-size: 15px; font-weight: 500; }
+
+/* Avg table */
+.avg-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 10px; }
+.avg-cell { background: var(--bg3); border-radius: 8px; padding: 10px 12px; }
+.avg-cell-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; }
+.avg-cell-val { font-size: 16px; font-weight: 500; margin-top: 2px; }
+
+/* Empty state */
+.empty { text-align: center; padding: 48px 20px; color: var(--text3); }
+.empty-icon { font-size: 36px; margin-bottom: 12px; }
+.empty-text { font-size: 13px; color: var(--text2); margin-bottom: 6px; }
+.empty-sub { font-size: 11px; }
+
+/* Toast */
+.toast {
+  position: fixed; bottom: 24px; right: 24px; z-index: 999;
+  background: var(--bg2); border: 1px solid var(--green2);
+  color: var(--green); border-radius: 8px; padding: 10px 18px;
+  font-size: 12px; font-family: var(--font-mono);
+  opacity: 0; transform: translateY(10px);
+  transition: all .25s; pointer-events: none;
+}
+.toast.show { opacity: 1; transform: translateY(0); }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--bg3); border-radius: 3px; }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .app { grid-template-columns: 1fr; }
+  .sidebar { height: auto; position: static; flex-direction: row; flex-wrap: wrap; padding: 12px; }
+  .logo { border-bottom: none; margin-bottom: 0; padding: 0 8px 0 0; }
+  .sidebar-stats { display: none; }
+  .nav-section { display: flex; gap: 4px; padding: 0; }
+  .nav-label { display: none; }
+  .main { padding: 16px; }
+  .chart-grid { grid-template-columns: 1fr; }
+  .settings-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- SIDEBAR -->
+<nav class="sidebar">
+  <div class="logo">
+    <div class="logo-title"><span class="logo-dot"></span>PV Tracker</div>
+    <div class="logo-sub">Pinggau · 800W · SW 35°</div>
+  </div>
+  <div class="nav-section">
+    <div class="nav-label">Ansichten</div>
+    <button class="nav-btn active" onclick="showPage('dashboard')"><span class="icon">◈</span> Dashboard</button>
+    <button class="nav-btn" onclick="showPage('entry')"><span class="icon">+</span> Eintrag</button>
+    <button class="nav-btn" onclick="showPage('table')"><span class="icon">≡</span> Alle Daten</button>
+    <button class="nav-btn" onclick="showPage('averages')"><span class="icon">∅</span> Durchschnitte</button>
+    <div class="nav-label">Verwaltung</div>
+    <button class="nav-btn" onclick="showPage('import')"><span class="icon">↑</span> Import / Export</button>
+    <button class="nav-btn" onclick="showPage('settings')"><span class="icon">⚙</span> Einstellungen</button>
+  </div>
+  <div class="sidebar-stats">
+    <div class="sidebar-stat">
+      <div class="sidebar-stat-label">Gesamt</div>
+      <div class="sidebar-stat-value" id="sb-total">—<span class="sidebar-stat-unit">kWh</span></div>
+    </div>
+    <div class="sidebar-stat">
+      <div class="sidebar-stat-label">Performance</div>
+      <div class="sidebar-stat-value" id="sb-pr">—<span class="sidebar-stat-unit">%</span></div>
+    </div>
+    <div class="sidebar-stat">
+      <div class="sidebar-stat-label">Ertrag</div>
+      <div class="sidebar-stat-value" id="sb-euro">—<span class="sidebar-stat-unit">€</span></div>
+    </div>
+  </div>
+</nav>
+
+<!-- MAIN -->
+<main class="main">
+
+<!-- DASHBOARD -->
+<div id="page-dashboard" class="page">
+  <div class="page-header">
+    <div>
+      <div class="page-title">Dashboard</div>
+      <div class="page-subtitle" id="dash-subtitle">Alle Daten</div>
+    </div>
+  </div>
+
+  <!-- Filter -->
+  <div class="filter-bar">
+    <label>Granularität</label>
+    <select id="f-gran" onchange="applyFilter()">
+      <option value="day">Täglich</option>
+      <option value="week">Wöchentlich</option>
+      <option value="month" selected>Monatlich</option>
+    </select>
+    <span class="filter-sep">|</span>
+    <label>Von</label>
+    <input type="date" id="f-from" onchange="applyFilter()">
+    <label>Bis</label>
+    <input type="date" id="f-to" onchange="applyFilter()">
+    <span class="filter-sep">|</span>
+    <button class="btn-filter" onclick="applyFilter()">Anwenden</button>
+    <button class="btn-clear" onclick="clearFilter()">Reset</button>
+  </div>
+
+  <!-- Metrics -->
+  <div class="metrics" id="dash-metrics">
+    <div class="metric-card accent">
+      <div class="mc-label">Ertrag (gefiltert)</div>
+      <div><span class="mc-value" id="m-actual">—</span><span class="mc-unit">kWh</span></div>
+      <div class="mc-delta neu" id="m-actual-delta"></div>
+    </div>
+    <div class="metric-card">
+      <div class="mc-label">Theoretisch</div>
+      <div><span class="mc-value" id="m-theory">—</span><span class="mc-unit">kWh</span></div>
+      <div class="mc-delta neu" id="m-theory-delta"></div>
+    </div>
+    <div class="metric-card">
+      <div class="mc-label">Performance Ratio</div>
+      <div><span class="mc-value" id="m-pr">—</span><span class="mc-unit">%</span></div>
+      <div class="mc-delta neu" id="m-pr-note"></div>
+    </div>
+    <div class="metric-card">
+      <div class="mc-label">Ertrag €</div>
+      <div><span class="mc-value" id="m-euro">—</span><span class="mc-unit">€</span></div>
+      <div class="mc-delta neu" id="m-euro-note"></div>
+    </div>
+    <div class="metric-card">
+      <div class="mc-label">Ø pro Tag</div>
+      <div><span class="mc-value" id="m-avg-day">—</span><span class="mc-unit">kWh</span></div>
+      <div class="mc-delta neu" id="m-avg-note"></div>
+    </div>
+    <div class="metric-card">
+      <div class="mc-label">Einträge</div>
+      <div><span class="mc-value" id="m-count">—</span><span class="mc-unit">Tage</span></div>
+      <div class="mc-delta neu" id="m-count-note"></div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="chart-grid">
+    <div class="chart-card full">
+      <div class="chart-title">Ertrag vs. Theoretisch</div>
+      <div class="chart-sub" id="chart-sub1">kWh im gewählten Zeitraum</div>
+      <div class="legend">
+        <div class="legend-item"><span class="legend-dot" style="background:#f5c842"></span>Tatsächlich</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#3a3d45"></span>Theoretisch</div>
+      </div>
+      <div class="chart-wrap" style="height:240px"><canvas id="chart-main" role="img" aria-label="Ertrag vs Theoretisch">Lade...</canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Performance Ratio</div>
+      <div class="chart-sub">% Effizienz vs. Optimum</div>
+      <div class="chart-wrap" style="height:200px"><canvas id="chart-pr" role="img" aria-label="Performance Ratio">Lade...</canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Kumulierter Ertrag</div>
+      <div class="chart-sub">kWh aufgelaufen</div>
+      <div class="chart-wrap" style="height:200px"><canvas id="chart-cum" role="img" aria-label="Kumulierter Ertrag">Lade...</canvas></div>
+    </div>
+  </div>
+</div>
+
+<!-- ENTRY -->
+<div id="page-entry" class="page" style="display:none">
+  <div class="page-header">
+    <div><div class="page-title">Eintrag hinzufügen</div><div class="page-subtitle">Wähle den Modus und trage die Daten ein</div></div>
+  </div>
+  <div class="mode-tabs">
+    <button class="mode-tab active" onclick="setEntryMode('day',this)">Täglich</button>
+    <button class="mode-tab" onclick="setEntryMode('week',this)">Wöchentlich</button>
+    <button class="mode-tab" onclick="setEntryMode('month',this)">Monatlich</button>
+  </div>
+
+  <!-- Daily form -->
+  <div id="form-day" class="form-card">
+    <div class="form-title">📅 Tageseintrag</div>
+    <div class="form-grid">
+      <div class="field"><label>Datum</label><input type="date" id="e-date"></div>
+      <div class="field"><label>Ertrag (kWh)</label><input type="number" id="e-kwh" placeholder="z.B. 4.2" step="0.01" min="0"></div>
+      <div class="field"><label>Spitzenleistung (W)</label><input type="number" id="e-peak" placeholder="z.B. 720" step="1" min="0"></div>
+      <div class="field"><label>Betriebsstunden (h)</label><input type="number" id="e-hours" placeholder="z.B. 6.5" step="0.1" min="0"></div>
+      <div class="field"><label>Eigenstrom (kWh)</label><input type="number" id="e-self" placeholder="opt." step="0.01" min="0"></div>
+      <div class="field"><label>Einspeisung (kWh)</label><input type="number" id="e-feed" placeholder="opt." step="0.01" min="0"></div>
+      <div class="field"><label>Wetter</label>
+        <select id="e-weather">
+          <option value="☀️">☀️ Sonnig</option>
+          <option value="🌤️">🌤️ Meist sonnig</option>
+          <option value="⛅">⛅ Wechselhaft</option>
+          <option value="☁️">☁️ Bewölkt</option>
+          <option value="🌧️">🌧️ Regen</option>
+          <option value="🌨️">🌨️ Schnee</option>
+        </select>
+      </div>
+      <div class="field"><label>Temp. (°C)</label><input type="number" id="e-temp" placeholder="opt." step="1"></div>
+      <div class="field" style="grid-column:1/-1"><label>Notiz</label><input type="text" id="e-note" placeholder="Freitext..."></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn-primary" onclick="addDayEntry()">Eintrag speichern</button>
+      <button class="btn-secondary" onclick="prefillToday()">Heute vorausfüllen</button>
+    </div>
+  </div>
+
+  <!-- Weekly form -->
+  <div id="form-week" class="form-card" style="display:none">
+    <div class="form-title">📆 Wocheneintrag</div>
+    <div class="form-grid">
+      <div class="field"><label>Woche startet (Montag)</label><input type="date" id="w-date"></div>
+      <div class="field"><label>Ertrag (kWh)</label><input type="number" id="w-kwh" placeholder="z.B. 28.5" step="0.01" min="0"></div>
+      <div class="field"><label>KW</label><input type="number" id="w-kw" placeholder="z.B. 22" step="1" min="1" max="53"></div>
+      <div class="field"><label>Wetter Ø</label>
+        <select id="w-weather">
+          <option value="☀️">☀️ Sonnig</option><option value="⛅">⛅ Wechselhaft</option>
+          <option value="☁️">☁️ Bewölkt</option><option value="🌧️">🌧️ Regen</option>
+        </select>
+      </div>
+      <div class="field" style="grid-column:1/-1"><label>Notiz</label><input type="text" id="w-note" placeholder="Freitext..."></div>
+    </div>
+    <div class="btn-row"><button class="btn-primary" onclick="addWeekEntry()">Woche speichern</button></div>
+  </div>
+
+  <!-- Monthly form -->
+  <div id="form-month" class="form-card" style="display:none">
+    <div class="form-title">📊 Monatseintrag</div>
+    <div class="form-grid">
+      <div class="field"><label>Monat</label>
+        <select id="mo-month">
+          <option value="0">Jänner</option><option value="1">Februar</option><option value="2">März</option>
+          <option value="3">April</option><option value="4">Mai</option><option value="5">Juni</option>
+          <option value="6">Juli</option><option value="7">August</option><option value="8">September</option>
+          <option value="9">Oktober</option><option value="10">November</option><option value="11">Dezember</option>
+        </select>
+      </div>
+      <div class="field"><label>Jahr</label><input type="number" id="mo-year" value="2025" min="2020" max="2035"></div>
+      <div class="field"><label>Ertrag (kWh)</label><input type="number" id="mo-kwh" placeholder="z.B. 95.4" step="0.1" min="0"></div>
+      <div class="field"><label>Eigenstrom (kWh)</label><input type="number" id="mo-self" placeholder="opt." step="0.1" min="0"></div>
+      <div class="field"><label>Einspeisung (kWh)</label><input type="number" id="mo-feed" placeholder="opt." step="0.1" min="0"></div>
+      <div class="field"><label>Wetter Ø</label>
+        <select id="mo-weather">
+          <option value="☀️">☀️ Gut</option><option value="⛅">⛅ Mittel</option><option value="☁️">☁️ Schlecht</option>
+        </select>
+      </div>
+      <div class="field" style="grid-column:1/-1"><label>Notiz</label><input type="text" id="mo-note" placeholder="Freitext..."></div>
+    </div>
+    <div class="btn-row"><button class="btn-primary" onclick="addMonthEntry()">Monat speichern</button></div>
+  </div>
+
+  <div class="note">💡 Tipp: Die Power Zero App zeigt den Tagesertrag unter "Energie" → "Heute". Notiere ihn jeden Abend oder füge ihn wöchentlich nach.</div>
+</div>
+
+<!-- TABLE -->
+<div id="page-table" class="page" style="display:none">
+  <div class="page-header">
+    <div><div class="page-title">Alle Einträge</div><div class="page-subtitle" id="table-count">—</div></div>
+  </div>
+  <div class="filter-bar">
+    <label>Typ</label>
+    <select id="tf-type" onchange="renderTable()">
+      <option value="all">Alle</option>
+      <option value="day">Tage</option>
+      <option value="week">Wochen</option>
+      <option value="month">Monate</option>
+    </select>
+    <span class="filter-sep">|</span>
+    <label>Von</label><input type="date" id="tf-from" onchange="renderTable()">
+    <label>Bis</label><input type="date" id="tf-to" onchange="renderTable()">
+    <span class="filter-sep">|</span>
+    <label>Sortierung</label>
+    <select id="tf-sort" onchange="renderTable()">
+      <option value="date-desc">Datum ↓</option>
+      <option value="date-asc">Datum ↑</option>
+      <option value="kwh-desc">kWh ↓</option>
+      <option value="pr-desc">PR% ↓</option>
+    </select>
+    <button class="btn-secondary btn-danger" onclick="deleteSelected()">Auswahl löschen</button>
+  </div>
+  <div class="table-card">
+    <div class="table-header">
+      <div class="table-title">Messwerte</div>
+      <div id="table-badge"></div>
+    </div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th><input type="checkbox" id="cb-all" onchange="toggleAll(this)"></th>
+            <th>Datum / Zeitraum</th>
+            <th>Typ</th>
+            <th>Ertrag</th>
+            <th>Theor.</th>
+            <th>PR%</th>
+            <th>Peak W</th>
+            <th>Std</th>
+            <th>Wetter</th>
+            <th>€</th>
+            <th>Notiz</th>
+          </tr>
+        </thead>
+        <tbody id="table-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- AVERAGES -->
+<div id="page-averages" class="page" style="display:none">
+  <div class="page-header">
+    <div><div class="page-title">Durchschnittswerte</div><div class="page-subtitle">Statistische Auswertung nach Zeitraum</div></div>
+  </div>
+  <div class="filter-bar">
+    <label>Zeitraum</label>
+    <select id="av-range" onchange="renderAverages()">
+      <option value="all">Gesamt</option>
+      <option value="thisyear">Dieses Jahr</option>
+      <option value="lastyear">Letztes Jahr</option>
+      <option value="last30">Letzte 30 Tage</option>
+      <option value="last90">Letzte 90 Tage</option>
+      <option value="custom">Benutzerdefiniert</option>
+    </select>
+    <input type="date" id="av-from" style="display:none" onchange="renderAverages()">
+    <input type="date" id="av-to" style="display:none" onchange="renderAverages()">
+  </div>
+  <div id="averages-content"></div>
+</div>
+
+<!-- IMPORT -->
+<div id="page-import" class="page" style="display:none">
+  <div class="page-header">
+    <div><div class="page-title">Import / Export</div><div class="page-subtitle">CSV-Datenaustausch für Power Zero App und andere Quellen</div></div>
+  </div>
+  <div class="form-card">
+    <div class="form-title">↑ CSV Import</div>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:10px">Format: <code>Typ(day/week/month),Datum(YYYY-MM-DD),kWh[,PeakW,Stunden,Eigenstrom,Einspeisung,Wetter,Temp,Notiz]</code></p>
+    <textarea class="csv-area" id="csv-in" placeholder="day,2025-06-01,4.21,720,6.5,2.1,2.1,☀️,22,Erster Tag
+day,2025-06-02,3.85,690,6.0,,,⛅,,
+month,2025-05,95.4,,,45,50,☀️,,Guter Monat"></textarea>
+    <div class="btn-row">
+      <button class="btn-primary" onclick="importCSV()">Importieren</button>
+      <button class="btn-secondary" onclick="loadSample()">Beispieldaten laden</button>
+    </div>
+  </div>
+  <div class="form-card">
+    <div class="form-title">↓ CSV Export</div>
+    <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr">
+      <div class="field"><label>Typ</label>
+        <select id="ex-type">
+          <option value="all">Alle</option><option value="day">Täglich</option>
+          <option value="week">Wöchentlich</option><option value="month">Monatlich</option>
+        </select>
+      </div>
+      <div class="field"><label>Von</label><input type="date" id="ex-from"></div>
+      <div class="field"><label>Bis</label><input type="date" id="ex-to"></div>
+    </div>
+    <button class="btn-primary" onclick="exportCSV()">Als CSV exportieren</button>
+  </div>
+  <div class="form-card">
+    <div class="form-title" style="color:var(--red)">⚠ Daten löschen</div>
+    <div class="btn-row">
+      <button class="btn-secondary btn-danger" onclick="clearAll()">Alle Daten löschen</button>
+    </div>
+  </div>
+</div>
+
+<!-- SETTINGS -->
+<div id="page-settings" class="page" style="display:none">
+  <div class="page-header">
+    <div><div class="page-title">Einstellungen</div><div class="page-subtitle">Standort, Anlage, Preise</div></div>
+  </div>
+  <div class="form-card">
+    <div class="form-title">📍 Standort & Anlage</div>
+    <div class="form-grid">
+      <div class="field"><label>Breitengrad</label><input type="number" id="s-lat" value="47.52" step="0.01"></div>
+      <div class="field"><label>Längengrad</label><input type="number" id="s-lon" value="16.03" step="0.01"></div>
+      <div class="field"><label>Neigung (°)</label><input type="number" id="s-tilt" value="35" step="1" min="0" max="90"></div>
+      <div class="field"><label>Ausrichtung</label>
+        <select id="s-az">
+          <option value="0">Süd (0°)</option>
+          <option value="-45" selected>Süd-West (-45°)</option>
+          <option value="-90">West (-90°)</option>
+          <option value="45">Süd-Ost (+45°)</option>
+          <option value="90">Ost (+90°)</option>
+          <option value="-135">Nord-West</option>
+          <option value="135">Nord-Ost</option>
+          <option value="180">Nord</option>
+        </select>
+      </div>
+      <div class="field"><label>Nennleistung (Wp)</label><input type="number" id="s-wp" value="800" step="10"></div>
+      <div class="field"><label>Wechselrichter</label><input type="text" id="s-inv" value="Marstek MST-MI0800W"></div>
+    </div>
+    <button class="btn-primary" onclick="saveSettings()">Speichern & Neuberechnen</button>
+    <div id="theory-summary" style="margin-top:14px"></div>
+  </div>
+  <div class="form-card">
+    <div class="form-title">💶 Energiepreise</div>
+    <div class="form-grid">
+      <div class="field"><label>Bezugspreis (€/kWh)</label><input type="number" id="s-price" value="0.30" step="0.01"></div>
+      <div class="field"><label>Einspeisung (€/kWh)</label><input type="number" id="s-feed" value="0.082" step="0.001"></div>
+      <div class="field"><label>Eigenstromanteil (%)</label><input type="number" id="s-selfpct" value="50" step="5" min="0" max="100"></div>
+    </div>
+    <button class="btn-primary" onclick="saveSettings()">Speichern</button>
+    <div class="note">🇦🇹 Österreich 2024: OeMAG Einspeisetarif ~8,2 ct/kWh · Haushalt Ø ~30 ct/kWh</div>
+  </div>
+</div>
+
+</main>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+// DATA & CONFIG
+// ============================================================
+const MONTHS = ['Jän','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+const MONTHS_FULL = ['Jänner','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+// Base irradiance kWh/m²/month for 47.5°N, 35° south tilt
+const BASE_H = [25,42,85,130,158,165,178,158,115,70,30,20];
+
+let cfg = {
+  lat: 47.52, lon: 16.03, tilt: 35, az: -45, wp: 800,
+  inv: 'Marstek MST-MI0800W',
+  price: 0.30, feedRate: 0.082, selfPct: 50
+};
+let theory = []; // monthly theory kWh
+let entries = []; // {id, type:'day'|'week'|'month', date:YYYY-MM-DD, kwh, peak, hours, self, feed, weather, temp, note}
+let charts = {};
+let filterState = { gran: 'month', from: null, to: null };
+
+// ============================================================
+// INIT
+// ============================================================
+function init() {
+  loadFromStorage();
+  computeTheory();
+  prefillToday();
+  setDefaultDates();
+  loadSettingsUI();
+  renderAll();
+  updateSidebar();
+}
+
+function loadFromStorage() {
+  try {
+    const c = localStorage.getItem('pv_cfg'); if(c) cfg = {...cfg,...JSON.parse(c)};
+    const e = localStorage.getItem('pv_entries'); if(e) entries = JSON.parse(e);
+  } catch(err) {}
+}
+function saveToStorage() {
+  try {
+    localStorage.setItem('pv_cfg', JSON.stringify(cfg));
+    localStorage.setItem('pv_entries', JSON.stringify(entries));
+  } catch(err) {}
+}
+
+function computeTheory() {
+  const azFactors = {0:1.0,'-45':0.93,'45':0.93,'-90':0.80,'90':0.80,'-135':0.65,'135':0.65,'180':0.45};
+  const azF = azFactors[String(cfg.az)] || 0.93;
+  const tiltF = Math.max(0.75, 1 - Math.abs(cfg.tilt-35)*0.004);
+  const PR = 0.82;
+  const m2 = cfg.wp / 200;
+  theory = BASE_H.map(h => parseFloat((h * azF * tiltF * m2 * PR).toFixed(2)));
+}
+
+// Get daily theory for a date
+function dailyTheory(dateStr) {
+  const d = new Date(dateStr);
+  const m = d.getMonth();
+  const days = new Date(d.getFullYear(), m+1, 0).getDate();
+  return parseFloat((theory[m] / days).toFixed(3));
+}
+
+function weeklyTheory(dateStr) {
+  let total = 0;
+  const start = new Date(dateStr);
+  for(let i=0;i<7;i++) {
+    const d = new Date(start); d.setDate(d.getDate()+i);
+    total += dailyTheory(d.toISOString().split('T')[0]);
+  }
+  return parseFloat(total.toFixed(2));
+}
+
+function getTheoryForEntry(e) {
+  if(e.type==='day') return dailyTheory(e.date);
+  if(e.type==='week') return weeklyTheory(e.date);
+  if(e.type==='month') {
+    const d = new Date(e.date); return theory[d.getMonth()];
+  }
+  return 0;
+}
+
+function calcEuro(e) {
+  const selfKwh = e.self != null ? e.self : e.kwh * (cfg.selfPct/100);
+  const feedKwh = e.feed != null ? e.feed : (e.kwh - selfKwh);
+  return parseFloat(((selfKwh * cfg.price) + (Math.max(0,feedKwh) * cfg.feedRate)).toFixed(2));
+}
+
+function setDefaultDates() {
+  const today = new Date().toISOString().split('T')[0];
+  const yr = today.substring(0,4);
+  document.getElementById('f-from').value = yr+'-01-01';
+  document.getElementById('f-to').value = today;
+  filterState.from = yr+'-01-01';
+  filterState.to = today;
+  document.getElementById('e-date').value = today;
+  // week: find last monday
+  const now = new Date();
+  const day = now.getDay()||7;
+  now.setDate(now.getDate()-day+1);
+  document.getElementById('w-date').value = now.toISOString().split('T')[0];
+  document.getElementById('w-kw').value = getWeekNumber(new Date());
+  // month
+  const nm = new Date(); 
+  document.getElementById('mo-month').value = nm.getMonth();
+  document.getElementById('mo-year').value = nm.getFullYear();
+}
+
+function getWeekNumber(d) {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(),0,1));
+  return Math.ceil((((date - yearStart) / 86400000) + 1)/7);
+}
+
+// ============================================================
+// NAVIGATION
+// ============================================================
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p=>p.style.display='none');
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+id).style.display='block';
+  const btns = document.querySelectorAll('.nav-btn');
+  btns.forEach(b=>{ if(b.getAttribute('onclick')?.includes("'"+id+"'")) b.classList.add('active'); });
+  if(id==='dashboard') renderDashboard();
+  if(id==='table') renderTable();
+  if(id==='averages') renderAverages();
+  if(id==='settings') loadSettingsUI();
+}
+
+function renderAll() { renderDashboard(); updateSidebar(); }
+
+// ============================================================
+// FILTER & DASHBOARD
+// ============================================================
+function applyFilter() {
+  filterState.gran = document.getElementById('f-gran').value;
+  filterState.from = document.getElementById('f-from').value;
+  filterState.to   = document.getElementById('f-to').value;
+  renderDashboard();
+}
+function clearFilter() {
+  const yr = new Date().getFullYear();
+  document.getElementById('f-from').value = yr+'-01-01';
+  document.getElementById('f-to').value = new Date().toISOString().split('T')[0];
+  document.getElementById('f-gran').value = 'month';
+  filterState = {gran:'month', from:yr+'-01-01', to: new Date().toISOString().split('T')[0]};
+  renderDashboard();
+}
+
+function getFilteredEntries() {
+  return entries.filter(e => {
+    if(filterState.from && e.date < filterState.from) return false;
+    if(filterState.to && e.date > filterState.to) return false;
+    return true;
+  }).sort((a,b)=>a.date.localeCompare(b.date));
+}
+
+// Aggregate entries to granularity buckets
+function aggregateEntries(filtered, gran) {
+  const map = {};
+  filtered.forEach(e => {
+    let key;
+    const d = new Date(e.date);
+    if(gran==='day') key = e.date;
+    else if(gran==='week') {
+      // ISO week
+      const wn = getWeekNumber(d);
+      key = d.getFullYear()+'-W'+String(wn).padStart(2,'0');
+    } else {
+      key = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+    }
+    if(!map[key]) map[key] = {key, kwh:0, theory:0, count:0, dates:[]};
+    map[key].kwh += e.kwh;
+    map[key].theory += getTheoryForEntry(e);
+    map[key].count++;
+    map[key].dates.push(e.date);
+  });
+  return Object.values(map).sort((a,b)=>a.key.localeCompare(b.key));
+}
+
+function renderDashboard() {
+  const filtered = getFilteredEntries();
+  const gran = filterState.gran;
+  const buckets = aggregateEntries(filtered, gran);
+
+  const totalAct = filtered.reduce((s,e)=>s+e.kwh,0);
+  const totalTh  = filtered.reduce((s,e)=>s+getTheoryForEntry(e),0);
+  const totalEuro= filtered.reduce((s,e)=>s+calcEuro(e),0);
+  const pr = totalTh>0 ? Math.round(totalAct/totalTh*100) : 0;
+  const dayCount = filtered.filter(e=>e.type==='day').length;
+  const avgDay = dayCount>0 ? (filtered.filter(e=>e.type==='day').reduce((s,e)=>s+e.kwh,0)/dayCount) : 0;
+
+  document.getElementById('m-actual').textContent = totalAct.toFixed(2);
+  document.getElementById('m-theory').textContent = totalTh.toFixed(2);
+  document.getElementById('m-pr').textContent = pr||'—';
+  document.getElementById('m-euro').textContent = totalEuro.toFixed(2);
+  document.getElementById('m-avg-day').textContent = avgDay>0?avgDay.toFixed(2):'—';
+  document.getElementById('m-count').textContent = filtered.length;
+
+  const prNote = pr>=80?'✓ Gut (≥80%)':pr>=65?'~ Mittel':pr>0?'⚠ Niedrig':'—';
+  const prClass = pr>=80?'pos':pr>=65?'neu':'neg';
+  document.getElementById('m-pr-note').textContent = prNote;
+  document.getElementById('m-pr-note').className = 'mc-delta '+prClass;
+  document.getElementById('m-euro-note').textContent = totalEuro>0?`≈ ${Math.round(totalEuro/Math.max(filtered.length,1)*30)} €/Monat`:'';
+  document.getElementById('m-avg-note').textContent = dayCount>0?`${dayCount} Tage aufgezeichnet`:'Keine Tageseinträge';
+  document.getElementById('m-count-note').textContent = filtered.length>0?`${gran==='day'?'Tage':gran==='week'?'Wochen':'Monate'} im Zeitraum`:'';
+
+  const from = filterState.from||'—', to = filterState.to||'—';
+  document.getElementById('dash-subtitle').textContent = `${from} bis ${to} · ${gran==='day'?'Täglich':gran==='week'?'Wöchentlich':'Monatlich'}`;
+  document.getElementById('chart-sub1').textContent = `${buckets.length} ${gran==='day'?'Tage':gran==='week'?'Wochen':'Monate'}`;
+
+  const labels = buckets.map(b=>b.key);
+  const actData = buckets.map(b=>+b.kwh.toFixed(2));
+  const thData  = buckets.map(b=>+b.theory.toFixed(2));
+  const prData  = buckets.map(b=>b.theory>0?Math.round(b.kwh/b.theory*100):0);
+  const cumData = actData.reduce((acc,v,i)=>[...acc,(acc[i-1]||0)+v],[]);
+
+  drawBarChart('chart-main', labels, actData, thData);
+  drawLineChart('chart-pr', labels, prData, '#3fcf8e', '%');
+  drawLineChart('chart-cum', labels, cumData, '#5b9cf6', 'kWh');
+
+  updateSidebar(totalAct, pr, totalEuro);
+}
+
+function updateSidebar(act, pr, euro) {
+  if(act!==undefined) {
+    document.getElementById('sb-total').innerHTML = act.toFixed(1)+'<span class="sidebar-stat-unit">kWh</span>';
+    document.getElementById('sb-pr').innerHTML = (pr||'—')+'<span class="sidebar-stat-unit">%</span>';
+    document.getElementById('sb-euro').innerHTML = (euro||0).toFixed(0)+'<span class="sidebar-stat-unit">€</span>';
+  }
+}
+
+// ============================================================
+// CHARTS
+// ============================================================
+function destroyChart(id) { if(charts[id]) { charts[id].destroy(); delete charts[id]; } }
+
+function drawBarChart(id, labels, act, th) {
+  destroyChart(id);
+  const ctx = document.getElementById(id);
+  charts[id] = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets: [
+      { label:'Tatsächlich', data:act, backgroundColor:'rgba(245,200,66,0.85)', borderRadius:3, order:1 },
+      { label:'Theoretisch', data:th, backgroundColor:'rgba(58,61,69,0.8)', borderRadius:3, order:2 }
+    ]},
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false} },
+      scales:{
+        x:{ticks:{color:'#555860',font:{family:'DM Mono',size:10}},grid:{color:'rgba(255,255,255,0.04)'}},
+        y:{ticks:{color:'#555860',font:{family:'DM Mono',size:10}},grid:{color:'rgba(255,255,255,0.04)'},title:{display:true,text:'kWh',color:'#555860',font:{size:10}}}
+      }
+    }
+  });
+}
+
+function drawLineChart(id, labels, data, color, unit) {
+  destroyChart(id);
+  const ctx = document.getElementById(id);
+  charts[id] = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets: [{
+      data, borderColor:color, backgroundColor:color.replace(')',',0.08)').replace('rgb','rgba'),
+      fill:true, tension:0.35, pointRadius:3, pointBackgroundColor:color, borderWidth:1.5
+    }]},
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false} },
+      scales:{
+        x:{ticks:{color:'#555860',font:{family:'DM Mono',size:10}},grid:{color:'rgba(255,255,255,0.04)'}},
+        y:{ticks:{color:'#555860',font:{family:'DM Mono',size:10},callback:v=>v+unit},grid:{color:'rgba(255,255,255,0.04)'}}
+      }
+    }
+  });
+}
+
+// ============================================================
+// ENTRY
+// ============================================================
+function setEntryMode(mode, btn) {
+  document.querySelectorAll('.mode-tab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('form-day').style.display = mode==='day'?'block':'none';
+  document.getElementById('form-week').style.display = mode==='week'?'block':'none';
+  document.getElementById('form-month').style.display = mode==='month'?'block':'none';
+}
+
+function prefillToday() {
+  document.getElementById('e-date').value = new Date().toISOString().split('T')[0];
+}
+
+function genId() { return Date.now().toString(36)+Math.random().toString(36).slice(2,5); }
+
+function addDayEntry() {
+  const date = document.getElementById('e-date').value;
+  const kwh  = parseFloat(document.getElementById('e-kwh').value);
+  if(!date||isNaN(kwh)) { showToast('Datum und kWh sind Pflichtfelder','error'); return; }
+  entries = entries.filter(e=>!(e.type==='day'&&e.date===date));
+  entries.push({
+    id:genId(), type:'day', date, kwh,
+    peak: parseFloat(document.getElementById('e-peak').value)||null,
+    hours: parseFloat(document.getElementById('e-hours').value)||null,
+    self: parseFloat(document.getElementById('e-self').value)||null,
+    feed: parseFloat(document.getElementById('e-feed').value)||null,
+    weather: document.getElementById('e-weather').value,
+    temp: parseFloat(document.getElementById('e-temp').value)||null,
+    note: document.getElementById('e-note').value||''
+  });
+  saveToStorage(); renderAll();
+  showToast('✓ Tag gespeichert: '+kwh.toFixed(2)+' kWh');
+  document.getElementById('e-kwh').value='';
+  document.getElementById('e-peak').value='';
+  document.getElementById('e-hours').value='';
+  document.getElementById('e-self').value='';
+  document.getElementById('e-feed').value='';
+  document.getElementById('e-note').value='';
+}
+
+function addWeekEntry() {
+  const date = document.getElementById('w-date').value;
+  const kwh  = parseFloat(document.getElementById('w-kwh').value);
+  if(!date||isNaN(kwh)) { showToast('Pflichtfelder fehlen','error'); return; }
+  entries = entries.filter(e=>!(e.type==='week'&&e.date===date));
+  entries.push({
+    id:genId(), type:'week', date, kwh,
+    kw: parseInt(document.getElementById('w-kw').value)||null,
+    weather: document.getElementById('w-weather').value,
+    note: document.getElementById('w-note').value||''
+  });
+  saveToStorage(); renderAll();
+  showToast('✓ Woche gespeichert: '+kwh.toFixed(2)+' kWh');
+  document.getElementById('w-kwh').value='';
+}
+
+function addMonthEntry() {
+  const m = parseInt(document.getElementById('mo-month').value);
+  const y = parseInt(document.getElementById('mo-year').value);
+  const kwh = parseFloat(document.getElementById('mo-kwh').value);
+  if(isNaN(kwh)) { showToast('kWh Pflichtfeld','error'); return; }
+  const date = y+'-'+String(m+1).padStart(2,'0')+'-01';
+  entries = entries.filter(e=>!(e.type==='month'&&e.date===date));
+  entries.push({
+    id:genId(), type:'month', date, kwh,
+    self: parseFloat(document.getElementById('mo-self').value)||null,
+    feed: parseFloat(document.getElementById('mo-feed').value)||null,
+    weather: document.getElementById('mo-weather').value,
+    note: document.getElementById('mo-note').value||''
+  });
+  saveToStorage(); renderAll();
+  showToast('✓ Monat gespeichert: '+kwh.toFixed(2)+' kWh');
+  document.getElementById('mo-kwh').value='';
+}
+
+// ============================================================
+// TABLE
+// ============================================================
+function renderTable() {
+  const type = document.getElementById('tf-type').value;
+  const from = document.getElementById('tf-from').value;
+  const to   = document.getElementById('tf-to').value;
+  const sort = document.getElementById('tf-sort').value;
+
+  let data = [...entries];
+  if(type!=='all') data = data.filter(e=>e.type===type);
+  if(from) data = data.filter(e=>e.date>=from);
+  if(to)   data = data.filter(e=>e.date<=to);
+
+  if(sort==='date-desc') data.sort((a,b)=>b.date.localeCompare(a.date));
+  else if(sort==='date-asc') data.sort((a,b)=>a.date.localeCompare(b.date));
+  else if(sort==='kwh-desc') data.sort((a,b)=>b.kwh-a.kwh);
+  else if(sort==='pr-desc') data.sort((a,b)=>{
+    const pa = getTheoryForEntry(a)>0?a.kwh/getTheoryForEntry(a):0;
+    const pb = getTheoryForEntry(b)>0?b.kwh/getTheoryForEntry(b):0;
+    return pb-pa;
+  });
+
+  document.getElementById('table-count').textContent = data.length+' Einträge';
+  const tbody = document.getElementById('table-body');
+  if(data.length===0) {
+    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:2rem;color:var(--text3)">Keine Einträge für diesen Filter</td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.map(e => {
+    const th = getTheoryForEntry(e);
+    const pr = th>0?Math.round(e.kwh/th*100):0;
+    const cls = pr>=80?'good':pr>=60?'mid':'low';
+    const eur = calcEuro(e);
+    const label = e.type==='day'?e.date:e.type==='week'?'KW'+(e.kw||'?')+' '+e.date.substring(0,4):MONTHS_FULL[new Date(e.date).getMonth()]+' '+e.date.substring(0,4);
+    const typeLabel = e.type==='day'?'Tag':e.type==='week'?'Woche':'Monat';
+    return `<tr>
+      <td><input type="checkbox" class="row-cb" data-id="${e.id}"></td>
+      <td style="font-weight:500">${label}</td>
+      <td><span class="badge ${cls}" style="font-size:9px">${typeLabel}</span></td>
+      <td style="color:var(--accent)">${e.kwh.toFixed(2)} kWh</td>
+      <td style="color:var(--text3)">${th.toFixed(2)}</td>
+      <td>
+        <div class="eff-bar-wrap">
+          <div class="eff-bar"><div class="eff-fill" style="width:${Math.min(pr,100)}%;background:${pr>=80?'var(--green)':pr>=60?'var(--accent)':'var(--red)'}"></div></div>
+          <span class="badge ${cls}">${pr}%</span>
+        </div>
+      </td>
+      <td style="color:var(--text2)">${e.peak||'—'}</td>
+      <td style="color:var(--text2)">${e.hours||'—'}</td>
+      <td>${e.weather||'—'}</td>
+      <td style="color:var(--green)">${eur} €</td>
+      <td style="color:var(--text3);font-size:11px">${e.note||''}</td>
+    </tr>`;
+  }).join('');
+}
+
+function toggleAll(cb) {
+  document.querySelectorAll('.row-cb').forEach(c=>c.checked=cb.checked);
+}
+function deleteSelected() {
+  const sel = [...document.querySelectorAll('.row-cb:checked')].map(c=>c.dataset.id);
+  if(sel.length===0){showToast('Keine Zeilen ausgewählt','error');return;}
+  if(!confirm(sel.length+' Einträge löschen?')) return;
+  entries = entries.filter(e=>!sel.includes(e.id));
+  saveToStorage(); renderTable(); renderAll();
+  showToast('✓ '+sel.length+' Einträge gelöscht');
+}
+
+// ============================================================
+// AVERAGES
+// ============================================================
+function renderAverages() {
+  const range = document.getElementById('av-range').value;
+  const fromEl = document.getElementById('av-from');
+  const toEl = document.getElementById('av-to');
+  fromEl.style.display = range==='custom'?'inline':'none';
+  toEl.style.display   = range==='custom'?'inline':'none';
+
+  const today = new Date().toISOString().split('T')[0];
+  const yr = new Date().getFullYear();
+  let from, to;
+  if(range==='all')       { from=null; to=null; }
+  else if(range==='thisyear')  { from=yr+'-01-01'; to=today; }
+  else if(range==='lastyear')  { from=(yr-1)+'-01-01'; to=(yr-1)+'-12-31'; }
+  else if(range==='last30')    { const d=new Date(); d.setDate(d.getDate()-30); from=d.toISOString().split('T')[0]; to=today; }
+  else if(range==='last90')    { const d=new Date(); d.setDate(d.getDate()-90); from=d.toISOString().split('T')[0]; to=today; }
+  else { from=fromEl.value; to=toEl.value; }
+
+  let data = [...entries];
+  if(from) data=data.filter(e=>e.date>=from);
+  if(to)   data=data.filter(e=>e.date<=to);
+
+  const days  = data.filter(e=>e.type==='day');
+  const weeks = data.filter(e=>e.type==='week');
+  const months= data.filter(e=>e.type==='month');
+
+  const avg = (arr,fn) => arr.length>0?(arr.reduce((s,e)=>s+fn(e),0)/arr.length):null;
+  const sum = (arr,fn) => arr.reduce((s,e)=>s+fn(e),0);
+
+  const fmtVal = (v,u,dec=2) => v!=null?`<span style="font-size:20px;font-weight:500">${v.toFixed(dec)}</span><span style="font-size:12px;color:var(--text2);margin-left:3px">${u}</span>`:'<span style="color:var(--text3)">—</span>';
+
+  const sections = [];
+
+  if(days.length>0) {
+    const avgKwh = avg(days,e=>e.kwh);
+    const maxDay = days.reduce((a,b)=>b.kwh>a.kwh?b:a);
+    const minDay = days.reduce((a,b)=>b.kwh<a.kwh?b:a);
+    const avgPr  = avg(days,e=>{ const th=getTheoryForEntry(e); return th>0?e.kwh/th*100:0; });
+    const peakDays = days.filter(e=>e.peak);
+    sections.push(`
+      <div class="form-card">
+        <div class="form-title">📅 Tages-Durchschnitte <span style="font-size:11px;color:var(--text3);font-weight:400">(${days.length} Einträge)</span></div>
+        <div class="avg-row">
+          <div class="avg-cell"><div class="avg-cell-label">Ø Tagesertrag</div><div class="avg-cell-val">${fmtVal(avgKwh,'kWh')}</div></div>
+          <div class="avg-cell"><div class="avg-cell-label">Ø Performance</div><div class="avg-cell-val">${fmtVal(avgPr,'%',1)}</div></div>
+          <div class="avg-cell"><div class="avg-cell-label">Bester Tag</div><div class="avg-cell-val" style="font-size:13px">${maxDay.date}<br><span style="color:var(--accent)">${maxDay.kwh.toFixed(2)} kWh</span></div></div>
+          <div class="avg-cell"><div class="avg-cell-label">Schlechtester Tag</div><div class="avg-cell-val" style="font-size:13px">${minDay.date}<br><span style="color:var(--text2)">${minDay.kwh.toFixed(2)} kWh</span></div></div>
+        </div>
+        ${peakDays.length>0?`<div class="avg-row">
+          <div class="avg-cell"><div class="avg-cell-label">Ø Spitzenleistung</div><div class="avg-cell-val">${fmtVal(avg(peakDays,e=>e.peak),'W',0)}</div></div>
+          <div class="avg-cell"><div class="avg-cell-label">Max Spitze</div><div class="avg-cell-val">${fmtVal(Math.max(...peakDays.map(e=>e.peak)),'W',0)}</div></div>
+          <div class="avg-cell"><div class="avg-cell-label">Gesamtertrag</div><div class="avg-cell-val">${fmtVal(sum(days,e=>e.kwh),'kWh')}</div></div>
+          <div class="avg-cell"><div class="avg-cell-label">Geschätzter Gewinn</div><div class="avg-cell-val">${fmtVal(sum(days,e=>calcEuro(e)),'€')}</div></div>
+        </div>`:''}
+      </div>`);
+  }
+
+  if(weeks.length>0) {
+    const avgKwh = avg(weeks,e=>e.kwh);
+    const maxW = weeks.reduce((a,b)=>b.kwh>a.kwh?b:a);
+    sections.push(`
+      <div class="form-card">
+        <div class="form-title">📆 Wochen-Durchschnitte <span style="font-size:11px;color:var(--text3);font-weight:400">(${weeks.length} Einträge)</span></div>
+        <div class="avg-row">
+          <div class="avg-cell"><div class="avg-cell-label">Ø Wochenertrag</div><div class="avg-cell-val">${fmtVal(avgKwh,'kWh')}</div></div>
+          <div class="avg-cell"><div class="avg-cell-label">Beste Woche</div><div class="avg-cell-val" style="font-size:13px">KW${maxW.kw||'?'}<br><span style="color:var(--accent)">${maxW.kwh.toFixed(2)} kWh</span></div></div>
+          <div class="avg-cell"><div class="avg-cell-label">Gesamtertrag</div><div class="avg-cell-val">${fmtVal(sum(weeks,e=>e.kwh),'kWh')}</div></div>
+          <div class="avg-cell"><div class="avg-cell-label">Geschätzter Gewinn</div><div class="avg-cell-val">${fmtVal(sum(weeks,e=>calcEuro(e)),'€')}</div></div>
+        </div>
+      </div>`);
+  }
+
+  if(months.length>0) {
+    const avgKwh = avg(months,e=>e.kwh);
+    const maxM = months.reduce((a,b)=>b.kwh>a.kwh?b:a);
+    const avgPr = avg(months,e=>{ const th=getTheoryForEntry(e); return th>0?e.kwh/th*100:0; });
+    sections.push(`
+      <div class="form-card">
+        <div class="form-title">📊 Monats-Durchschnitte <span style="font-size:11px;color:var(--text3);font-weight:400">(${months.length} Einträge)</span></div>
+        <div class="avg-row">
+          <div class="avg-cell"><div class="avg-cell-label">Ø Monatsertrag</div><div class="avg-cell-val">${fmtVal(avgKwh,'kWh')}</div></div>
+          <div class="avg-cell"><div class="avg-cell-label">Ø Performance</div><div class="avg-cell-val">${fmtVal(avgPr,'%',1)}</div></div>
+          <div class="avg-cell"><div class="avg-cell-label">Bester Monat</div><div class="avg-cell-val" style="font-size:13px">${MONTHS_FULL[new Date(maxM.date).getMonth()]}<br><span style="color:var(--accent)">${maxM.kwh.toFixed(2)} kWh</span></div></div>
+          <div class="avg-cell"><div class="avg-cell-label">Jahreshochrechnung</div><div class="avg-cell-val">${fmtVal(avgKwh!=null?avgKwh*12:null,'kWh',0)}</div></div>
+        </div>
+      </div>`);
+  }
+
+  const content = document.getElementById('averages-content');
+  if(sections.length===0) {
+    content.innerHTML = `<div class="empty"><div class="empty-icon">◎</div><div class="empty-text">Keine Daten für diesen Zeitraum</div><div class="empty-sub">Trage zuerst Werte im Tab "Eintrag" ein</div></div>`;
+  } else {
+    content.innerHTML = sections.join('');
+  }
+}
+
+// ============================================================
+// SETTINGS
+// ============================================================
+function loadSettingsUI() {
+  document.getElementById('s-lat').value = cfg.lat;
+  document.getElementById('s-lon').value = cfg.lon;
+  document.getElementById('s-tilt').value = cfg.tilt;
+  document.getElementById('s-az').value = cfg.az;
+  document.getElementById('s-wp').value = cfg.wp;
+  document.getElementById('s-inv').value = cfg.inv;
+  document.getElementById('s-price').value = cfg.price;
+  document.getElementById('s-feed').value = cfg.feedRate;
+  document.getElementById('s-selfpct').value = cfg.selfPct;
+  updateTheorySummary();
+}
+function saveSettings() {
+  cfg.lat = parseFloat(document.getElementById('s-lat').value)||47.52;
+  cfg.lon = parseFloat(document.getElementById('s-lon').value)||16.03;
+  cfg.tilt= parseFloat(document.getElementById('s-tilt').value)||35;
+  cfg.az  = parseFloat(document.getElementById('s-az').value)||-45;
+  cfg.wp  = parseFloat(document.getElementById('s-wp').value)||800;
+  cfg.inv = document.getElementById('s-inv').value;
+  cfg.price = parseFloat(document.getElementById('s-price').value)||0.30;
+  cfg.feedRate = parseFloat(document.getElementById('s-feed').value)||0.082;
+  cfg.selfPct = parseFloat(document.getElementById('s-selfpct').value)||50;
+  computeTheory();
+  saveToStorage();
+  renderAll();
+  updateTheorySummary();
+  showToast('✓ Einstellungen gespeichert & Theorie neu berechnet');
+}
+function updateTheorySummary() {
+  computeTheory();
+  const annual = theory.reduce((a,b)=>a+b,0);
+  const spec = Math.round(annual/cfg.wp*1000);
+  document.getElementById('theory-summary').innerHTML = `
+    <div class="note">📐 Theoretischer Jahresertrag: <strong>${annual.toFixed(0)} kWh</strong> · Spezifisch: <strong>${spec} kWh/kWp</strong> · Österreich-Referenz: ~1000–1100 kWh/kWp<br>
+    Monatswerte (kWh): ${theory.map((v,i)=>`<span style="color:var(--text2)">${MONTHS[i]}: ${v}</span>`).join(' · ')}</div>`;
+}
+
+// ============================================================
+// IMPORT / EXPORT
+// ============================================================
+function importCSV() {
+  const txt = document.getElementById('csv-in').value.trim();
+  if(!txt) { showToast('Kein Text eingefügt','error'); return; }
+  let count=0;
+  txt.split('\n').forEach(line => {
+    const p = line.trim().split(',');
+    if(p.length<3) return;
+    const type=p[0].trim(), date=p[1].trim(), kwh=parseFloat(p[2]);
+    if(!['day','week','month'].includes(type)||!date||isNaN(kwh)) return;
+    entries = entries.filter(e=>!(e.type===type&&e.date===date));
+    entries.push({
+      id:genId(), type, date, kwh,
+      peak: p[3]?parseFloat(p[3]):null,
+      hours: p[4]?parseFloat(p[4]):null,
+      self:  p[5]?parseFloat(p[5]):null,
+      feed:  p[6]?parseFloat(p[6]):null,
+      weather: p[7]||'⛅',
+      temp:  p[8]?parseFloat(p[8]):null,
+      note:  p[9]||''
+    });
+    count++;
+  });
+  saveToStorage(); renderAll();
+  showToast(`✓ ${count} Einträge importiert`);
+}
+
+function exportCSV() {
+  const type = document.getElementById('ex-type').value;
+  const from = document.getElementById('ex-from').value;
+  const to   = document.getElementById('ex-to').value;
+  let data = [...entries];
+  if(type!=='all') data=data.filter(e=>e.type===type);
+  if(from) data=data.filter(e=>e.date>=from);
+  if(to)   data=data.filter(e=>e.date<=to);
+  data.sort((a,b)=>a.date.localeCompare(b.date));
+  const rows = data.map(e=>[e.type,e.date,e.kwh,e.peak||'',e.hours||'',e.self||'',e.feed||'',e.weather||'',e.temp||'',e.note||''].join(','));
+  const blob = new Blob(['typ,datum,kwh,peak_w,stunden,eigenstrom,einspeisung,wetter,temp,notiz\n'+rows.join('\n')],{type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='pv_pinggau_'+new Date().toISOString().split('T')[0]+'.csv'; a.click();
+  showToast('✓ CSV exportiert ('+rows.length+' Zeilen)');
+}
+
+function loadSample() {
+  const today = new Date();
+  const yr = today.getFullYear()-1;
+  const sample = [
+    `day,${yr}-05-15,4.82,740,7.5,2.5,2.3,☀️,24,Erster schöner Tag`,
+    `day,${yr}-05-16,3.21,680,6.0,1.6,1.6,⛅,19,`,
+    `day,${yr}-05-17,1.85,420,4.5,0.9,1.0,☁️,16,Bewölkt`,
+    `day,${yr}-05-18,5.14,765,8.0,2.8,2.3,☀️,26,Rekordtag`,
+    `week,${yr}-05-20,25.40,,,,,⛅,,KW21`,
+    `week,${yr}-05-27,28.90,,,,,☀️,,KW22`,
+    `month,${yr}-04-01,72.5,,,34,38,☀️,,`,
+    `month,${yr}-05-01,98.3,,,48,50,☀️,,`,
+    `month,${yr}-06-01,115.8,,,57,59,☀️,,Bisher bester Monat`,
+    `month,${yr}-07-01,124.2,,,62,62,☀️,,`,
+    `month,${yr}-08-01,112.4,,,55,57,⛅,,`,
+    `month,${yr}-09-01,84.6,,,42,43,⛅,,`,
+    `month,${yr}-10-01,45.2,,,22,23,☁️,,`,
+    `month,${yr}-11-01,18.3,,,9,9,☁️,,`,
+    `month,${yr}-12-01,10.1,,,5,5,☁️,,`,
+  ].join('\n');
+  document.getElementById('csv-in').value = sample;
+  showToast('Beispieldaten eingefügt — jetzt importieren!');
+}
+
+function clearAll() {
+  if(!confirm('Wirklich ALLE Daten löschen? Das kann nicht rückgängig gemacht werden.')) return;
+  entries = [];
+  saveToStorage(); renderAll();
+  showToast('Alle Daten gelöscht');
+}
+
+// ============================================================
+// TOAST
+// ============================================================
+function showToast(msg, type='success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.borderColor = type==='error'?'rgba(242,92,92,0.5)':'var(--green2)';
+  t.style.color = type==='error'?'var(--red)':'var(--green)';
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 3000);
+}
+
+// ============================================================
+// START
+// ============================================================
+window.addEventListener('load', init);
+document.getElementById('av-range').addEventListener('change', function() {
+  const custom = this.value==='custom';
+  document.getElementById('av-from').style.display=custom?'inline':'none';
+  document.getElementById('av-to').style.display=custom?'inline':'none';
+});
+</script>
+</body>
+</html>
