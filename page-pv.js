@@ -242,8 +242,33 @@ const HTML = `
     </div>
     <button class="btn-p" onclick="PV.exportCsv()">Als CSV exportieren</button>
   </div>
+  <div class="fcard" style="border-color:rgba(91,156,246,.2)">
+    <div class="fcard-t" style="font-size:13px;color:var(--tx2)">🗄 Supabase Datenbank — Tabelle <code>pv_entries</code></div>
+    <div style="font-size:12px;color:var(--tx2);line-height:2;margin-bottom:10px">
+      PV-Einträge werden automatisch mit Supabase synchronisiert.<br>
+      Falls die Tabelle noch nicht existiert, einmalig im <strong>Supabase SQL Editor</strong> ausführen:
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <span style="font-size:11px;color:var(--tx3)">SQL</span>
+      <button class="copy-btn" onclick="APP.copyCode('pv-sql')">Kopieren</button>
+    </div>
+    <div class="code-block" id="pv-sql">create table if not exists pv_entries (
+  id text primary key,
+  type text not null,
+  date date not null,
+  kwh numeric not null,
+  peak numeric, hours numeric,
+  self_kwh numeric, feed_kwh numeric,
+  weather text, temp numeric, note text,
+  source text default 'manual',
+  updated_at timestamptz default now()
+);
+alter table pv_entries enable row level security;
+create policy "allow_all" on pv_entries
+  for all using (true) with check (true);</div>
+  </div>
+
   <div class="fcard" style="border-color:rgba(242,92,92,.2)">
-    <div class="fcard-t" style="color:var(--rd)">⚠ PV-Daten löschen</div>
     <div style="margin-bottom:14px">
       <p style="font-size:12px;color:var(--tx2);margin-bottom:10px">Zeitraum auswählen und Einträge in diesem Bereich löschen:</p>
       <div class="fgrid" style="grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">

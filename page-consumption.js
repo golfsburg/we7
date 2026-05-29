@@ -96,20 +96,35 @@ const HTML = `
     <textarea class="csv-area" id="cv-csv-in"
       placeholder='Export_Bezeichnung;...;Von;Zeitzone;...;Wert;Einheit&#10;"2026-04";...;01.04.2026 00:00:00;MESZ;...;0,069000;kWh;gemessen;'></textarea>
     <div class="brow">
-      <button class="btn-p" onclick="CV.importSmartMeter()">Smart Meter CSV importieren</button>
+      <button class="btn-p" onclick="CV.importSmartMeter(false)">Importieren (neu hinzufügen)</button>
+      <button class="btn-s" onclick="CV.importSmartMeter(true)">↺ Neu importieren (überschreiben)</button>
     </div>
     <div id="cv-import-result" style="font-size:12px;color:var(--tx2);margin-top:10px"></div>
   </div>
 
-  <div class="fcard" style="border-color:rgba(245,200,66,.25)">
-    <div class="fcard-t" style="color:var(--ac)">🔧 Daten reparieren</div>
-    <p style="font-size:12px;color:var(--tx2);margin-bottom:10px">
-      Falls Stundenwerte falsch dargestellt werden (alles bei 00:00), hier einmalig alle gespeicherten Stunden- und Minutenwerte korrigieren:
-    </p>
-    <div class="brow">
-      <button class="btn-p" onclick="CV.fixHours()">Stunden reparieren</button>
+  <div class="fcard" style="border-color:rgba(91,156,246,.2)">
+    <div class="fcard-t" style="font-size:13px;color:var(--tx2)">🗄 Supabase Datenbank — Tabelle <code>consumption_15min</code></div>
+    <div style="font-size:12px;color:var(--tx2);line-height:2;margin-bottom:10px">
+      Verbrauchsdaten werden automatisch mit Supabase synchronisiert.<br>
+      Falls die Tabelle noch nicht existiert, einmalig im <strong>Supabase SQL Editor</strong> ausführen:
     </div>
-    <div id="cv-fix-result" style="font-size:12px;color:var(--tx2);margin-top:8px"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <span style="font-size:11px;color:var(--tx3)">SQL</span>
+      <button class="copy-btn" onclick="APP.copyCode('cv-sql')">Kopieren</button>
+    </div>
+    <div class="code-block" id="cv-sql">create table if not exists consumption_15min (
+  id text primary key,
+  date date not null,
+  hour smallint not null,
+  minute smallint not null,
+  kwh numeric not null,
+  direction text default 'grid',
+  created_at timestamptz default now()
+);
+alter table consumption_15min enable row level security;
+create policy "allow_all" on consumption_15min
+  for all using (true) with check (true);
+create index if not exists idx_cv_date on consumption_15min(date);</div>
   </div>
 
   <div class="fcard" style="border-color:rgba(242,92,92,.2)">
@@ -350,112 +365,84 @@ function renderProfile() {
 }
 
 // ── SMART METER IMPORT ────────────────────────────────────
-function importSmartMeter() {
+function importSmartMeter(overwrite = false) {
   const raw = document.getElementById('cv-csv-in')?.value.trim();
   const resEl = document.getElementById('cv-import-result');
   if (!raw) { APP.toast('Kein CSV eingefügt','err'); return; }
-  const lines = raw.split('\n').map(l=>l.trim()).filter(l=>l.length>0);
-  let added=0, skipped=0;
+
+  const lines = raw.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  let skipped = 0;
   const newE = [];
+
   lines.forEach(line => {
-    if (line.startsWith('Export_Bezeichnung')||line.startsWith('"Export')) { skipped++; return; }
+    // Skip header line
+    if (line.startsWith('Export_Bezeichnung') || line.startsWith('"Export')) { skipped++; return; }
     const cols = line.split(';');
     if (cols.length < 15) { skipped++; return; }
     try {
       const direction = cols[5]?.trim();
       const vonRaw    = cols[6]?.trim();
-      const wertRaw   = cols[14]?.trim().replace(',','.');
+      const wertRaw   = cols[14]?.trim().replace(',', '.');
       const kwh = parseFloat(wertRaw);
-      if (isNaN(kwh)||!vonRaw) { skipped++; return; }
+      if (isNaN(kwh) || !vonRaw) { skipped++; return; }
+
       const [datePart, timePart] = vonRaw.split(' ');
-      const [d,m,y] = datePart.split('.');
+      const [d, m, y] = datePart.split('.');
       const date = `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
-      const [hh,mm] = (timePart||'00:00:00').split(':');
-      const hour=parseInt(hh), minute=parseInt(mm);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { skipped++; return; }
-      const dir = direction?.toLowerCase().includes('einspeisung') ? 'feed' : 'grid';
-      newE.push({ id:APP.genId(), date, hour:parseInt(hh,10), minute:parseInt(mm,10), kwh, direction:dir });
-      added++;
+
+      const [hh, mm] = (timePart || '00:00:00').split(':');
+      const hour   = parseInt(hh, 10);
+      const minute = parseInt(mm, 10);
+      const dir    = direction?.toLowerCase().includes('einspeisung') ? 'feed' : 'grid';
+
+      newE.push({ id: APP.genId(), date, hour, minute, kwh, direction: dir });
     } catch(e) { skipped++; }
   });
+
   if (!newE.length) {
-    if (resEl) resEl.innerHTML = `<span style="color:var(--rd)">Keine gültigen Zeilen. Bitte Format prüfen.</span>`;
-    APP.toast('Import fehlgeschlagen','err'); return;
-  }
-
-  // Normalize existing entries: ensure hour/minute are integers for comparison
-  const normalizedExisting = APP.consumption.map(c => ({
-    ...c,
-    hour:   parseInt(c.hour,   10),
-    minute: parseInt(c.minute, 10),
-    kwh:    parseFloat(c.kwh)
-  }));
-
-  // Build duplicate key set from normalized data
-  const existing = new Set(
-    normalizedExisting.map(c => `${c.date}-${c.hour}-${c.minute}-${c.direction}`)
-  );
-  const fresh = newE.filter(e =>
-    !existing.has(`${e.date}-${e.hour}-${e.minute}-${e.direction}`)
-  );
-
-  // If all were duplicates, offer to overwrite (re-import)
-  if (fresh.length === 0) {
-    if (resEl) resEl.innerHTML = `
-      <span style="color:var(--ac)">⚠ Alle ${newE.length} Einträge bereits vorhanden.<br>
-      <button class="btn-s" onclick="CV.reimport()" style="margin-top:6px;font-size:11px">
-        ↺ Trotzdem neu importieren (überschreiben)
-      </button></span>`;
-    // Store pending import for reimport()
-    APP._pendingImport = newE;
+    if (resEl) resEl.innerHTML = `<span style="color:var(--rd)">Keine gültigen Zeilen gefunden. Format prüfen.</span>`;
+    APP.toast('Import fehlgeschlagen','err');
     return;
   }
 
-  APP._pendingImport = null;
-  APP.setConsumption([...normalizedExisting, ...fresh]
-    .sort((a,b) => a.date!==b.date ? a.date.localeCompare(b.date) : a.hour!==b.hour ? a.hour-b.hour : a.minute-b.minute));
+  const importDates = new Set(newE.map(e => e.date));
+  let base;
+
+  if (overwrite) {
+    // Remove all existing entries for the dates in this import, then add new
+    base = APP.consumption.filter(c => !importDates.has(c.date));
+  } else {
+    // Only add entries not already present (by date+hour+minute+direction)
+    // Normalize existing hours to integers for reliable comparison
+    const existingNorm = APP.consumption.map(c => ({
+      ...c, hour: parseInt(c.hour, 10), minute: parseInt(c.minute, 10), kwh: parseFloat(c.kwh)
+    }));
+    const existingKeys = new Set(existingNorm.map(c => `${c.date}|${c.hour}|${c.minute}|${c.direction}`));
+    const fresh = newE.filter(e => !existingKeys.has(`${e.date}|${e.hour}|${e.minute}|${e.direction}`));
+    if (fresh.length === 0) {
+      if (resEl) resEl.innerHTML = `<span style="color:var(--ac)">⚠ Alle ${newE.length} Einträge bereits vorhanden. Verwende "↺ Neu importieren (überschreiben)" um sie zu ersetzen.</span>`;
+      return;
+    }
+    base = existingNorm;
+    newE.length = 0;
+    fresh.forEach(e => newE.push(e));
+  }
+
+  APP.setConsumption(
+    [...base, ...newE].sort((a,b) =>
+      a.date !== b.date ? a.date.localeCompare(b.date) :
+      a.hour !== b.hour ? a.hour - b.hour : a.minute - b.minute
+    )
+  );
   APP.saveCv(); renderOverview(); APP.updateSidebar();
-  const days = new Set(newE.map(e=>e.date)).size;
-  if (resEl) resEl.innerHTML = `<span style="color:var(--gr)">✓ ${fresh.length} neue Messpunkte importiert (${days} Tage)${newE.length-fresh.length>0?' · '+(newE.length-fresh.length)+' bereits vorhanden':''}</span>`;
-  APP.toast('✓ ' + fresh.length + ' Verbrauchswerte importiert');
-}
 
-function reimport() {
-  const newE = APP._pendingImport;
-  const resEl = document.getElementById('cv-import-result');
-  if (!newE || !newE.length) { APP.toast('Kein ausstehender Import','err'); return; }
-
-  // Remove existing entries for the same dates, then add fresh
-  const dates = new Set(newE.map(e => e.date));
-  const kept = APP.consumption.filter(c => !dates.has(c.date));
-  APP.setConsumption([...kept, ...newE]
-    .sort((a,b) => a.date!==b.date ? a.date.localeCompare(b.date) : a.hour!==b.hour ? a.hour-b.hour : a.minute-b.minute));
-  APP._pendingImport = null;
-  APP.saveCv(); renderOverview(); APP.updateSidebar();
-  const days = dates.size;
-  if (resEl) resEl.innerHTML = `<span style="color:var(--gr)">✓ ${newE.length} Messpunkte (${days} Tage) neu importiert — alte Einträge für diese Tage ersetzt.</span>`;
-  APP.toast('✓ ' + newE.length + ' Messpunkte reimportiert');
-}
-
-function fixHours() {
-  const resEl = document.getElementById('cv-fix-result');
-  let fixed = 0;
-  const repaired = APP.consumption.map(c => {
-    const h = parseInt(c.hour,   10);
-    const m = parseInt(c.minute, 10);
-    const k = parseFloat(c.kwh);
-    if (c.hour !== h || c.minute !== m || c.kwh !== k) fixed++;
-    return { ...c, hour: h, minute: m, kwh: k };
-  });
-  APP.setConsumption(repaired);
-  APP.saveCv();
-  renderOverview();
-  renderProfile();
-  const msg = fixed > 0
-    ? `✓ ${fixed} Einträge korrigiert — Ansicht wurde aktualisiert.`
-    : `✓ Alle ${repaired.length} Einträge waren bereits korrekt.`;
+  const days = importDates.size;
+  const msg = overwrite
+    ? `✓ ${newE.length} Messpunkte für ${days} Tage neu importiert (alte Einträge ersetzt).`
+    : `✓ ${newE.length} neue Messpunkte importiert (${days} Tage)${skipped > 0 ? ' · ' + skipped + ' übersprungen' : ''}.`;
   if (resEl) resEl.innerHTML = `<span style="color:var(--gr)">${msg}</span>`;
-  APP.toast('✓ Stunden repariert');
+  APP.toast(`✓ ${newE.length} Messpunkte importiert`);
 }
 
 function clearAll() {
@@ -511,5 +498,5 @@ function register() {
   });
 }
 
-return { tab, renderOverview, renderProfile, importSmartMeter, reimport, fixHours, deleteRange, clearAll, register };
+return { tab, renderOverview, renderProfile, importSmartMeter, deleteRange, clearAll, register };
 })();
