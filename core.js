@@ -37,7 +37,19 @@ let pages = {};        // registered page modules
 function loadStorage() {
   try { const c = localStorage.getItem('pv_cfg');  if (c) cfg         = {...cfg,...JSON.parse(c)}; } catch(e){}
   try { const e = localStorage.getItem('pv_ent');  if (e) entries     = JSON.parse(e); } catch(e){}
-  try { const v = localStorage.getItem('pv_cv');   if (v) consumption = JSON.parse(v); } catch(e){}
+  try {
+    const v = localStorage.getItem('pv_cv');
+    if (v) {
+      const raw = JSON.parse(v);
+      // Sanitize: ensure hour and minute are always integers (may be strings from old saves)
+      consumption = raw.map(c => ({
+        ...c,
+        hour:   parseInt(c.hour,   10),
+        minute: parseInt(c.minute, 10),
+        kwh:    parseFloat(c.kwh)
+      }));
+    }
+  } catch(e){}
 }
 function savePv(sync=true) {
   try { localStorage.setItem('pv_cfg', JSON.stringify(cfg));
@@ -233,7 +245,9 @@ async function loadConsumption() {
     if (data && data.length > 0) {
       const localIds = new Set(consumption.map(c=>c.id));
       const n = data.filter(r=>!localIds.has(r.id)).map(r=>({
-        id:r.id, date:r.date, hour:+r.hour, minute:+r.minute,
+        id:r.id, date:r.date,
+        hour:   parseInt(r.hour, 10),
+        minute: parseInt(r.minute, 10),
         kwh:+r.kwh, direction:r.direction||'grid'
       }));
       if (n.length > 0) {
@@ -391,6 +405,8 @@ function closeModal() {
 
 // ── PUBLIC API ───────────────────────────────────────────
 return {
+  // Pending import slot (used by CV module)
+  _pendingImport: null,
   // state (read-only references)
   get cfg()         { return cfg; },
   get theory()      { return theory; },

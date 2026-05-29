@@ -101,6 +101,17 @@ const HTML = `
     <div id="cv-import-result" style="font-size:12px;color:var(--tx2);margin-top:10px"></div>
   </div>
 
+  <div class="fcard" style="border-color:rgba(245,200,66,.25)">
+    <div class="fcard-t" style="color:var(--ac)">🔧 Daten reparieren</div>
+    <p style="font-size:12px;color:var(--tx2);margin-bottom:10px">
+      Falls Stundenwerte falsch dargestellt werden (alles bei 00:00), hier einmalig alle gespeicherten Stunden- und Minutenwerte korrigieren:
+    </p>
+    <div class="brow">
+      <button class="btn-p" onclick="CV.fixHours()">Stunden reparieren</button>
+    </div>
+    <div id="cv-fix-result" style="font-size:12px;color:var(--tx2);margin-top:8px"></div>
+  </div>
+
   <div class="fcard" style="border-color:rgba(242,92,92,.2)">
     <div class="fcard-t" style="color:var(--rd)">⚠ Verbrauchsdaten löschen</div>
     <div style="margin-bottom:14px">
@@ -132,17 +143,22 @@ function tab(name, btn) {
 }
 
 // ── VIEW TOGGLE ───────────────────────────────────────────
+function applyViewToggle(view) {
+  const isDay = view === 'day';
+  const dEl  = document.getElementById('cv-date');
+  const mEl  = document.getElementById('cv-month');
+  const dLbl = document.getElementById('cv-lbl-date');
+  const mLbl = document.getElementById('cv-lbl-month');
+  if (dEl)  dEl.style.display  = isDay ? 'inline' : 'none';
+  if (mEl)  mEl.style.display  = isDay ? 'none'   : 'inline';
+  if (dLbl) dLbl.style.display = isDay ? 'inline' : 'none';
+  if (mLbl) mLbl.style.display = isDay ? 'none'   : 'inline';
+}
 function setupViewToggle() {
   const sel = document.getElementById('cv-view'); if (!sel) return;
-  sel.addEventListener('change', function() {
-    const isDay = this.value === 'day';
-    const dEl = document.getElementById('cv-date'), mEl = document.getElementById('cv-month');
-    const dLbl = document.getElementById('cv-lbl-date'), mLbl = document.getElementById('cv-lbl-month');
-    if (dEl) dEl.style.display = isDay ? 'inline' : 'none';
-    if (mEl) mEl.style.display = isDay ? 'none' : 'inline';
-    if (dLbl) dLbl.style.display = isDay ? 'inline' : 'none';
-    if (mLbl) mLbl.style.display = isDay ? 'none' : 'inline';
-  });
+  // Apply immediately for current value
+  applyViewToggle(sel.value);
+  sel.addEventListener('change', function() { applyViewToggle(this.value); });
 }
 
 // ── METRICS HELPER ────────────────────────────────────────
@@ -180,22 +196,27 @@ function renderDay(date) {
   const t = document.getElementById('cv-chart-title'); if(t) t.textContent = 'Stundenverlauf — ' + date;
   const s = document.getElementById('cv-chart-sub');   if(s) s.textContent = 'kWh pro Stunde';
 
-  const gridH  = Array(24).fill(0);
-  APP.consumption.filter(c=>c.date===date&&c.direction==='grid').forEach(c=>{ gridH[c.hour]+=c.kwh; });
+  const gridH = Array(24).fill(0);
+  // IMPORTANT: cast hour to integer — localStorage/JSON may return strings
+  APP.consumption
+    .filter(c => c.date === date && c.direction === 'grid')
+    .forEach(c => { gridH[parseInt(c.hour, 10)] += c.kwh; });
 
-  const pvDay  = APP.getDayPv(date);
-  const pvH    = Array(24).fill(0);
+  const pvDay = APP.getDayPv(date);
+  const pvH   = Array(24).fill(0);
   if (pvDay > 0) {
-    const w = [0,0,0,0,0,0,.01,.03,.07,.10,.13,.14,.14,.13,.10,.08,.06,.04,.02,.01,0,0,0,0];
-    const ws = w.reduce((a,b)=>a+b,0);
-    w.forEach((v,i) => { pvH[i] = pvDay*(v/ws); });
+    const w  = [0,0,0,0,0,0,.01,.03,.07,.10,.13,.14,.14,.13,.10,.08,.06,.04,.02,.01,0,0,0,0];
+    const ws = w.reduce((a,b) => a+b, 0);
+    w.forEach((v,i) => { pvH[i] = pvDay * (v/ws); });
   }
-  const directH = Array.from({length:24},(_,i) => Math.min(pvH[i], gridH[i]+pvH[i]));
-  const labels  = Array.from({length:24},(_,i) => String(i).padStart(2,'0')+':00');
+  const directH = Array.from({length:24}, (_,i) => Math.min(pvH[i], gridH[i]+pvH[i]));
+  const labels  = Array.from({length:24}, (_,i) => String(i).padStart(2,'0')+':00');
 
   setMetrics(gridH.reduce((a,b)=>a+b,0), pvDay, directH.reduce((a,b)=>a+b,0));
   drawCharts(labels,
-    gridH.map(v=>+v.toFixed(3)), directH.map(v=>+v.toFixed(3)), pvH.map(v=>+v.toFixed(3)),
+    gridH.map(v  => +v.toFixed(3)),
+    directH.map(v => +v.toFixed(3)),
+    pvH.map(v    => +v.toFixed(3)),
     null, pvDay, gridH.reduce((a,b)=>a+b,0));
 }
 
@@ -273,31 +294,58 @@ function drawCharts(labels, gridArr, directArr, pvArr, autarkyArr, pvTot, gridTo
 // ── LASTPROFIL ───────────────────────────────────────────
 function renderProfile() {
   const ym = document.getElementById('cv-pm')?.value || new Date().toISOString().substring(0,7);
-  const data = APP.consumption.filter(c=>c.date.startsWith(ym)&&c.direction==='grid');
-  const days = new Set(data.map(c=>c.date)).size || 1;
-  const hourly = Array(24).fill(0);
-  data.forEach(c => { hourly[c.hour] += c.kwh; });
-  hourly.forEach((_,i) => { hourly[i] = +(hourly[i]/days).toFixed(4); });
+  const data = APP.consumption.filter(c => c.date.startsWith(ym) && c.direction === 'grid');
+  const days = new Set(data.map(c => c.date)).size || 1;
 
-  const maxV  = Math.max(...hourly);
-  const peakH = hourly.indexOf(maxV);
-  const set = (id,v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
-  set('pr-avg',  (hourly.reduce((a,b)=>a+b,0)).toFixed(2));
-  set('pr-peak', String(peakH).padStart(2,'0')+':00');
-  set('pr-days', days);
+  // Aggregate 15-min slots into hourly totals per day, then average across days
+  // hourlyPerDay[date][hour] = sum of kWh for that hour on that day
+  const hourlyPerDay = {};
+  data.forEach(c => {
+    const h = parseInt(c.hour, 10);
+    const d = c.date;
+    if (!hourlyPerDay[d]) hourlyPerDay[d] = Array(24).fill(0);
+    hourlyPerDay[d][h] += c.kwh;
+  });
+
+  // Average across all days that have data
+  const dayList = Object.keys(hourlyPerDay);
+  const nDays   = dayList.length || 1;
+  const hourly  = Array(24).fill(0);
+  dayList.forEach(d => {
+    hourlyPerDay[d].forEach((v, h) => { hourly[h] += v; });
+  });
+  hourly.forEach((_, i) => { hourly[i] = +(hourly[i] / nDays).toFixed(4); });
+
+  const dayTotal = hourly.reduce((a,b) => a+b, 0);
+  const maxV     = Math.max(...hourly);
+  const peakH    = hourly.indexOf(maxV);
+
+  const set = (id, v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
+  set('pr-avg',  dayTotal.toFixed(2));
+  set('pr-peak', String(peakH).padStart(2,'0') + ':00');
+  set('pr-days', nDays);
   set('pr-pts',  data.length);
 
-  const labels = Array.from({length:24},(_,i)=>String(i).padStart(2,'0')+':00');
-  const bg = hourly.map(v => v===maxV ? 'rgba(242,92,92,.7)' : v>maxV*.7 ? 'rgba(245,200,66,.6)' : 'rgba(91,156,246,.65)');
+  const labels = Array.from({length:24}, (_,i) => String(i).padStart(2,'0')+':00');
+  const bg = hourly.map(v =>
+    v === maxV     ? 'rgba(242,92,92,.7)'  :
+    v > maxV * .7  ? 'rgba(245,200,66,.6)' :
+                     'rgba(91,156,246,.65)');
 
   APP.destroyChart('cv-prof');
   APP.charts['cv-prof'] = new Chart(document.getElementById('cv-c-profile'), {
-    type:'bar',
-    data:{ labels, datasets:[{ data:hourly, backgroundColor:bg, borderRadius:3 }] },
-    options:{ responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label:ctx=>ctx.parsed.y.toFixed(4)+' kWh' } } },
-      scales:{ x:{ticks:{color:APP.TC,font:{size:10}},grid:{color:APP.GC}},
-               y:{ticks:{color:APP.TC,font:{size:10}},grid:{color:APP.GC}} } }
+    type: 'bar',
+    data: { labels, datasets: [{ data: hourly, backgroundColor: bg, borderRadius: 3 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend:{display:false},
+        tooltip: { callbacks: { label: ctx => ctx.parsed.y.toFixed(4) + ' kWh' } } },
+      scales: {
+        x: { ticks:{color:APP.TC,font:{size:10}}, grid:{color:APP.GC} },
+        y: { ticks:{color:APP.TC,font:{size:10}}, grid:{color:APP.GC},
+             title:{display:true, text:'kWh/h', color:APP.TC, font:{size:10}} }
+      }
+    }
   });
 }
 
@@ -326,7 +374,7 @@ function importSmartMeter() {
       const hour=parseInt(hh), minute=parseInt(mm);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { skipped++; return; }
       const dir = direction?.toLowerCase().includes('einspeisung') ? 'feed' : 'grid';
-      newE.push({ id:APP.genId(), date, hour, minute, kwh, direction:dir });
+      newE.push({ id:APP.genId(), date, hour:parseInt(hh,10), minute:parseInt(mm,10), kwh, direction:dir });
       added++;
     } catch(e) { skipped++; }
   });
@@ -334,14 +382,80 @@ function importSmartMeter() {
     if (resEl) resEl.innerHTML = `<span style="color:var(--rd)">Keine gültigen Zeilen. Bitte Format prüfen.</span>`;
     APP.toast('Import fehlgeschlagen','err'); return;
   }
-  const existing = new Set(APP.consumption.map(c=>`${c.date}-${c.hour}-${c.minute}-${c.direction}`));
-  const fresh = newE.filter(e => !existing.has(`${e.date}-${e.hour}-${e.minute}-${e.direction}`));
-  APP.setConsumption([...APP.consumption,...fresh]
-    .sort((a,b) => a.date!==b.date ? a.date.localeCompare(b.date) : a.hour-b.hour));
+
+  // Normalize existing entries: ensure hour/minute are integers for comparison
+  const normalizedExisting = APP.consumption.map(c => ({
+    ...c,
+    hour:   parseInt(c.hour,   10),
+    minute: parseInt(c.minute, 10),
+    kwh:    parseFloat(c.kwh)
+  }));
+
+  // Build duplicate key set from normalized data
+  const existing = new Set(
+    normalizedExisting.map(c => `${c.date}-${c.hour}-${c.minute}-${c.direction}`)
+  );
+  const fresh = newE.filter(e =>
+    !existing.has(`${e.date}-${e.hour}-${e.minute}-${e.direction}`)
+  );
+
+  // If all were duplicates, offer to overwrite (re-import)
+  if (fresh.length === 0) {
+    if (resEl) resEl.innerHTML = `
+      <span style="color:var(--ac)">⚠ Alle ${newE.length} Einträge bereits vorhanden.<br>
+      <button class="btn-s" onclick="CV.reimport()" style="margin-top:6px;font-size:11px">
+        ↺ Trotzdem neu importieren (überschreiben)
+      </button></span>`;
+    // Store pending import for reimport()
+    APP._pendingImport = newE;
+    return;
+  }
+
+  APP._pendingImport = null;
+  APP.setConsumption([...normalizedExisting, ...fresh]
+    .sort((a,b) => a.date!==b.date ? a.date.localeCompare(b.date) : a.hour!==b.hour ? a.hour-b.hour : a.minute-b.minute));
   APP.saveCv(); renderOverview(); APP.updateSidebar();
   const days = new Set(newE.map(e=>e.date)).size;
-  if (resEl) resEl.innerHTML = `<span style="color:var(--gr)">✓ ${added} Messpunkte (${days} Tage)${skipped>0?' · '+skipped+' übersprungen':''}</span>`;
-  APP.toast('✓ ' + added + ' Verbrauchswerte importiert');
+  if (resEl) resEl.innerHTML = `<span style="color:var(--gr)">✓ ${fresh.length} neue Messpunkte importiert (${days} Tage)${newE.length-fresh.length>0?' · '+(newE.length-fresh.length)+' bereits vorhanden':''}</span>`;
+  APP.toast('✓ ' + fresh.length + ' Verbrauchswerte importiert');
+}
+
+function reimport() {
+  const newE = APP._pendingImport;
+  const resEl = document.getElementById('cv-import-result');
+  if (!newE || !newE.length) { APP.toast('Kein ausstehender Import','err'); return; }
+
+  // Remove existing entries for the same dates, then add fresh
+  const dates = new Set(newE.map(e => e.date));
+  const kept = APP.consumption.filter(c => !dates.has(c.date));
+  APP.setConsumption([...kept, ...newE]
+    .sort((a,b) => a.date!==b.date ? a.date.localeCompare(b.date) : a.hour!==b.hour ? a.hour-b.hour : a.minute-b.minute));
+  APP._pendingImport = null;
+  APP.saveCv(); renderOverview(); APP.updateSidebar();
+  const days = dates.size;
+  if (resEl) resEl.innerHTML = `<span style="color:var(--gr)">✓ ${newE.length} Messpunkte (${days} Tage) neu importiert — alte Einträge für diese Tage ersetzt.</span>`;
+  APP.toast('✓ ' + newE.length + ' Messpunkte reimportiert');
+}
+
+function fixHours() {
+  const resEl = document.getElementById('cv-fix-result');
+  let fixed = 0;
+  const repaired = APP.consumption.map(c => {
+    const h = parseInt(c.hour,   10);
+    const m = parseInt(c.minute, 10);
+    const k = parseFloat(c.kwh);
+    if (c.hour !== h || c.minute !== m || c.kwh !== k) fixed++;
+    return { ...c, hour: h, minute: m, kwh: k };
+  });
+  APP.setConsumption(repaired);
+  APP.saveCv();
+  renderOverview();
+  renderProfile();
+  const msg = fixed > 0
+    ? `✓ ${fixed} Einträge korrigiert — Ansicht wurde aktualisiert.`
+    : `✓ Alle ${repaired.length} Einträge waren bereits korrekt.`;
+  if (resEl) resEl.innerHTML = `<span style="color:var(--gr)">${msg}</span>`;
+  APP.toast('✓ Stunden repariert');
 }
 
 function clearAll() {
@@ -397,5 +511,5 @@ function register() {
   });
 }
 
-return { tab, renderOverview, renderProfile, importSmartMeter, deleteRange, clearAll, register };
+return { tab, renderOverview, renderProfile, importSmartMeter, reimport, fixHours, deleteRange, clearAll, register };
 })();
