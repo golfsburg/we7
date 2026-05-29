@@ -315,7 +315,7 @@ tr:hover td { background: rgba(255,255,255,0.03); }
     <input class="pw-input" type="password" id="pw-input" placeholder="Passwort" onkeydown="if(event.key==='Enter')checkPw()">
     <button class="pw-btn" onclick="checkPw()">Entsperren</button>
     <div class="pw-error" id="pw-error"></div>
-    <div class="pw-version">pv-tracker v3.0</div>
+    <div class="pw-version">pv-tracker v3.1 · Growatt NEO 800M-X</div>
   </div>
 </div>
 
@@ -529,7 +529,7 @@ tr:hover td { background: rgba(255,255,255,0.03); }
     <div class="btn-row"><button class="btn-primary" onclick="addMonthEntry()">Monat speichern</button></div>
   </div>
 
-  <div class="note">💡 Tipp: Die Power Zero App zeigt den Tagesertrag unter "Energie" → "Heute". Notiere ihn jeden Abend oder füge ihn wöchentlich nach.</div>
+  <div class="note">💡 Tipp: Growatt ShinePhone App → Anlage → Energie → Export → CSV — dann unter "Import / Export" direkt einspielen. Alternativ hier manuell eintragen.</div>
 </div>
 
 <!-- TABLE -->
@@ -611,19 +611,54 @@ tr:hover td { background: rgba(255,255,255,0.03); }
 <!-- IMPORT -->
 <div id="page-import" class="page" style="display:none">
   <div class="page-header">
-    <div><div class="page-title">Import / Export</div><div class="page-subtitle">CSV-Datenaustausch für Power Zero App und andere Quellen</div></div>
+    <div><div class="page-title">Import / Export</div><div class="page-subtitle">Growatt ShinePhone CSV · Manuelles Format · Export</div></div>
   </div>
+
+  <!-- GROWATT SHINEPHONE IMPORT -->
   <div class="form-card">
-    <div class="form-title">↑ CSV Import</div>
-    <p style="font-size:12px;color:var(--text2);margin-bottom:10px">Format: <code>Typ(day/week/month),Datum(YYYY-MM-DD),kWh[,PeakW,Stunden,Eigenstrom,Einspeisung,Wetter,Temp,Notiz]</code></p>
-    <textarea class="csv-area" id="csv-in" placeholder="day,2025-06-01,4.21,720,6.5,2.1,2.1,☀️,22,Erster Tag
-day,2025-06-02,3.85,690,6.0,,,⛅,,
-month,2025-05,95.4,,,45,50,☀️,,Guter Monat"></textarea>
+    <div class="form-title">☀️ Growatt ShinePhone Import</div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:4px">
+      ShinePhone App → <strong>Anlage</strong> → Wechselrichter → <strong>Energie</strong> → Zeitraum wählen → <strong>Export → CSV</strong><br>
+      Das CSV direkt hier einfügen — alle Spalten werden automatisch erkannt.
+    </p>
+    <div class="note" style="margin-bottom:12px">
+      📋 Erwartete Growatt-Spalten: <code>Date, E-Today(kWh), E-Total(kWh), Pac(W), Vpv1(V), Ipv1(A), Temp(℃)</code><br>
+      Auch monatliche Exporte werden erkannt: <code>Month, E-Month(kWh)</code> oder <code>Year, E-Year(kWh)</code>
+    </div>
+    <textarea class="csv-area" id="growatt-csv-in" placeholder="Date,Time,Pac(W),E-Today(kWh),E-Total(kWh),Vpv1(V),Ipv1(A),Temp(℃)
+2025-06-01,05:15:00,0,0,124.5,12.1,0,18.2
+2025-06-01,05:30:00,145,0.07,124.57,28.4,5.1,19.1
+...
+2025-06-01,20:45:00,0,4.21,128.71,0,0,22.3"></textarea>
     <div class="btn-row">
-      <button class="btn-primary" onclick="importCSV()">Importieren</button>
-      <button class="btn-secondary" onclick="loadSample()">Beispieldaten laden</button>
+      <button class="btn-primary" onclick="importGrowatt()">Growatt CSV importieren</button>
+      <button class="btn-secondary" onclick="loadGrowattSample()">Beispiel laden</button>
+    </div>
+    <div id="growatt-import-result" style="font-size:12px;color:var(--text2);margin-top:10px"></div>
+  </div>
+
+  <!-- MANUELLES FORMAT (Fallback) -->
+  <div class="form-card">
+    <div class="form-title" style="display:flex;align-items:center;justify-content:space-between">
+      <span>📝 Manuelles CSV-Format</span>
+      <button onclick="toggleManualImport()" id="manual-toggle-btn" class="btn-secondary" style="font-size:11px;padding:5px 12px">Einblenden</button>
+    </div>
+    <div id="manual-import-section" style="display:none;margin-top:14px">
+      <p style="font-size:12px;color:var(--text2);margin-bottom:8px">
+        Fallback-Format falls kein ShinePhone-Export verfügbar:<br>
+        <code>Typ(day/week/month), Datum(YYYY-MM-DD), kWh [, PeakW, Stunden, Eigenstrom, Einspeisung, Wetter, Temp, Notiz]</code>
+      </p>
+      <textarea class="csv-area" id="csv-in" placeholder="day,2025-06-01,4.21,720,6.5,2.1,2.1,☀️,22,Erster Tag
+day,2025-06-02,3.85,690,6.0,,,⛅,,
+month,2025-05-01,95.4,,,45,50,☀️,,Guter Monat"></textarea>
+      <div class="btn-row">
+        <button class="btn-primary" onclick="importCSV()">Manuell importieren</button>
+        <button class="btn-secondary" onclick="loadSample()">Beispieldaten laden</button>
+      </div>
     </div>
   </div>
+
+  <!-- EXPORT -->
   <div class="form-card">
     <div class="form-title">↓ CSV Export</div>
     <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr">
@@ -638,6 +673,7 @@ month,2025-05,95.4,,,45,50,☀️,,Guter Monat"></textarea>
     </div>
     <button class="btn-primary" onclick="exportCSV()">Als CSV exportieren</button>
   </div>
+
   <div class="form-card">
     <div class="form-title" style="color:var(--red)">⚠ Daten löschen</div>
     <div class="btn-row">
@@ -670,7 +706,7 @@ month,2025-05,95.4,,,45,50,☀️,,Guter Monat"></textarea>
         </select>
       </div>
       <div class="field"><label>Nennleistung (Wp)</label><input type="number" id="s-wp" value="800" step="10"></div>
-      <div class="field"><label>Wechselrichter</label><input type="text" id="s-inv" value="Marstek MST-MI0800W"></div>
+      <div class="field"><label>Wechselrichter</label><input type="text" id="s-inv" value="Growatt NEO 800M-X"></div>
     </div>
     <button class="btn-primary" onclick="saveSettings()">Speichern & Neuberechnen</button>
     <div id="theory-summary" style="margin-top:14px"></div>
@@ -1417,7 +1453,175 @@ function importCSV() {
   showToast(`✓ ${count} Einträge importiert`);
 }
 
-function exportCSV() {
+function toggleManualImport() {
+  const sec = document.getElementById('manual-import-section');
+  const btn = document.getElementById('manual-toggle-btn');
+  const visible = sec.style.display !== 'none';
+  sec.style.display = visible ? 'none' : 'block';
+  btn.textContent = visible ? 'Einblenden' : 'Ausblenden';
+}
+
+// ── GROWATT SHINEPHONE CSV PARSER ───────────────────────────
+function importGrowatt() {
+  const raw = document.getElementById('growatt-csv-in').value.trim();
+  const resultEl = document.getElementById('growatt-import-result');
+  if(!raw) { showToast('Kein CSV eingefügt', 'error'); return; }
+
+  const lines = raw.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  if(lines.length < 2) { showToast('Zu wenig Daten', 'error'); return; }
+
+  const header = lines[0].split(',').map(h => h.trim().toLowerCase()
+    .replace(/[()°℃\s]/g,'').replace('e-today','etoday').replace('e-total','etotal')
+    .replace('e-month','emonth').replace('e-year','eyear')
+    .replace('vpv1','vpv').replace('ipv1','ipv').replace('pac','pac')
+    .replace('temp','temp').replace('date','date').replace('time','time')
+    .replace('month','month').replace('year','year')
+  );
+
+  // Detect export type: daily 5-min data, monthly summary, yearly summary
+  const hasDate   = header.includes('date');
+  const hasMonth  = header.includes('month') && !hasDate;
+  const hasYear   = header.includes('year')  && !hasDate && !hasMonth;
+  const hasEtoday = header.includes('etoday');
+  const hasEmonth = header.includes('emonth');
+  const hasEyear  = header.includes('eyear');
+  const hasPac    = header.includes('pac');
+  const hasTemp   = header.includes('temp');
+  const hasVpv    = header.includes('vpv');
+  const hasIpv    = header.includes('ipv');
+
+  const col = (name) => header.indexOf(name);
+  const val = (row, name) => { const i = col(name); return i>=0 ? row[i]?.trim() : null; };
+
+  const dataLines = lines.slice(1);
+  let importedDays = {};   // date → {kwh, peakW, temps[]}
+  let importedMonths = {}; // YYYY-MM → kwh
+  let skipped = 0;
+
+  if(hasDate && hasEtoday) {
+    // 5-minute interval data → aggregate per day using E-Today max
+    dataLines.forEach(line => {
+      const row = line.split(',');
+      const dateRaw = val(row,'date');
+      if(!dateRaw) { skipped++; return; }
+      // Normalize date: 2025/06/01 or 2025-06-01
+      const date = dateRaw.replace(/\//g,'-').substring(0,10);
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(date)) { skipped++; return; }
+
+      const etoday = parseFloat(val(row,'etoday'));
+      const pac    = hasPac  ? parseFloat(val(row,'pac'))  : NaN;
+      const temp   = hasTemp ? parseFloat(val(row,'temp')) : NaN;
+
+      if(!importedDays[date]) importedDays[date] = { kwh: 0, peakW: 0, temps: [] };
+      // E-Today is cumulative within day — take max as day total
+      if(!isNaN(etoday) && etoday > importedDays[date].kwh) importedDays[date].kwh = etoday;
+      if(!isNaN(pac) && pac > importedDays[date].peakW) importedDays[date].peakW = pac;
+      if(!isNaN(temp)) importedDays[date].temps.push(temp);
+    });
+  } else if(hasDate && !hasEtoday) {
+    // Daily summary rows: Date, E-day(kWh) in various column names
+    const kwhCol = header.find(h => h.includes('kwh') || h.includes('energy') || h.includes('eday')) || header[1];
+    dataLines.forEach(line => {
+      const row = line.split(',');
+      const dateRaw = val(row,'date');
+      if(!dateRaw) { skipped++; return; }
+      const date = dateRaw.replace(/\//g,'-').substring(0,10);
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(date)) { skipped++; return; }
+      const kwh = parseFloat(row[col(kwhCol)] || row[1]);
+      if(isNaN(kwh)) { skipped++; return; }
+      importedDays[date] = { kwh, peakW: 0, temps: [] };
+    });
+  } else if(hasMonth && hasEmonth) {
+    // Monthly summary
+    dataLines.forEach(line => {
+      const row = line.split(',');
+      const monthRaw = val(row,'month')?.replace(/\//g,'-');
+      const kwh = parseFloat(val(row,'emonth'));
+      if(!monthRaw || isNaN(kwh)) { skipped++; return; }
+      const key = monthRaw.length === 7 ? monthRaw : monthRaw.substring(0,7);
+      importedMonths[key] = kwh;
+    });
+  } else if(hasYear && hasEyear) {
+    // Yearly — split into months proportionally (fallback)
+    dataLines.forEach(line => {
+      const row = line.split(',');
+      const year = val(row,'year');
+      const kwh = parseFloat(val(row,'eyear'));
+      if(!year || isNaN(kwh)) { skipped++; return; }
+      theory.forEach((th,m) => {
+        const totalTh = theory.reduce((a,b)=>a+b,0);
+        const share = totalTh>0 ? kwh * (th/totalTh) : kwh/12;
+        const key = year+'-'+String(m+1).padStart(2,'0');
+        importedMonths[key] = parseFloat(share.toFixed(2));
+      });
+    });
+  }
+
+  let added = 0;
+
+  // Build day entries
+  Object.entries(importedDays).forEach(([date, d]) => {
+    if(d.kwh <= 0) return;
+    entries = entries.filter(e => !(e.type==='day' && e.date===date));
+    const avgTemp = d.temps.length ? Math.round(d.temps.reduce((a,b)=>a+b,0)/d.temps.length) : null;
+    entries.push({
+      id: genId(), type: 'day', date,
+      kwh: parseFloat(d.kwh.toFixed(3)),
+      peak: d.peakW > 0 ? Math.round(d.peakW) : null,
+      hours: null, self: null, feed: null,
+      weather: '⛅', temp: avgTemp,
+      note: 'Growatt ShinePhone Import'
+    });
+    added++;
+  });
+
+  // Build month entries
+  Object.entries(importedMonths).forEach(([key, kwh]) => {
+    const date = key.length === 7 ? key+'-01' : key;
+    entries = entries.filter(e => !(e.type==='month' && e.date===date));
+    entries.push({
+      id: genId(), type: 'month', date,
+      kwh: parseFloat(kwh.toFixed(2)),
+      peak: null, hours: null, self: null, feed: null,
+      weather: '⛅', temp: null,
+      note: 'Growatt ShinePhone Import'
+    });
+    added++;
+  });
+
+  entries.sort((a,b) => a.date.localeCompare(b.date));
+  saveToStorage();
+  renderAll();
+
+  const summary = `✓ ${added} Einträge importiert${skipped>0?' ('+skipped+' Zeilen übersprungen)':''} · Typ: ${Object.keys(importedDays).length>0?'Tagesdaten':'Monatsdaten'}`;
+  resultEl.innerHTML = `<span style="color:var(--green)">${summary}</span>`;
+  showToast('✓ Growatt: '+added+' Einträge importiert');
+}
+
+function loadGrowattSample() {
+  const today = new Date();
+  const yr = today.getFullYear();
+  const mo = String(today.getMonth()+1).padStart(2,'0');
+  const sample = `Date,Time,Pac(W),E-Today(kWh),E-Total(kWh),Vpv1(V),Ipv1(A),Temp(℃)
+${yr}-${mo}-01,05:30:00,0,0.00,124.50,12.1,0.0,16.2
+${yr}-${mo}-01,06:00:00,87,0.04,124.54,28.4,3.1,17.8
+${yr}-${mo}-01,09:00:00,542,1.21,125.71,36.2,15.0,22.1
+${yr}-${mo}-01,12:00:00,748,3.10,127.60,38.1,19.6,28.4
+${yr}-${mo}-01,15:00:00,610,4.85,129.35,35.0,17.4,27.2
+${yr}-${mo}-01,18:00:00,124,5.80,130.30,18.2,6.8,24.0
+${yr}-${mo}-01,20:00:00,0,5.82,130.32,0,0,21.5
+${yr}-${mo}-02,05:30:00,0,0.00,130.32,11.8,0.0,15.9
+${yr}-${mo}-02,09:00:00,380,0.95,131.27,33.1,11.5,20.3
+${yr}-${mo}-02,12:00:00,490,2.40,132.72,34.5,14.2,23.8
+${yr}-${mo}-02,18:00:00,60,3.71,134.03,14.1,4.3,21.0
+${yr}-${mo}-02,20:00:00,0,3.72,134.04,0,0,19.4
+${yr}-${mo}-03,12:00:00,210,1.20,135.24,29.0,7.2,18.1
+${yr}-${mo}-03,20:00:00,0,2.15,136.19,0,0,17.8`;
+  document.getElementById('growatt-csv-in').value = sample;
+  showToast('Beispiel-Daten eingefügt — jetzt importieren!');
+}
+
+
   const type = document.getElementById('ex-type').value;
   const from = document.getElementById('ex-from').value;
   const to   = document.getElementById('ex-to').value;
@@ -1545,7 +1749,9 @@ function entryToRow(e) {
     peak: e.peak||null, hours: e.hours||null,
     self_kwh: e.self||null, feed_kwh: e.feed||null,
     weather: e.weather||null, temp: e.temp||null,
-    note: e.note||null, updated_at: new Date().toISOString()
+    note: e.note||null,
+    source: e.source || 'manual',
+    updated_at: new Date().toISOString()
   };
 }
 
@@ -1557,7 +1763,7 @@ function rowToEntry(r) {
     self:  r.self_kwh  ? parseFloat(r.self_kwh)  : null,
     feed:  r.feed_kwh  ? parseFloat(r.feed_kwh)  : null,
     weather: r.weather||'', temp: r.temp ? parseFloat(r.temp) : null,
-    note: r.note||''
+    note: r.note||'', source: r.source||'manual'
   };
 }
 
