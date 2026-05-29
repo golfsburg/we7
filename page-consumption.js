@@ -101,28 +101,20 @@ const HTML = `
     <div id="cv-import-result" style="font-size:12px;color:var(--tx2);margin-top:10px"></div>
   </div>
 
-  <div class="fcard" style="border-color:rgba(91,156,246,.2)">
-    <div class="fcard-t" style="font-size:13px;color:var(--tx2)">
-      <span>🗄 Supabase Tabelle (einmalig anlegen)</span>
-      <button class="copy-btn" onclick="APP.copyCode('cv-sql')">Kopieren</button>
-    </div>
-    <div class="code-block" id="cv-sql">create table if not exists consumption_15min (
-  id text primary key, date date not null,
-  hour smallint not null, minute smallint not null,
-  kwh numeric not null, direction text default 'grid',
-  created_at timestamptz default now()
-);
-alter table consumption_15min enable row level security;
-create policy "allow_all" on consumption_15min for all using (true) with check (true);
-create index if not exists idx_cv_date on consumption_15min(date);</div>
-    <div class="note" style="margin-top:10px">Falls du die Spalte noch nicht hinzugefügt hast:<br>
-      <code>alter table pv_entries add column if not exists source text default 'manual';</code>
-    </div>
-  </div>
-
   <div class="fcard" style="border-color:rgba(242,92,92,.2)">
     <div class="fcard-t" style="color:var(--rd)">⚠ Verbrauchsdaten löschen</div>
-    <button class="btn-s btn-d" onclick="CV.clearAll()">Alle Verbrauchsdaten löschen</button>
+    <div style="margin-bottom:14px">
+      <p style="font-size:12px;color:var(--tx2);margin-bottom:10px">Zeitraum auswählen und Messpunkte in diesem Bereich löschen:</p>
+      <div class="fgrid" style="grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div class="field"><label>Von</label><input type="date" id="cv-del-from"></div>
+        <div class="field"><label>Bis</label><input type="date" id="cv-del-to"></div>
+      </div>
+      <div class="brow">
+        <button class="btn-s btn-d" onclick="CV.deleteRange()">Zeitraum löschen</button>
+        <button class="btn-s btn-d" onclick="CV.clearAll()">Alle Verbrauchsdaten löschen</button>
+      </div>
+      <div id="cv-del-result" style="font-size:12px;color:var(--tx2);margin-top:8px"></div>
+    </div>
   </div>
 </div>
 `;
@@ -361,6 +353,29 @@ function clearAll() {
   APP.toast('Verbrauchsdaten gelöscht');
 }
 
+function deleteRange() {
+  const from  = document.getElementById('cv-del-from')?.value;
+  const to    = document.getElementById('cv-del-to')?.value;
+  const resEl = document.getElementById('cv-del-result');
+  if (!from || !to) { APP.toast('Bitte Von und Bis Datum auswählen','err'); return; }
+  if (from > to)    { APP.toast('Von muss vor Bis liegen','err'); return; }
+
+  const toDelete = APP.consumption.filter(c => c.date >= from && c.date <= to);
+  if (toDelete.length === 0) {
+    if (resEl) resEl.innerHTML = `<span style="color:var(--tx2)">Keine Messpunkte in diesem Zeitraum gefunden.</span>`;
+    return;
+  }
+  if (!confirm(`${toDelete.length} Messpunkte vom ${from} bis ${to} löschen?`)) return;
+  const pw = prompt('Passwort bestätigen:');
+  if (pw !== 'We7-Tracker-P!nggau') { APP.toast('Falsches Passwort','err'); return; }
+
+  const days = new Set(toDelete.map(c=>c.date)).size;
+  APP.setConsumption(APP.consumption.filter(c => !(c.date >= from && c.date <= to)));
+  APP.saveCv(); renderOverview(); APP.updateSidebar();
+  if (resEl) resEl.innerHTML = `<span style="color:var(--gr)">✓ ${toDelete.length} Messpunkte (${days} Tage) gelöscht (${from} – ${to})</span>`;
+  APP.toast(`✓ ${toDelete.length} Messpunkte gelöscht`);
+}
+
 // ── INIT DEFAULTS ─────────────────────────────────────────
 function initDefaults() {
   const today = new Date().toISOString().split('T')[0];
@@ -368,6 +383,10 @@ function initDefaults() {
   const cd=document.getElementById('cv-date');  if(cd) cd.value=today;
   const cm=document.getElementById('cv-month'); if(cm) cm.value=ym;
   const cp=document.getElementById('cv-pm');    if(cp) cp.value=ym;
+  // Delete-range defaults to last 30 days
+  const d30=new Date(); d30.setDate(d30.getDate()-30);
+  const df=document.getElementById('cv-del-from'), dt=document.getElementById('cv-del-to');
+  if(df) df.value=d30.toISOString().split('T')[0]; if(dt) dt.value=today;
   setupViewToggle();
 }
 
@@ -378,5 +397,5 @@ function register() {
   });
 }
 
-return { tab, renderOverview, renderProfile, importSmartMeter, clearAll, register };
+return { tab, renderOverview, renderProfile, importSmartMeter, deleteRange, clearAll, register };
 })();

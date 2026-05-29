@@ -12,12 +12,53 @@ const HTML = `
 
 <div class="mtabs" id="pv-tabs">
   <button class="mtab active"  onclick="PV.tab('overview',this)">Übersicht</button>
+  <button class="mtab"         onclick="PV.tab('profile',this)">Ertragsprofil</button>
   <button class="mtab"         onclick="PV.tab('data',this)">Daten</button>
   <button class="mtab"         onclick="PV.tab('entry',this)">Eintrag</button>
   <button class="mtab"         onclick="PV.tab('import',this)">Import / Export</button>
 </div>
 
-<!-- ── ÜBERSICHT ── -->
+<!-- ── ERTRAGSPROFIL ── -->
+<div id="pv-t-profile" style="display:none">
+  <div class="fbar">
+    <label>Granularität</label>
+    <select id="pp-gran" onchange="PV.renderProfile()">
+      <option value="day" selected>Täglich</option>
+      <option value="week">Wöchentlich</option>
+      <option value="month">Monatlich</option>
+    </select>
+    <span class="fsep">|</span>
+    <label>Von</label><input type="date" id="pp-from" onchange="PV.renderProfile()">
+    <label>Bis</label><input type="date" id="pp-to"   onchange="PV.renderProfile()">
+    <button class="btn-p" onclick="PV.renderProfile()">Anwenden</button>
+    <button class="btn-s" onclick="PV.resetProfile()">Reset</button>
+  </div>
+  <div class="metrics">
+    <div class="mc hi"><div class="mc-l">Ertrag (Zeitraum)</div><div><span class="mc-v" id="pp-m-total">—</span><span class="mc-u">kWh</span></div><div class="mc-d" id="pp-m-total2"></div></div>
+    <div class="mc"><div class="mc-l">Ø pro Eintrag</div><div><span class="mc-v" id="pp-m-avg">—</span><span class="mc-u">kWh</span></div></div>
+    <div class="mc"><div class="mc-l">Spitzenwert</div><div><span class="mc-v" id="pp-m-max">—</span><span class="mc-u">kWh</span></div><div class="mc-d" id="pp-m-max2"></div></div>
+    <div class="mc"><div class="mc-l">Minimum</div><div><span class="mc-v" id="pp-m-min">—</span><span class="mc-u">kWh</span></div><div class="mc-d" id="pp-m-min2"></div></div>
+  </div>
+  <div class="cc full" style="margin-bottom:14px">
+    <div class="cc-title" id="pp-chart-title">Ertragsprofil</div>
+    <div class="cc-sub" id="pp-chart-sub">kWh pro Eintrag — 🟡 Spitze · 🟢 hoch · 🔵 normal · 🔴 niedrig</div>
+    <div class="cw" style="height:260px"><canvas id="pp-c-main"></canvas></div>
+  </div>
+  <div class="cgrid">
+    <div class="cc">
+      <div class="cc-title">Vergleich mit Theorie</div>
+      <div class="cc-sub">Tatsächlich vs. Theoretisch (kWh)</div>
+      <div class="cw" style="height:190px"><canvas id="pp-c-theory"></canvas></div>
+    </div>
+    <div class="cc">
+      <div class="cc-title">Performance Ratio</div>
+      <div class="cc-sub">% Effizienz im Profil-Zeitraum</div>
+      <div class="cw" style="height:190px"><canvas id="pp-c-pr"></canvas></div>
+    </div>
+  </div>
+</div>
+
+
 <div id="pv-t-overview">
   <div class="fbar">
     <label>Granularität</label>
@@ -203,21 +244,33 @@ const HTML = `
   </div>
   <div class="fcard" style="border-color:rgba(242,92,92,.2)">
     <div class="fcard-t" style="color:var(--rd)">⚠ PV-Daten löschen</div>
-    <button class="btn-s btn-d" onclick="PV.clearAll()">Alle PV-Daten löschen</button>
+    <div style="margin-bottom:14px">
+      <p style="font-size:12px;color:var(--tx2);margin-bottom:10px">Zeitraum auswählen und Einträge in diesem Bereich löschen:</p>
+      <div class="fgrid" style="grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div class="field"><label>Von</label><input type="date" id="pv-del-from"></div>
+        <div class="field"><label>Bis</label><input type="date" id="pv-del-to"></div>
+      </div>
+      <div class="brow">
+        <button class="btn-s btn-d" onclick="PV.deleteRange()">Zeitraum löschen</button>
+        <button class="btn-s btn-d" onclick="PV.clearAll()">Alle PV-Daten löschen</button>
+      </div>
+      <div id="pv-del-result" style="font-size:12px;color:var(--tx2);margin-top:8px"></div>
+    </div>
   </div>
 </div>
 `;
 
 // ── TAB SWITCHING ────────────────────────────────────────
 function tab(name, btn) {
-  ['overview','data','entry','import'].forEach(t => {
+  ['overview','profile','data','entry','import'].forEach(t => {
     const el = document.getElementById('pv-t-' + t);
     if (el) el.style.display = t === name ? 'block' : 'none';
   });
   document.querySelectorAll('#pv-tabs .mtab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   if (name === 'overview') renderOverview();
-  if (name === 'data') renderTable();
+  if (name === 'profile')  renderProfile();
+  if (name === 'data')     renderTable();
 }
 function setEntryMode(mode, btn) {
   ['day','week','month'].forEach(m => {
@@ -531,17 +584,158 @@ function clearAll() {
   APP.toast('PV-Daten gelöscht');
 }
 
-// ── INIT DEFAULTS ────────────────────────────────────────
+// ── ERTRAGSPROFIL ─────────────────────────────────────────
+function resetProfile() {
+  const yr = new Date().getFullYear(), today = new Date().toISOString().split('T')[0];
+  const f = document.getElementById('pp-from'), t = document.getElementById('pp-to');
+  if (f) f.value = yr + '-01-01';
+  if (t) t.value = today;
+  const g = document.getElementById('pp-gran'); if (g) g.value = 'day';
+  renderProfile();
+}
+
+function renderProfile() {
+  const gran = document.getElementById('pp-gran')?.value || 'day';
+  const from = document.getElementById('pp-from')?.value;
+  const to   = document.getElementById('pp-to')?.value;
+
+  let filtered = APP.entries
+    .filter(e => (!from || e.date >= from) && (!to || e.date <= to))
+    .sort((a,b) => a.date.localeCompare(b.date));
+
+  // Aggregate into buckets same as overview
+  const map = {};
+  filtered.forEach(e => {
+    let key;
+    const d = new Date(e.date);
+    if (gran==='day') key = e.date;
+    else if (gran==='week') { const w = APP.getWeekNum(d); key = d.getFullYear()+'-W'+String(w).padStart(2,'0'); }
+    else key = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+    if (!map[key]) map[key] = { key, kwh:0, theory:0, count:0, date:e.date };
+    map[key].kwh += e.kwh; map[key].theory += APP.getTheory(e); map[key].count++;
+  });
+  const bk = Object.values(map).sort((a,b) => a.key.localeCompare(b.key));
+
+  const labels  = bk.map(b => b.key);
+  const actArr  = bk.map(b => +b.kwh.toFixed(3));
+  const thArr   = bk.map(b => +b.theory.toFixed(3));
+  const prArr   = bk.map(b => b.theory > 0 ? Math.round(b.kwh/b.theory*100) : 0);
+  const total   = actArr.reduce((a,v) => a+v, 0);
+  const avg     = actArr.length > 0 ? total / actArr.length : 0;
+  const maxVal  = actArr.length > 0 ? Math.max(...actArr) : 0;
+  const minVal  = actArr.length > 0 ? Math.min(...actArr.filter(v=>v>0)) : 0;
+  const maxIdx  = actArr.indexOf(maxVal);
+  const minIdx  = actArr.indexOf(minVal);
+
+  const granLabel = { day:'Tage', week:'Wochen', month:'Monate' }[gran];
+  const titleMap  = { day:'Tägliches Ertragsprofil', week:'Wöchentliches Ertragsprofil', month:'Monatliches Ertragsprofil' };
+
+  const set = (id,v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
+  set('pp-m-total',  total.toFixed(2));
+  set('pp-m-total2', bk.length + ' ' + granLabel);
+  set('pp-m-avg',    avg.toFixed(3));
+  set('pp-m-max',    maxVal.toFixed(3));
+  set('pp-m-max2',   maxIdx>=0 ? labels[maxIdx] : '—');
+  set('pp-m-min',    minVal > 0 ? minVal.toFixed(3) : '—');
+  set('pp-m-min2',   minIdx>=0 && minVal>0 ? labels[minIdx] : '—');
+  set('pp-chart-title', titleMap[gran]);
+  set('pp-chart-sub', bk.length + ' ' + granLabel + (from&&to ? ` · ${from} bis ${to}` : ''));
+
+  // Color bars: yellow=top 20%, green=top 50%, blue=normal, red=bottom 20%
+  const sorted = [...actArr].sort((a,b)=>b-a);
+  const p20 = sorted[Math.floor(sorted.length*0.2)] || maxVal;
+  const p50 = sorted[Math.floor(sorted.length*0.5)] || avg;
+  const p80 = sorted[Math.floor(sorted.length*0.8)] || 0;
+  const bgColors = actArr.map(v =>
+    v >= p20 ? 'rgba(245,200,66,.85)' :
+    v >= p50 ? 'rgba(63,207,142,.75)' :
+    v >= p80 ? 'rgba(91,156,246,.65)' :
+               'rgba(242,92,92,.55)');
+
+  ['pp-main','pp-th','pp-pr'].forEach(id => APP.destroyChart(id));
+
+  APP.charts['pp-main'] = new Chart(document.getElementById('pp-c-main'), {
+    type:'bar',
+    data:{ labels, datasets:[{ data:actArr, backgroundColor:bgColors, borderRadius:3 }] },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false},
+        tooltip:{ callbacks:{ label:ctx=>`${ctx.parsed.y.toFixed(3)} kWh` } } },
+      scales:{
+        x:{ticks:{color:APP.TC,font:{size:10},maxRotation:45},grid:{color:APP.GC}},
+        y:{ticks:{color:APP.TC,font:{size:10}},grid:{color:APP.GC},
+          title:{display:true,text:'kWh',color:APP.TC,font:{size:10}}}
+      }
+    }
+  });
+
+  APP.charts['pp-th'] = new Chart(document.getElementById('pp-c-theory'), {
+    type:'bar',
+    data:{ labels, datasets:[
+      { label:'Tatsächlich', data:actArr, backgroundColor:'rgba(245,200,66,.8)', borderRadius:3 },
+      { label:'Theoretisch', data:thArr,  backgroundColor:'rgba(58,61,69,.7)',   borderRadius:3 }
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ labels:{ color:APP.TC, font:{size:10}, boxWidth:8 } } },
+      scales:{ x:{ticks:{color:APP.TC,font:{size:9},maxRotation:45},grid:{color:APP.GC}},
+               y:{ticks:{color:APP.TC,font:{size:10}},grid:{color:APP.GC}} }
+    }
+  });
+
+  APP.charts['pp-pr'] = new Chart(document.getElementById('pp-c-pr'), {
+    type:'line',
+    data:{ labels, datasets:[{ data:prArr, borderColor:'#3fcf8e',
+      backgroundColor:'rgba(63,207,142,.1)', fill:true, tension:0.35,
+      pointRadius:3, borderWidth:1.5, pointBackgroundColor:'#3fcf8e' }] },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false} },
+      scales:{
+        x:{ticks:{color:APP.TC,font:{size:9},maxRotation:45},grid:{color:APP.GC}},
+        y:{min:0,max:110,ticks:{color:APP.TC,font:{size:10},callback:v=>v+'%'},grid:{color:APP.GC}}
+      }
+    }
+  });
+}
+
+// ── DELETE BY DATE RANGE ──────────────────────────────────
+function deleteRange() {
+  const from = document.getElementById('pv-del-from')?.value;
+  const to   = document.getElementById('pv-del-to')?.value;
+  const resEl = document.getElementById('pv-del-result');
+  if (!from || !to) { APP.toast('Bitte Von und Bis Datum auswählen','err'); return; }
+  if (from > to)    { APP.toast('Von muss vor Bis liegen','err'); return; }
+
+  const toDelete = APP.entries.filter(e => e.date >= from && e.date <= to);
+  if (toDelete.length === 0) {
+    if (resEl) resEl.innerHTML = `<span style="color:var(--tx2)">Keine Einträge in diesem Zeitraum gefunden.</span>`;
+    return;
+  }
+  if (!confirm(`${toDelete.length} Einträge vom ${from} bis ${to} löschen?`)) return;
+  const pw = prompt('Passwort bestätigen:');
+  if (pw !== 'We7-Tracker-P!nggau') { APP.toast('Falsches Passwort','err'); return; }
+
+  APP.setEntries(APP.entries.filter(e => !(e.date >= from && e.date <= to)));
+  APP.savePv(); APP.updateSidebar(); renderTable(); renderOverview();
+  if (resEl) resEl.innerHTML = `<span style="color:var(--gr)">✓ ${toDelete.length} Einträge gelöscht (${from} – ${to})</span>`;
+  APP.toast(`✓ ${toDelete.length} Einträge gelöscht`);
+}
+
+
 function initDefaults() {
-  const today=new Date().toISOString().split('T')[0],yr=today.substring(0,4);
-  const f=document.getElementById('pv-from'),t=document.getElementById('pv-to');
-  if(f) f.value=yr+'-01-01'; if(t) t.value=today;
+  const today=new Date().toISOString().split('T')[0], yr=today.substring(0,4);
+  const f=document.getElementById('pv-from'),  t=document.getElementById('pv-to');
+  const pf=document.getElementById('pp-from'), pt=document.getElementById('pp-to');
+  if(f)  f.value=yr+'-01-01'; if(t)  t.value=today;
+  if(pf) pf.value=yr+'-01-01'; if(pt) pt.value=today;
   const ed=document.getElementById('e-date'); if(ed) ed.value=today;
-  const now=new Date(),day=now.getDay()||7;now.setDate(now.getDate()-day+1);
+  const now=new Date(),day=now.getDay()||7; now.setDate(now.getDate()-day+1);
   const wd=document.getElementById('w-date'); if(wd) wd.value=now.toISOString().split('T')[0];
-  const wk=document.getElementById('w-kw'); if(wk) wk.value=APP.getWeekNum(new Date());
+  const wk=document.getElementById('w-kw');   if(wk) wk.value=APP.getWeekNum(new Date());
   const mm=document.getElementById('mo-month'); if(mm) mm.value=new Date().getMonth();
-  const my=document.getElementById('mo-year'); if(my) my.value=new Date().getFullYear();
+  const my=document.getElementById('mo-year');  if(my) my.value=new Date().getFullYear();
+  // Delete-range defaults to last 30 days
+  const d30=new Date(); d30.setDate(d30.getDate()-30);
+  const df=document.getElementById('pv-del-from'), dt=document.getElementById('pv-del-to');
+  if(df) df.value=d30.toISOString().split('T')[0]; if(dt) dt.value=today;
 }
 
 function register() {
@@ -551,9 +745,9 @@ function register() {
   });
 }
 
-return { tab, setEntryMode, resetFilter, renderOverview, renderTable,
-         toggleAll, deleteSelected, deleteSingle, copyEntry,
+return { tab, setEntryMode, resetFilter, renderOverview, renderProfile, resetProfile,
+         renderTable, toggleAll, deleteSelected, deleteSingle, copyEntry,
          prefillToday, addDay, addWeek, addMonth,
          importGrowatt, loadGrowattSample, toggleManual, importManual, loadManualSample,
-         exportCsv, clearAll, register };
+         exportCsv, deleteRange, clearAll, register };
 })();
