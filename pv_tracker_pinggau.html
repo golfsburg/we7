@@ -1281,10 +1281,7 @@ function saveEditModal() {
 function closeEditModal() {
   document.getElementById('edit-modal-bg').style.display = 'none';
 }
-// Close modal on background click
-document.getElementById('edit-modal-bg').addEventListener('click', function(e) {
-  if(e.target===this) closeEditModal();
-});
+// Close modal on background click — handled in load event above
 
 // ============================================================
 // AVERAGES
@@ -1860,11 +1857,23 @@ function showToast(msg, type='success') {
 // ============================================================
 // START
 // ============================================================
-window.addEventListener('load', bootApp);
-document.getElementById('av-range').addEventListener('change', function() {
-  const custom = this.value==='custom';
-  document.getElementById('av-from').style.display=custom?'inline':'none';
-  document.getElementById('av-to').style.display=custom?'inline':'none';
+window.addEventListener('load', () => {
+  // Attach listeners only after DOM is ready
+  const avRange = document.getElementById('av-range');
+  if(avRange) {
+    avRange.addEventListener('change', function() {
+      const custom = this.value==='custom';
+      document.getElementById('av-from').style.display=custom?'inline':'none';
+      document.getElementById('av-to').style.display=custom?'inline':'none';
+    });
+  }
+  const modalBg = document.getElementById('edit-modal-bg');
+  if(modalBg) {
+    modalBg.addEventListener('click', function(e) {
+      if(e.target===this) closeEditModal();
+    });
+  }
+  bootApp();
 });
 </script>
 </body>
