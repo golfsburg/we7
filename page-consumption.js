@@ -212,10 +212,9 @@ function renderDay(date) {
   const s = document.getElementById('cv-chart-sub');   if(s) s.textContent = 'kWh pro Stunde';
 
   const gridH = Array(24).fill(0);
-  // IMPORTANT: cast hour to integer — localStorage/JSON may return strings
   APP.consumption
-    .filter(c => c.date === date && c.direction === 'grid')
-    .forEach(c => { gridH[parseInt(c.hour, 10)] += c.kwh; });
+    .filter(c => String(c.date).substring(0,10) === date && c.direction === 'grid')
+    .forEach(c => { gridH[parseInt(c.hour, 10)] += parseFloat(c.kwh); });
 
   const pvDay = APP.getDayPv(date);
   const pvH   = Array(24).fill(0);
@@ -309,43 +308,54 @@ function drawCharts(labels, gridArr, directArr, pvArr, autarkyArr, pvTot, gridTo
 // ── LASTPROFIL ───────────────────────────────────────────
 function renderProfile() {
   const ym = document.getElementById('cv-pm')?.value || new Date().toISOString().substring(0,7);
-  const data = APP.consumption.filter(c => c.date.startsWith(ym) && c.direction === 'grid');
-  const days = new Set(data.map(c => c.date)).size || 1;
 
-  // Aggregate 15-min slots into hourly totals per day, then average across days
-  // hourlyPerDay[date][hour] = sum of kWh for that hour on that day
+  // Normalize date: always take first 10 chars (handles ISO strings, date objects, etc.)
+  const normalize = c => ({
+    ...c,
+    date:   String(c.date).substring(0, 10),
+    hour:   parseInt(c.hour,   10),
+    minute: parseInt(c.minute, 10),
+    kwh:    parseFloat(c.kwh)
+  });
+
+  const data = APP.consumption
+    .map(normalize)
+    .filter(c => c.date.startsWith(ym) && c.direction === 'grid');
+
+  // hourlyPerDay[date][hour] = sum kWh for that hour on that day
   const hourlyPerDay = {};
   data.forEach(c => {
-    const h = parseInt(c.hour, 10);
-    const d = c.date;
+    const h = c.hour;          // already int from normalize
+    const d = c.date;          // already YYYY-MM-DD from normalize
     if (!hourlyPerDay[d]) hourlyPerDay[d] = Array(24).fill(0);
     hourlyPerDay[d][h] += c.kwh;
   });
 
-  // Average across all days that have data
   const dayList = Object.keys(hourlyPerDay);
   const nDays   = dayList.length || 1;
-  const hourly  = Array(24).fill(0);
+
+  // Sum hourly totals across all days, then divide by nDays = average per day per hour
+  const hourly = Array(24).fill(0);
   dayList.forEach(d => {
     hourlyPerDay[d].forEach((v, h) => { hourly[h] += v; });
   });
   hourly.forEach((_, i) => { hourly[i] = +(hourly[i] / nDays).toFixed(4); });
 
-  const dayTotal = hourly.reduce((a,b) => a+b, 0);
-  const maxV     = Math.max(...hourly);
-  const peakH    = hourly.indexOf(maxV);
+  const dayTotal = +(hourly.reduce((a,b) => a+b, 0)).toFixed(2);
+  const maxV     = Math.max(...hourly.filter(v => v > 0), 0);
+  const peakH    = maxV > 0 ? hourly.indexOf(maxV) : 0;
 
   const set = (id, v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
-  set('pr-avg',  dayTotal.toFixed(2));
+  set('pr-avg',  dayTotal);
   set('pr-peak', String(peakH).padStart(2,'0') + ':00');
   set('pr-days', nDays);
   set('pr-pts',  data.length);
 
   const labels = Array.from({length:24}, (_,i) => String(i).padStart(2,'0')+':00');
   const bg = hourly.map(v =>
-    v === maxV     ? 'rgba(242,92,92,.7)'  :
-    v > maxV * .7  ? 'rgba(245,200,66,.6)' :
-                     'rgba(91,156,246,.65)');
+    v > 0 && v === maxV    ? 'rgba(242,92,92,.7)'  :
+    v > 0 && v > maxV * .7 ? 'rgba(245,200,66,.6)' :
+                              'rgba(91,156,246,.65)');
 
   APP.destroyChart('cv-prof');
   APP.charts['cv-prof'] = new Chart(document.getElementById('cv-c-profile'), {
@@ -353,11 +363,13 @@ function renderProfile() {
     data: { labels, datasets: [{ data: hourly, backgroundColor: bg, borderRadius: 3 }] },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend:{display:false},
-        tooltip: { callbacks: { label: ctx => ctx.parsed.y.toFixed(4) + ' kWh' } } },
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ctx.parsed.y.toFixed(4) + ' kWh' } }
+      },
       scales: {
-        x: { ticks:{color:APP.TC,font:{size:10}}, grid:{color:APP.GC} },
-        y: { ticks:{color:APP.TC,font:{size:10}}, grid:{color:APP.GC},
+        x: { ticks:{color:APP.TC, font:{size:10}}, grid:{color:APP.GC} },
+        y: { ticks:{color:APP.TC, font:{size:10}}, grid:{color:APP.GC},
              title:{display:true, text:'kWh/h', color:APP.TC, font:{size:10}} }
       }
     }

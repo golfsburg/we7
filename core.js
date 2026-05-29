@@ -100,10 +100,14 @@ function calcDirect(pvKwh, gridKwh) {
   return parseFloat(Math.min(assumed, gridKwh + assumed).toFixed(2));
 }
 function getDayGrid(date) {
-  return consumption.filter(c=>c.date===date&&c.direction==='grid').reduce((s,c)=>s+c.kwh,0);
+  return consumption
+    .filter(c => String(c.date).substring(0,10) === date && c.direction==='grid')
+    .reduce((s,c) => s + parseFloat(c.kwh), 0);
 }
 function getMonthGrid(ym) {
-  return consumption.filter(c=>c.date.startsWith(ym)&&c.direction==='grid').reduce((s,c)=>s+c.kwh,0);
+  return consumption
+    .filter(c => String(c.date).substring(0,10).startsWith(ym) && c.direction==='grid')
+    .reduce((s,c) => s + parseFloat(c.kwh), 0);
 }
 function getDayPv(date) {
   const e = entries.find(x=>x.type==='day'&&x.date===date);
