@@ -120,7 +120,11 @@ function getMonthPv(ym) {
 }
 
 // ── UTILS ────────────────────────────────────────────────
-function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2,5); }
+let _idCounter = 0;
+function genId() {
+  _idCounter++;
+  return Date.now().toString(36) + _idCounter.toString(36) + Math.random().toString(36).slice(2,6);
+}
 function getWeekNum(d) {
   const dt = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
   const dn = dt.getUTCDay() || 7;
@@ -207,8 +211,11 @@ async function doSync() {
       savePv(false); refreshCurrentPage();
     }
     const rows = entries.map(entryToRow);
-    for (let i=0; i<rows.length; i+=100) {
-      const { error: e } = await sbClient.from(PV_TBL).upsert(rows.slice(i,i+100), {onConflict:'id'});
+    // Deduplicate by id — prevents "ON CONFLICT DO UPDATE affect row a second time" error
+    const seen = new Set();
+    const uniqueRows = rows.filter(r => { if (seen.has(r.id)) return false; seen.add(r.id); return true; });
+    for (let i=0; i<uniqueRows.length; i+=100) {
+      const { error: e } = await sbClient.from(PV_TBL).upsert(uniqueRows.slice(i,i+100), {onConflict:'id'});
       if (e) throw e;
     }
     syncInd('ok');
@@ -234,7 +241,8 @@ async function initialLoad() {
 async function syncConsumption() {
   if (!sbClient || consumption.length === 0) return;
   try {
-    const rows = consumption.map(c=>({...c}));
+    const seen = new Set();
+    const rows = consumption.filter(c => { if (seen.has(c.id)) return false; seen.add(c.id); return true; });
     for (let i=0; i<rows.length; i+=200) {
       const { error } = await sbClient.from(CV_TBL).upsert(rows.slice(i,i+200), {onConflict:'id'});
       if (error) throw error;
@@ -249,10 +257,12 @@ async function loadConsumption() {
     if (data && data.length > 0) {
       const localIds = new Set(consumption.map(c=>c.id));
       const n = data.filter(r=>!localIds.has(r.id)).map(r=>({
-        id:r.id, date:r.date,
-        hour:   parseInt(r.hour, 10),
-        minute: parseInt(r.minute, 10),
-        kwh:+r.kwh, direction:r.direction||'grid'
+        id:       r.id,
+        date:     String(r.date).substring(0, 10),
+        hour:     parseInt(r.hour,   10),
+        minute:   parseInt(r.minute, 10),
+        kwh:      parseFloat(r.kwh),
+        direction: r.direction || 'grid'
       }));
       if (n.length > 0) {
         consumption = [...consumption,...n].sort((a,b)=>a.date!==b.date
