@@ -324,7 +324,7 @@ tr:hover td { background: rgba(255,255,255,0.03); }
 <!-- SIDEBAR -->
 <nav class="sidebar">
   <div class="logo">
-    <div class="logo-title"><span class="logo-dot"></span>PV Tracker</div>
+    <div class="logo-title"><span class="logo-dot"></span>PV Tracker <span style="font-size:10px;font-weight:400;color:var(--text3);letter-spacing:0.5px;margin-left:4px">v3.1</span></div>
     <div class="logo-sub">Pinggau · 800W · SW 35°</div>
   </div>
   <div class="nav-section">
@@ -1660,6 +1660,8 @@ function loadSample() {
 
 function clearAll() {
   if(!confirm('Wirklich ALLE Daten löschen? Das kann nicht rückgängig gemacht werden.')) return;
+  const pw = prompt('Bitte Passwort eingeben um zu bestätigen:');
+  if(pw !== APP_PW) { showToast('Falsches Passwort — Abbruch', 'error'); return; }
   entries = [];
   saveToStorage(); renderAll();
   showToast('Alle Daten gelöscht');
