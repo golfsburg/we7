@@ -68,9 +68,17 @@ const HTML = `
 <!-- LASTPROFIL -->
 <div id="cv-t-profile" style="display:none">
   <div class="fbar">
-    <label>Monat</label>
-    <input type="month" id="cv-pm" onchange="CV.renderProfile()">
-    <button class="btn-p" onclick="CV.renderProfile()">Anzeigen</button>
+    <label>Granularität</label>
+    <select id="pr-gran" onchange="CV.renderProfile()">
+      <option value="day" selected>Täglich</option>
+      <option value="week">Wöchentlich</option>
+      <option value="month">Monatlich</option>
+    </select>
+    <span class="fsep">|</span>
+    <label>Von</label><input type="date" id="pr-from" onchange="CV.renderProfile()">
+    <label>Bis</label><input type="date"  id="pr-to"   onchange="CV.renderProfile()">
+    <button class="btn-p" onclick="CV.renderProfile()">Anwenden</button>
+    <button class="btn-s" onclick="CV.resetProfile()">Reset</button>
   </div>
   <div class="metrics">
     <div class="mc"><div class="mc-l">Ø Tagesverbrauch</div><div><span class="mc-v" id="pr-avg">—</span><span class="mc-u">kWh</span></div></div>
@@ -79,8 +87,8 @@ const HTML = `
     <div class="mc"><div class="mc-l">Messpunkte</div><div><span class="mc-v" id="pr-pts">—</span></div></div>
   </div>
   <div class="cc full">
-    <div class="cc-title">Ø Lastprofil</div>
-    <div class="cc-sub">Durchschnittlicher Stundenwert — 🔴 Spitze · 🟡 hoch · 🔵 normal</div>
+    <div class="cc-title" id="pr-chart-title">Ø Lastprofil</div>
+    <div class="cc-sub" id="pr-chart-sub">Durchschnittlicher Stundenwert — 🔴 Spitze · 🟡 hoch · 🔵 normal</div>
     <div class="cw" style="height:260px"><canvas id="cv-c-profile"></canvas></div>
   </div>
 </div>
@@ -322,11 +330,30 @@ function renderOverview() {
 }
 
 // ── LASTPROFIL ────────────────────────────────────────────
-function renderProfile() {
-  const ym   = document.getElementById('cv-pm')?.value || new Date().toISOString().substring(0,7);
-  const data = getCv().filter(c => c.date.startsWith(ym) && c.direction === 'grid');
+function resetProfile() {
+  const dates    = APP.consumption.map(c => String(c.date).substring(0,10)).filter(Boolean).sort();
+  const earliest = dates.length > 0 ? dates[0] : new Date().getFullYear() + '-01-01';
+  const today    = new Date().toISOString().split('T')[0];
+  const f = document.getElementById('pr-from'), t = document.getElementById('pr-to');
+  const g = document.getElementById('pr-gran');
+  if (f) f.value = earliest;
+  if (t) t.value = today;
+  if (g) g.value = 'day';
+  renderProfile();
+}
 
-  // Build per-day hourly sums:  dayMap[date][0..23] = kWh total for that hour
+function renderProfile() {
+  const gran = document.getElementById('pr-gran')?.value || 'day';
+  const from = document.getElementById('pr-from')?.value;
+  const to   = document.getElementById('pr-to')?.value;
+
+  const data = getCv().filter(c =>
+    c.direction === 'grid' &&
+    (!from || c.date >= from) &&
+    (!to   || c.date <= to)
+  );
+
+  // Build per-day hourly sums: dayMap[date][0..23] = total kWh for that hour
   const dayMap = {};
   data.forEach(c => {
     if (!dayMap[c.date]) dayMap[c.date] = Array(24).fill(0);
@@ -336,7 +363,7 @@ function renderProfile() {
   const days  = Object.keys(dayMap);
   const nDays = days.length;
 
-  // Average each hour across all days
+  // Average each hour across all days in range
   const hourly = Array(24).fill(0);
   days.forEach(d => {
     dayMap[d].forEach((v, h) => { hourly[h] += v; });
@@ -348,11 +375,15 @@ function renderProfile() {
   const dayTotal = +(hourly.reduce((a,b) => a+b, 0)).toFixed(2);
   const maxV     = nDays > 0 ? Math.max(...hourly) : 0;
   const peakH    = maxV > 0 ? hourly.indexOf(maxV) : 0;
+  const granLabel = { day:'Tage', week:'Wochen', month:'Monate' }[gran];
+  const rangeLabel = from && to ? `${from} – ${to}` : 'Gesamter Zeitraum';
 
   set('pr-avg',  dayTotal);
   set('pr-peak', String(peakH).padStart(2,'0') + ':00');
   set('pr-days', nDays);
   set('pr-pts',  data.length);
+  set('pr-chart-title', 'Ø Lastprofil');
+  set('pr-chart-sub',   `${nDays} ${granLabel} · ${rangeLabel} — 🔴 Spitze · 🟡 hoch · 🔵 normal`);
 
   const labels = Array.from({length:24}, (_,i) => String(i).padStart(2,'0')+':00');
   const bg = hourly.map(v =>
@@ -364,9 +395,10 @@ function renderProfile() {
   APP.charts['cv-prof'] = new Chart(document.getElementById('cv-c-profile'), {
     type: 'bar',
     data: { labels, datasets:[{ data:hourly, backgroundColor:bg, borderRadius:3 }] },
-    options: { responsive:true, maintainAspectRatio:false,
+    options: {
+      responsive:true, maintainAspectRatio:false,
       plugins:{ legend:{display:false},
-        tooltip:{ callbacks:{ label: ctx => ctx.parsed.y.toFixed(4) + ' kWh' } } },
+        tooltip:{ callbacks:{ label: ctx => ctx.parsed.y.toFixed(4) + ' kWh/h' } } },
       scales:{
         x:{ ticks:{color:APP.TC, font:{size:10}}, grid:{color:APP.GC} },
         y:{ ticks:{color:APP.TC, font:{size:10}}, grid:{color:APP.GC},
@@ -578,16 +610,15 @@ function clearAll() {
 // ── INIT ──────────────────────────────────────────────────
 function initDefaults() {
   const today = new Date().toISOString().split('T')[0];
-  const ym    = today.substring(0,7);
   const g     = id => document.getElementById(id);
 
-  // Set Von to earliest available consumption date, fallback to 2 years ago
-  const dates  = APP.consumption.map(c => String(c.date).substring(0,10)).filter(Boolean).sort();
+  const dates    = APP.consumption.map(c => String(c.date).substring(0,10)).filter(Boolean).sort();
   const earliest = dates.length > 0 ? dates[0] : (parseInt(today.substring(0,4))-2) + '-01-01';
 
   if (g('cv-from'))    g('cv-from').value    = earliest;
   if (g('cv-to'))      g('cv-to').value      = today;
-  if (g('cv-pm'))      g('cv-pm').value      = ym;
+  if (g('pr-from'))    g('pr-from').value    = earliest;
+  if (g('pr-to'))      g('pr-to').value      = today;
   if (g('cv-tf-from')) g('cv-tf-from').value = earliest;
   if (g('cv-tf-to'))   g('cv-tf-to').value   = today;
 
@@ -603,6 +634,6 @@ function register() {
   });
 }
 
-return { tab, resetFilter, renderOverview, renderProfile, renderTable,
+return { tab, resetFilter, resetProfile, renderOverview, renderProfile, renderTable,
          toggleAll, deleteSelected, importCSV, deleteRange, clearAll, register };
 })();
