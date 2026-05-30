@@ -578,14 +578,19 @@ function clearAll() {
 // ── INIT ──────────────────────────────────────────────────
 function initDefaults() {
   const today = new Date().toISOString().split('T')[0];
-  const yr    = today.substring(0,4);
   const ym    = today.substring(0,7);
-  const g  = id => document.getElementById(id);
-  if (g('cv-from'))    g('cv-from').value    = yr + '-01-01';
+  const g     = id => document.getElementById(id);
+
+  // Set Von to earliest available consumption date, fallback to 2 years ago
+  const dates  = APP.consumption.map(c => String(c.date).substring(0,10)).filter(Boolean).sort();
+  const earliest = dates.length > 0 ? dates[0] : (parseInt(today.substring(0,4))-2) + '-01-01';
+
+  if (g('cv-from'))    g('cv-from').value    = earliest;
   if (g('cv-to'))      g('cv-to').value      = today;
   if (g('cv-pm'))      g('cv-pm').value      = ym;
-  if (g('cv-tf-from')) g('cv-tf-from').value = yr + '-01-01';
+  if (g('cv-tf-from')) g('cv-tf-from').value = earliest;
   if (g('cv-tf-to'))   g('cv-tf-to').value   = today;
+
   const d30 = new Date(); d30.setDate(d30.getDate()-30);
   if (g('cv-del-from')) g('cv-del-from').value = d30.toISOString().split('T')[0];
   if (g('cv-del-to'))   g('cv-del-to').value   = today;

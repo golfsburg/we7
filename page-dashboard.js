@@ -14,7 +14,7 @@ const HTML = `
     <option value="last30">Letzte 30 Tage</option>
     <option value="last90">Letzte 90 Tage</option>
     <option value="thisyear">Dieses Jahr</option>
-    <option value="all">Gesamt</option>
+    <option value="all" selected>Gesamt</option>
   </select>
 </div>
 

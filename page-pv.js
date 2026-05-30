@@ -746,21 +746,34 @@ function deleteRange() {
 
 
 function initDefaults() {
-  const today=new Date().toISOString().split('T')[0], yr=today.substring(0,4);
-  const f=document.getElementById('pv-from'),  t=document.getElementById('pv-to');
-  const pf=document.getElementById('pp-from'), pt=document.getElementById('pp-to');
-  if(f)  f.value=yr+'-01-01'; if(t)  t.value=today;
-  if(pf) pf.value=yr+'-01-01'; if(pt) pt.value=today;
-  const ed=document.getElementById('e-date'); if(ed) ed.value=today;
-  const now=new Date(),day=now.getDay()||7; now.setDate(now.getDate()-day+1);
-  const wd=document.getElementById('w-date'); if(wd) wd.value=now.toISOString().split('T')[0];
-  const wk=document.getElementById('w-kw');   if(wk) wk.value=APP.getWeekNum(new Date());
-  const mm=document.getElementById('mo-month'); if(mm) mm.value=new Date().getMonth();
-  const my=document.getElementById('mo-year');  if(my) my.value=new Date().getFullYear();
-  // Delete-range defaults to last 30 days
-  const d30=new Date(); d30.setDate(d30.getDate()-30);
-  const df=document.getElementById('pv-del-from'), dt=document.getElementById('pv-del-to');
-  if(df) df.value=d30.toISOString().split('T')[0]; if(dt) dt.value=today;
+  const today = new Date().toISOString().split('T')[0];
+  const ym    = today.substring(0,7);
+
+  // Set Von to earliest available PV entry, fallback to 2 years ago
+  const dates    = APP.entries.map(e => e.date).filter(Boolean).sort();
+  const earliest = dates.length > 0 ? dates[0] : (parseInt(today.substring(0,4))-2) + '-01-01';
+
+  const f  = document.getElementById('pv-from');
+  const t  = document.getElementById('pv-to');
+  const pf = document.getElementById('pp-from');
+  const pt = document.getElementById('pp-to');
+  if (f)  f.value  = earliest;
+  if (t)  t.value  = today;
+  if (pf) pf.value = earliest;
+  if (pt) pt.value = today;
+
+  const ed = document.getElementById('e-date'); if (ed) ed.value = today;
+  const now = new Date(), day = now.getDay()||7; now.setDate(now.getDate()-day+1);
+  const wd = document.getElementById('w-date'); if (wd) wd.value = now.toISOString().split('T')[0];
+  const wk = document.getElementById('w-kw');   if (wk) wk.value = APP.getWeekNum(new Date());
+  const mm = document.getElementById('mo-month'); if (mm) mm.value = new Date().getMonth();
+  const my = document.getElementById('mo-year');  if (my) my.value = new Date().getFullYear();
+
+  const d30 = new Date(); d30.setDate(d30.getDate()-30);
+  const df  = document.getElementById('pv-del-from');
+  const dt  = document.getElementById('pv-del-to');
+  if (df) df.value = d30.toISOString().split('T')[0];
+  if (dt) dt.value = today;
 }
 
 function register() {
