@@ -208,12 +208,29 @@ const HTML = `
 <!-- ── IMPORT / EXPORT ── -->
 <div id="pv-t-import" style="display:none">
   <div class="fcard">
-    <div class="fcard-t">☀️ Growatt ShinePhone Import</div>
-    <p style="font-size:13px;color:var(--tx2);margin-bottom:8px">ShinePhone → Anlage → Energie → Export → CSV → hier einfügen.</p>
-    <div class="note" style="margin-bottom:12px">📋 Spalten: <code>Date, E-Today(kWh), E-Total(kWh), Pac(W), Temp(℃)</code></div>
-    <textarea class="csv-area" id="gr-csv" placeholder="CSV-Inhalt hier einfügen..."></textarea>
+    <div class="fcard-t">☀️ Growatt CSV Import</div>
+    <p style="font-size:13px;color:var(--tx2);margin-bottom:12px">
+      CSV-Datei vom Growatt-Skript direkt auswählen oder Inhalt einfügen.<br>
+      Format: <code>Date, Time, Pac(W), E-Today(kWh), E-Total(kWh)</code>
+    </p>
+
+    <!-- File picker -->
+    <div style="margin-bottom:12px">
+      <label style="display:block;font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--tx2);font-weight:500;margin-bottom:6px">Datei auswählen</label>
+      <input type="file" id="gr-file" accept=".csv,.txt"
+        style="font-family:var(--font-m);font-size:12px;color:var(--tx2);background:var(--bg3);border:1px solid var(--b2);border-radius:8px;padding:8px 10px;width:100%;cursor:pointer"
+        onchange="PV.loadGrowattFile(this)">
+      <div id="gr-file-info" style="font-size:11px;color:var(--tx3);margin-top:4px"></div>
+    </div>
+
+    <!-- Manual paste fallback -->
+    <div style="margin-bottom:10px">
+      <label style="display:block;font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--tx2);font-weight:500;margin-bottom:6px">Oder CSV-Inhalt einfügen</label>
+      <textarea class="csv-area" id="gr-csv" placeholder="CSV-Inhalt hier einfügen..."></textarea>
+    </div>
+
     <div class="brow">
-      <button class="btn-p" onclick="PV.importGrowatt()">Growatt CSV importieren</button>
+      <button class="btn-p" onclick="PV.importGrowatt()">Importieren</button>
     </div>
     <div id="gr-result" style="font-size:12px;color:var(--tx2);margin-top:10px"></div>
   </div>
@@ -522,47 +539,101 @@ function addMonth() {
   const el = document.getElementById('mo-kwh'); if (el) el.value='';
 }
 
-// ── GROWATT IMPORT ────────────────────────────────────────
+// ── GROWATT FILE + CSV IMPORT ─────────────────────────────
+function loadGrowattFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const info = document.getElementById('gr-file-info');
+  if (info) info.textContent = `📄 ${file.name} (${(file.size/1024).toFixed(1)} KB) — wird geladen...`;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const ta = document.getElementById('gr-csv');
+    if (ta) ta.value = e.target.result;
+    if (info) info.textContent = `📄 ${file.name} (${(file.size/1024).toFixed(1)} KB) ✓`;
+  };
+  reader.readAsText(file);
+}
+
 function importGrowatt() {
-  const raw = document.getElementById('gr-csv')?.value.trim();
+  const raw   = document.getElementById('gr-csv')?.value.trim();
   const resEl = document.getElementById('gr-result');
-  if (!raw) { APP.toast('Kein CSV','err'); return; }
-  const lines = raw.split('\n').map(l=>l.trim()).filter(l=>l.length>0);
-  if (lines.length < 2) { APP.toast('Zu wenig Daten','err'); return; }
-  const header = lines[0].split(',').map(h => h.trim().toLowerCase()
-    .replace(/[()°℃\s]/g,'').replace('e-today','etoday').replace('pac','pac')
-    .replace('temp','temp').replace('date','date'));
-  const hasE = header.includes('etoday'), hasP = header.includes('pac'), hasT = header.includes('temp');
-  const col = n => header.indexOf(n);
-  const val = (row, n) => { const i=col(n); return i>=0?row[i]?.trim():null; };
-  let days = {}, sk = 0;
-  if (header.includes('date') && hasE) {
-    lines.slice(1).forEach(line => {
-      const row = line.split(',');
-      const dr = val(row,'date'); if (!dr) { sk++; return; }
-      const date = dr.replace(/\//g,'-').substring(0,10);
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { sk++; return; }
-      const et=parseFloat(val(row,'etoday')), pac=hasP?parseFloat(val(row,'pac')):NaN, tmp=hasT?parseFloat(val(row,'temp')):NaN;
-      if (!days[date]) days[date] = { kwh:0, peakW:0, temps:[] };
-      if (!isNaN(et) && et > days[date].kwh) days[date].kwh = et;
-      if (!isNaN(pac) && pac > days[date].peakW) days[date].peakW = pac;
-      if (!isNaN(tmp)) days[date].temps.push(tmp);
-    });
+  if (!raw) { APP.toast('Keine Datei gewählt und kein Text eingefügt','err'); return; }
+
+  // Normalize: strip BOM, normalize line endings
+  const cleaned = raw.replace(/^\uFEFF/,'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+  const lines   = cleaned.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  if (lines.length < 2) { APP.toast('Zu wenig Zeilen','err'); return; }
+
+  // Parse header — flexible column detection
+  const hdr = lines[0].split(',').map(h => h.trim().toLowerCase()
+    .replace(/[()°℃\s]/g,''));
+  const ci = name => hdr.findIndex(h => h.includes(name));
+  const iDate   = ci('date');
+  const iPac    = ci('pac');
+  const iEtoday = ci('today');
+  const iEtotal = ci('total');
+
+  if (iDate < 0) {
+    if (resEl) resEl.innerHTML = '<span style="color:var(--rd)">Keine "Date" Spalte gefunden. Bitte Format prüfen.</span>';
+    return;
   }
+
+  // Per-day accumulator: MAX(E-Today) = Tagesertrag, MAX(Pac) = Spitzenleistung
+  const dayMap = {};
+  lines.slice(1).forEach(line => {
+    const row = line.split(',');
+    if (row.length < 2) return;
+    const date = row[iDate]?.trim().substring(0,10);
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+
+    const etoday = iEtoday >= 0 ? parseFloat(row[iEtoday]) : NaN;
+    const etotal = iEtotal >= 0 ? parseFloat(row[iEtotal]) : NaN;
+    const pac    = iPac    >= 0 ? parseFloat(row[iPac])    : NaN;
+
+    if (!dayMap[date]) dayMap[date] = { etoday:0, etotal:0, peakPac:0 };
+    if (!isNaN(etoday) && etoday > dayMap[date].etoday) dayMap[date].etoday = etoday;
+    if (!isNaN(etotal) && etotal > dayMap[date].etotal) dayMap[date].etotal = etotal;
+    if (!isNaN(pac)    && pac    > dayMap[date].peakPac) dayMap[date].peakPac = pac;
+  });
+
+  const days = Object.keys(dayMap);
+  if (!days.length) {
+    if (resEl) resEl.innerHTML = '<span style="color:var(--rd)">Keine gültigen Zeilen gefunden.</span>';
+    APP.toast('Import fehlgeschlagen','err'); return;
+  }
+
   let added = 0;
-  Object.entries(days).forEach(([date, d]) => {
-    if (d.kwh <= 0) return;
+  days.forEach(date => {
+    const d = dayMap[date];
+    if (d.etoday <= 0) return;
     APP.setEntries(APP.entries.filter(e => !(e.type==='day' && e.date===date)));
-    const avgT = d.temps.length ? Math.round(d.temps.reduce((a,b)=>a+b,0)/d.temps.length) : null;
-    APP.entries.push({ id:APP.genId(), type:'day', date, kwh:+d.kwh.toFixed(3),
-      peak:d.peakW>0?Math.round(d.peakW):null, hours:null, self:null, feed:null,
-      weather:'⛅', temp:avgT, note:'Growatt ShinePhone Import', source:'growatt' });
+    APP.entries.push({
+      id:      APP.genId(),
+      type:    'day',
+      date,
+      kwh:     +d.etoday.toFixed(3),
+      peak:    d.peakPac > 0 ? Math.round(d.peakPac) : null,
+      hours:   null, self: null, feed: null,
+      weather: '⛅', temp: null,
+      note:    'Growatt CSV Import',
+      source:  'growatt'
+    });
     added++;
   });
+
   APP.entries.sort((a,b) => a.date.localeCompare(b.date));
   APP.savePv(); APP.updateSidebar();
-  if (resEl) resEl.innerHTML = `<span style="color:var(--gr)">✓ ${added} Einträge importiert${sk>0?' ('+sk+' übersprungen)':''}</span>`;
-  APP.toast('✓ Growatt: ' + added + ' Einträge');
+
+  // Reset file input and textarea
+  const fi = document.getElementById('gr-file');
+  if (fi) fi.value = '';
+  const ta = document.getElementById('gr-csv');
+  if (ta) ta.value = '';
+  const info = document.getElementById('gr-file-info');
+  if (info) info.textContent = '';
+
+  if (resEl) resEl.innerHTML = `<span style="color:var(--gr)">✓ ${added} Tage importiert aus ${lines.length-1} Messzeilen.</span>`;
+  APP.toast(`✓ ${added} Tage importiert`);
 }
 function toggleManual() {
   const s = document.getElementById('pv-manual-body');
@@ -792,6 +863,6 @@ function register() {
 return { tab, setEntryMode, resetFilter, renderOverview, renderProfile, resetProfile,
          renderTable, toggleAll, deleteSelected, deleteSingle, copyEntry,
          prefillToday, addDay, addWeek, addMonth,
-         importGrowatt, toggleManual, importManual,
+         loadGrowattFile, importGrowatt, toggleManual, importManual,
          exportCsv, deleteRange, clearAll, register };
 })();
