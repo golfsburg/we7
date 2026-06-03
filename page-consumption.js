@@ -136,7 +136,7 @@ const HTML = `
     <div class="note" style="margin-bottom:12px">
       📋 Semikolon-getrennt · Spalte 7 = Von-Zeit (DD.MM.YYYY HH:MM) · Spalte 15 = kWh · <strong>Lieferung</strong> = Netzbezug · <strong>Einspeisung</strong> = Einspeisung
     </div>
-    <textarea class="csv-area" id="cv-csv-in" placeholder='Export_Bezeichnung;...;Energierichtung;Von;Zeitzone;Bis;...;Wert;Einheit&#10;"2026-04";...;Lieferung;01.04.2026 00:00:00;MESZ;...;0,069000;kWh;gemessen;'></textarea>
+    <textarea class="csv-area" id="cv-csv-in" placeholder="CSV-Inhalt hier einfügen..."></textarea>
     <div class="brow">
       <button class="btn-p" onclick="CV.importCSV(false)">Importieren (hinzufügen)</button>
       <button class="btn-s" onclick="CV.importCSV(true)">↺ Neu importieren (überschreiben)</button>

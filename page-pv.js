@@ -211,7 +211,7 @@ const HTML = `
     <div class="fcard-t">☀️ Growatt ShinePhone Import</div>
     <p style="font-size:13px;color:var(--tx2);margin-bottom:8px">ShinePhone → Anlage → Energie → Export → CSV → hier einfügen.</p>
     <div class="note" style="margin-bottom:12px">📋 Spalten: <code>Date, E-Today(kWh), E-Total(kWh), Pac(W), Temp(℃)</code></div>
-    <textarea class="csv-area" id="gr-csv" placeholder="Date,Time,Pac(W),E-Today(kWh),E-Total(kWh)&#10;2025-06-01,12:00:00,748,4.21,130.60"></textarea>
+    <textarea class="csv-area" id="gr-csv" placeholder="CSV-Inhalt hier einfügen..."></textarea>
     <div class="brow">
       <button class="btn-p" onclick="PV.importGrowatt()">Growatt CSV importieren</button>
     </div>
@@ -224,7 +224,7 @@ const HTML = `
     </div>
     <div id="pv-manual-body" style="display:none;margin-top:12px">
       <p style="font-size:12px;color:var(--tx2);margin-bottom:8px">Format: <code>Typ(day/week/month),Datum(YYYY-MM-DD),kWh[,PeakW,Std,Eigenstrom,Einspeisung,Wetter,Temp,Notiz]</code></p>
-      <textarea class="csv-area" id="pv-manual-csv" placeholder="day,2025-06-01,4.21,720,6.5,2.1,2.1,☀️,22,Erster Tag"></textarea>
+      <textarea class="csv-area" id="pv-manual-csv" placeholder="CSV-Inhalt hier einfügen..."></textarea>
       <div class="brow">
         <button class="btn-p" onclick="PV.importManual()">Importieren</button>
       </div>
@@ -287,81 +287,16 @@ create policy "allow_all" on pv_entries
 <div id="pv-t-api" style="display:none">
   <div class="fcard" style="border-color:rgba(63,207,142,.25)">
     <div class="fcard-t">🔌 Growatt Server API</div>
-    <p style="font-size:13px;color:var(--tx2);margin-bottom:14px">
-      Direkter Datenabruf vom Growatt-Server über die inoffizielle Python-Bibliothek
-      <a href="https://pypi.org/project/growattServer/" target="_blank" style="color:var(--ac)">growattServer</a>.
-      Da Browser-Apps keine Python-Verbindung aufbauen können, liefern die Skripte unten ein CSV
-      das du danach im Tab <strong>Import / Export</strong> einspielst.
+    <p style="font-size:13px;color:var(--tx2);margin-bottom:16px">
+      Tages- und Monatsdaten direkt vom Growatt-Server abrufen.<br>
+      Python-Skripte auf dem Desktop ausführen — die exportierte CSV danach im Tab <strong>Import / Export</strong> einspielen.
     </p>
-
-    <div style="font-size:12px;color:var(--tx2);margin-bottom:6px;font-weight:500">📦 Installation</div>
-    <div class="code-block">pip install growattServer</div>
-
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:16px;margin-bottom:6px">
-      <span style="font-size:12px;color:var(--tx2);font-weight:500">🐍 Tagesexport — 5-Minuten-Werte → CSV</span>
-      <button class="copy-btn" onclick="APP.copyCode('api-day')">Kopieren</button>
-    </div>
-    <div class="code-block" id="api-day">import growattServer, csv
-from datetime import datetime
-
-USERNAME = "dein_benutzername"
-PASSWORD = "dein_passwort"
-DATE     = datetime.today().strftime("%Y-%m-%d")  # oder "2025-06-01"
-
-api   = growattServer.GrowattApi()
-login = api.login(USERNAME, PASSWORD)
-uid   = login['user']['id']
-plant_id = api.get_plant_list(uid)['data'][0]['plantId']
-sn       = api.inverter_list(plant_id)[0]['sn']
-
-data  = api.mix_detail(plant_id, sn,
-          timespan=growattServer.Timespan.day, date=DATE)
-chart = data.get('obj', {}).get('pacChart', {})
-
-with open(f"growatt_{DATE}.csv", 'w', newline='') as f:
-    w = csv.writer(f)
-    w.writerow(['Date','Time','Pac(W)','E-Today(kWh)','E-Total(kWh)'])
-    etotal = float(data.get('obj',{}).get('eTotal', 0))
-    etoday = float(data.get('obj',{}).get('eToday', 0))
-    for t, pac in sorted(chart.items()):
-        w.writerow([DATE, f"{t}:00", pac, round(etoday,3), etotal])
-
-print(f"Exportiert: growatt_{DATE}.csv")</div>
-
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:16px;margin-bottom:6px">
-      <span style="font-size:12px;color:var(--tx2);font-weight:500">📅 Monatsexport — ein Tageswert pro Tag → CSV</span>
-      <button class="copy-btn" onclick="APP.copyCode('api-month')">Kopieren</button>
-    </div>
-    <div class="code-block" id="api-month">import growattServer, csv
-from datetime import datetime
-
-USERNAME = "dein_benutzername"
-PASSWORD = "dein_passwort"
-MONTH    = datetime.today().strftime("%Y-%m")  # oder "2025-05"
-
-api   = growattServer.GrowattApi()
-login = api.login(USERNAME, PASSWORD)
-uid   = login['user']['id']
-plant_id = api.get_plant_list(uid)['data'][0]['plantId']
-sn       = api.inverter_list(plant_id)[0]['sn']
-
-data  = api.mix_detail(plant_id, sn,
-          timespan=growattServer.Timespan.month, date=f"{MONTH}-01")
-chart = data.get('obj', {}).get('pacChart', {})
-
-with open(f"growatt_{MONTH}.csv", 'w', newline='') as f:
-    w = csv.writer(f)
-    w.writerow(['Date','Time','Pac(W)','E-Today(kWh)','E-Total(kWh)'])
-    for day, pac in sorted(chart.items(), key=lambda x: int(x[0])):
-        date = f"{MONTH}-{str(day).zfill(2)}"
-        w.writerow([date, '12:00:00', pac, 0, 0])
-
-print(f"Exportiert: growatt_{MONTH}.csv")</div>
-
+    <div style="font-size:12px;color:var(--tx2);margin-bottom:8px;font-weight:500">▶ Tagesexport (heutiger Tag)</div>
+    <div class="code-block">python3.11 ~/Desktop/growatt_tagesexport.py</div>
+    <div style="font-size:12px;color:var(--tx2);margin-top:14px;margin-bottom:8px;font-weight:500">▶ Monatsexport (aktueller Monat)</div>
+    <div class="code-block">python3.11 ~/Desktop/growatt_monatsexport.py</div>
     <div class="note" style="margin-top:14px">
-      💡 <strong>Workflow:</strong> Skript lokal ausführen → CSV erstellt →
-      PV Ertrag → Import / Export → Growatt CSV importieren.<br>
-      ⚠ Die Growatt-API ist inoffiziell. Passwörter nur lokal verwenden — nie in die App eingeben.
+      💡 Datum ändern: <code>EXPORT_DATE = date(2026, 5, 15)</code> bzw. <code>YEAR = 2025 / MONTH = 12</code> direkt im Skript.
     </div>
   </div>
 </div>
