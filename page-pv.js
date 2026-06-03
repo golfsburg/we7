@@ -578,7 +578,9 @@ function importGrowatt() {
     return;
   }
 
-  // Per-day accumulator: MAX(E-Today) = Tagesertrag, MAX(Pac) = Spitzenleistung
+  // Per-day accumulator:
+  // E-Today: take LAST non-zero value (= final day total)
+  // Pac: take MAX (= peak power during day)
   const dayMap = {};
   lines.slice(1).forEach(line => {
     const row = line.split(',');
@@ -591,9 +593,10 @@ function importGrowatt() {
     const pac    = iPac    >= 0 ? parseFloat(row[iPac])    : NaN;
 
     if (!dayMap[date]) dayMap[date] = { etoday:0, etotal:0, peakPac:0 };
-    if (!isNaN(etoday) && etoday > dayMap[date].etoday) dayMap[date].etoday = etoday;
-    if (!isNaN(etotal) && etotal > dayMap[date].etotal) dayMap[date].etotal = etotal;
-    if (!isNaN(pac)    && pac    > dayMap[date].peakPac) dayMap[date].peakPac = pac;
+    // Last non-zero E-Today = final day total
+    if (!isNaN(etoday) && etoday > 0) dayMap[date].etoday = etoday;
+    if (!isNaN(etotal) && etotal > 0) dayMap[date].etotal = etotal;
+    if (!isNaN(pac)    && pac > dayMap[date].peakPac) dayMap[date].peakPac = pac;
   });
 
   const days = Object.keys(dayMap);
