@@ -16,6 +16,7 @@ const HTML = `
   <button class="mtab"         onclick="PV.tab('data',this)">Daten</button>
   <button class="mtab"         onclick="PV.tab('entry',this)">Eintrag</button>
   <button class="mtab"         onclick="PV.tab('import',this)">Import / Export</button>
+  <button class="mtab"         onclick="PV.tab('api',this)">🔌 Growatt API</button>
 </div>
 
 <!-- ── ERTRAGSPROFIL ── -->
@@ -213,7 +214,6 @@ const HTML = `
     <textarea class="csv-area" id="gr-csv" placeholder="Date,Time,Pac(W),E-Today(kWh),E-Total(kWh)&#10;2025-06-01,12:00:00,748,4.21,130.60"></textarea>
     <div class="brow">
       <button class="btn-p" onclick="PV.importGrowatt()">Growatt CSV importieren</button>
-      <button class="btn-s" onclick="PV.loadGrowattSample()">Beispiel laden</button>
     </div>
     <div id="gr-result" style="font-size:12px;color:var(--tx2);margin-top:10px"></div>
   </div>
@@ -227,7 +227,6 @@ const HTML = `
       <textarea class="csv-area" id="pv-manual-csv" placeholder="day,2025-06-01,4.21,720,6.5,2.1,2.1,☀️,22,Erster Tag"></textarea>
       <div class="brow">
         <button class="btn-p" onclick="PV.importManual()">Importieren</button>
-        <button class="btn-s" onclick="PV.loadManualSample()">Beispiel laden</button>
       </div>
     </div>
   </div>
@@ -283,11 +282,94 @@ create policy "allow_all" on pv_entries
     </div>
   </div>
 </div>
+
+<!-- GROWATT API -->
+<div id="pv-t-api" style="display:none">
+  <div class="fcard" style="border-color:rgba(63,207,142,.25)">
+    <div class="fcard-t">🔌 Growatt Server API</div>
+    <p style="font-size:13px;color:var(--tx2);margin-bottom:14px">
+      Direkter Datenabruf vom Growatt-Server über die inoffizielle Python-Bibliothek
+      <a href="https://pypi.org/project/growattServer/" target="_blank" style="color:var(--ac)">growattServer</a>.
+      Da Browser-Apps keine Python-Verbindung aufbauen können, liefern die Skripte unten ein CSV
+      das du danach im Tab <strong>Import / Export</strong> einspielst.
+    </p>
+
+    <div style="font-size:12px;color:var(--tx2);margin-bottom:6px;font-weight:500">📦 Installation</div>
+    <div class="code-block">pip install growattServer</div>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:16px;margin-bottom:6px">
+      <span style="font-size:12px;color:var(--tx2);font-weight:500">🐍 Tagesexport — 5-Minuten-Werte → CSV</span>
+      <button class="copy-btn" onclick="APP.copyCode('api-day')">Kopieren</button>
+    </div>
+    <div class="code-block" id="api-day">import growattServer, csv
+from datetime import datetime
+
+USERNAME = "dein_benutzername"
+PASSWORD = "dein_passwort"
+DATE     = datetime.today().strftime("%Y-%m-%d")  # oder "2025-06-01"
+
+api   = growattServer.GrowattApi()
+login = api.login(USERNAME, PASSWORD)
+uid   = login['user']['id']
+plant_id = api.get_plant_list(uid)['data'][0]['plantId']
+sn       = api.inverter_list(plant_id)[0]['sn']
+
+data  = api.mix_detail(plant_id, sn,
+          timespan=growattServer.Timespan.day, date=DATE)
+chart = data.get('obj', {}).get('pacChart', {})
+
+with open(f"growatt_{DATE}.csv", 'w', newline='') as f:
+    w = csv.writer(f)
+    w.writerow(['Date','Time','Pac(W)','E-Today(kWh)','E-Total(kWh)'])
+    etotal = float(data.get('obj',{}).get('eTotal', 0))
+    etoday = float(data.get('obj',{}).get('eToday', 0))
+    for t, pac in sorted(chart.items()):
+        w.writerow([DATE, f"{t}:00", pac, round(etoday,3), etotal])
+
+print(f"Exportiert: growatt_{DATE}.csv")</div>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:16px;margin-bottom:6px">
+      <span style="font-size:12px;color:var(--tx2);font-weight:500">📅 Monatsexport — ein Tageswert pro Tag → CSV</span>
+      <button class="copy-btn" onclick="APP.copyCode('api-month')">Kopieren</button>
+    </div>
+    <div class="code-block" id="api-month">import growattServer, csv
+from datetime import datetime
+
+USERNAME = "dein_benutzername"
+PASSWORD = "dein_passwort"
+MONTH    = datetime.today().strftime("%Y-%m")  # oder "2025-05"
+
+api   = growattServer.GrowattApi()
+login = api.login(USERNAME, PASSWORD)
+uid   = login['user']['id']
+plant_id = api.get_plant_list(uid)['data'][0]['plantId']
+sn       = api.inverter_list(plant_id)[0]['sn']
+
+data  = api.mix_detail(plant_id, sn,
+          timespan=growattServer.Timespan.month, date=f"{MONTH}-01")
+chart = data.get('obj', {}).get('pacChart', {})
+
+with open(f"growatt_{MONTH}.csv", 'w', newline='') as f:
+    w = csv.writer(f)
+    w.writerow(['Date','Time','Pac(W)','E-Today(kWh)','E-Total(kWh)'])
+    for day, pac in sorted(chart.items(), key=lambda x: int(x[0])):
+        date = f"{MONTH}-{str(day).zfill(2)}"
+        w.writerow([date, '12:00:00', pac, 0, 0])
+
+print(f"Exportiert: growatt_{MONTH}.csv")</div>
+
+    <div class="note" style="margin-top:14px">
+      💡 <strong>Workflow:</strong> Skript lokal ausführen → CSV erstellt →
+      PV Ertrag → Import / Export → Growatt CSV importieren.<br>
+      ⚠ Die Growatt-API ist inoffiziell. Passwörter nur lokal verwenden — nie in die App eingeben.
+    </div>
+  </div>
+</div>
 `;
 
 // ── TAB SWITCHING ────────────────────────────────────────
 function tab(name, btn) {
-  ['overview','profile','data','entry','import'].forEach(t => {
+  ['overview','profile','data','entry','import','api'].forEach(t => {
     const el = document.getElementById('pv-t-' + t);
     if (el) el.style.display = t === name ? 'block' : 'none';
   });
@@ -547,12 +629,6 @@ function importGrowatt() {
   if (resEl) resEl.innerHTML = `<span style="color:var(--gr)">✓ ${added} Einträge importiert${sk>0?' ('+sk+' übersprungen)':''}</span>`;
   APP.toast('✓ Growatt: ' + added + ' Einträge');
 }
-function loadGrowattSample() {
-  const yr=new Date().getFullYear(), mo=String(new Date().getMonth()+1).padStart(2,'0');
-  const el = document.getElementById('gr-csv');
-  if (el) el.value = `Date,Time,Pac(W),E-Today(kWh),E-Total(kWh),Vpv1(V),Ipv1(A),Temp(℃)\n${yr}-${mo}-01,12:00:00,748,4.21,130.60,38.1,19.6,28.4\n${yr}-${mo}-02,12:00:00,690,3.85,134.45,36.2,19.0,25.1\n${yr}-${mo}-03,12:00:00,420,2.10,136.55,30.0,14.0,20.3`;
-  APP.toast('Beispiel eingefügt');
-}
 function toggleManual() {
   const s = document.getElementById('pv-manual-body');
   const b = document.getElementById('pv-manual-btn');
@@ -579,11 +655,6 @@ function importManual() {
     count++;
   });
   APP.savePv(); APP.updateSidebar(); APP.toast('✓ ' + count + ' Einträge importiert');
-}
-function loadManualSample() {
-  const yr = new Date().getFullYear() - 1;
-  const el = document.getElementById('pv-manual-csv');
-  if (el) el.value = `day,${yr}-05-15,4.82,740,7.5,2.5,2.3,☀️,24,Beispiel\nmonth,${yr}-05-01,98.3,,,48,50,☀️,,\nmonth,${yr}-06-01,115.8,,,57,59,☀️,,`;
 }
 function exportCsv() {
   const type=document.getElementById('ex-type')?.value||'all';
@@ -786,6 +857,6 @@ function register() {
 return { tab, setEntryMode, resetFilter, renderOverview, renderProfile, resetProfile,
          renderTable, toggleAll, deleteSelected, deleteSingle, copyEntry,
          prefillToday, addDay, addWeek, addMonth,
-         importGrowatt, loadGrowattSample, toggleManual, importManual, loadManualSample,
+         importGrowatt, toggleManual, importManual,
          exportCsv, deleteRange, clearAll, register };
 })();
