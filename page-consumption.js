@@ -35,32 +35,15 @@ const HTML = `
   </div>
   <div class="metrics">
     <div class="mc bl"><div class="mc-l">Netzbezug</div><div><span class="mc-v" id="cv-m-grid">—</span><span class="mc-u">kWh</span></div><div class="mc-d" id="cv-m-grid2"></div></div>
-    <div class="mc hi"><div class="mc-l">PV Ertrag</div><div><span class="mc-v" id="cv-m-pv">—</span><span class="mc-u">kWh</span></div></div>
-    <div class="mc"><div class="mc-l">Gesamtverbrauch</div><div><span class="mc-v" id="cv-m-total">—</span><span class="mc-u">kWh</span></div><div class="mc-d">Netz + PV direkt</div></div>
-    <div class="mc gr"><div class="mc-l">Autarkiegrad</div><div><span class="mc-v" id="cv-m-autarky">—</span><span class="mc-u">%</span></div><div class="mc-d" id="cv-m-autarky2"></div></div>
-    <div class="mc"><div class="mc-l">Eigenverbrauch</div><div><span class="mc-v" id="cv-m-self">—</span><span class="mc-u">%</span></div><div class="mc-d">PV direkt genutzt</div></div>
-    <div class="mc gr"><div class="mc-l">Ersparnis</div><div><span class="mc-v" id="cv-m-saving">—</span><span class="mc-u">€</span></div><div class="mc-d pos" id="cv-m-saving2"></div></div>
+    <div class="mc"><div class="mc-l">Ø pro Tag</div><div><span class="mc-v" id="cv-m-avg">—</span><span class="mc-u">kWh</span></div></div>
+    <div class="mc"><div class="mc-l">Kosten (geschätzt)</div><div><span class="mc-v" id="cv-m-cost">—</span><span class="mc-u">€</span></div><div class="mc-d" id="cv-m-cost2"></div></div>
+    <div class="mc"><div class="mc-l">Messpunkte</div><div><span class="mc-v" id="cv-m-pts">—</span></div></div>
   </div>
   <div class="cgrid">
     <div class="cc full">
-      <div class="cc-title" id="cv-chart-title">Verbrauch vs. PV-Ertrag</div>
+      <div class="cc-title" id="cv-chart-title">Netzbezug</div>
       <div class="cc-sub"   id="cv-chart-sub">kWh</div>
-      <div class="leg">
-        <div class="li"><span class="ld" style="background:rgba(91,156,246,.75)"></span>Netzbezug</div>
-        <div class="li"><span class="ld" style="background:rgba(63,207,142,.75)"></span>PV direkt</div>
-        <div class="li"><span class="ld" style="background:#f5c842"></span>PV Ertrag (Linie)</div>
-      </div>
-      <div class="cw" style="height:240px"><canvas id="cv-c-main"></canvas></div>
-    </div>
-    <div class="cc">
-      <div class="cc-title">Autarkiegrad</div>
-      <div class="cc-sub">% durch PV gedeckt</div>
-      <div class="cw" style="height:185px"><canvas id="cv-c-autarky"></canvas></div>
-    </div>
-    <div class="cc">
-      <div class="cc-title">Energiebilanz</div>
-      <div class="cc-sub">Verteilung im Zeitraum</div>
-      <div class="cw" style="height:185px"><canvas id="cv-c-donut"></canvas></div>
+      <div class="cw" style="height:260px"><canvas id="cv-c-main"></canvas></div>
     </div>
   </div>
 </div>
@@ -241,91 +224,50 @@ function renderOverview() {
     (!to   || c.date <= to)
   );
 
-  // Aggregate into buckets (day or month)
+  // Aggregate into buckets
   const map = {};
   cv.forEach(c => {
     const key = gran === 'day' ? c.date : c.date.substring(0, 7);
     if (!map[key]) map[key] = 0;
     map[key] += c.kwh;
   });
-  const bk     = Object.entries(map).sort((a,b) => a[0].localeCompare(b[0]));
+  const bk      = Object.entries(map).sort((a,b) => a[0].localeCompare(b[0]));
   const labels  = bk.map(([k]) => k);
   const gridArr = bk.map(([,v]) => +v.toFixed(3));
 
-  // PV data for same buckets
-  const pvArr = labels.map(k => {
-    if (gran === 'day') return APP.getDayPv(k);
-    return APP.getMonthPv(k);
-  });
-  const directArr = gridArr.map((g, i) => +APP.calcDirect(pvArr[i], g).toFixed(3));
+  const gridTotal = gridArr.reduce((a,b) => a+b, 0);
+  const avgDay    = bk.length > 0 ? gridTotal / bk.length : 0;
+  const cost      = gridTotal * APP.cfg.price;
+  const granLabel = gran === 'day' ? 'Tage' : 'Monate';
 
-  // Totals
-  const gridTotal   = gridArr.reduce((a,b)  => a+b, 0);
-  const pvTotal     = pvArr.reduce((a,b)    => a+b, 0);
-  const directTotal = directArr.reduce((a,b)=> a+b, 0);
-  const totalC      = gridTotal + directTotal;
-  const autarky     = totalC > 0 ? Math.round(directTotal / totalC * 100) : 0;
-  const selfUse     = pvTotal > 0 ? Math.round(directTotal / pvTotal * 100) : 0;
-  const saving      = directTotal * APP.cfg.price;
-  const granLabel   = gran === 'day' ? 'Tage' : 'Monate';
+  set('cv-m-grid',   gridTotal.toFixed(2));
+  set('cv-m-grid2',  cv.length + ' Messpunkte');
+  set('cv-m-avg',    avgDay.toFixed(2));
+  set('cv-m-cost',   cost.toFixed(2));
+  set('cv-m-cost2',  `@ ${APP.cfg.price} €/kWh`);
+  set('cv-m-pts',    cv.length.toLocaleString('de'));
+  set('cv-chart-title', gran === 'day' ? 'Täglicher Netzbezug' : 'Monatlicher Netzbezug');
+  set('cv-chart-sub', bk.length + ' ' + granLabel);
 
-  set('cv-m-grid',     gridTotal.toFixed(2));
-  set('cv-m-pv',       pvTotal.toFixed(2));
-  set('cv-m-total',    totalC.toFixed(2));
-  set('cv-m-autarky',  autarky || '—');
-  set('cv-m-self',     selfUse || '—');
-  set('cv-m-saving',   saving.toFixed(2));
-  set('cv-m-saving2',  directTotal.toFixed(2) + ' kWh direkt genutzt');
-  set('cv-m-grid2',    cv.length + ' Messpunkte');
-  set('cv-chart-title', gran === 'day' ? 'Tagesverbrauch' : 'Monatsverbrauch');
-  set('cv-chart-sub',  bk.length + ' ' + granLabel);
-
-  const auEl = document.getElementById('cv-m-autarky2');
-  if (auEl) {
-    auEl.textContent = autarky>=50?'✓ Gut':autarky>=25?'~ Mittel':pvTotal>0?'⚠ Niedrig':'Keine PV-Daten';
-    auEl.className   = 'mc-d' + (autarky>=50?' pos':autarky>=25?'':' neg');
-  }
-
-  // Charts
-  const autarkyArr = gridArr.map((g,i) => {
-    const tot = g + directArr[i];
-    return tot > 0 ? Math.round(directArr[i] / tot * 100) : 0;
-  });
-  const feedArr = pvArr.map((p,i) => +Math.max(0, p - directArr[i]).toFixed(3));
-
-  ['cv-m','cv-au','cv-dn'].forEach(id => APP.destroyChart(id));
-
+  // Single bar chart — pure consumption
+  APP.destroyChart('cv-m');
   APP.charts['cv-m'] = new Chart(document.getElementById('cv-c-main'), {
     type: 'bar',
-    data: { labels, datasets: [
-      { label:'Netzbezug', data:gridArr,   backgroundColor:'rgba(91,156,246,.75)', borderRadius:3, stack:'s' },
-      { label:'PV direkt', data:directArr, backgroundColor:'rgba(63,207,142,.75)', borderRadius:3, stack:'s' },
-      { label:'PV Ertrag', data:pvArr, type:'line', borderColor:'#f5c842',
-        backgroundColor:'transparent', fill:false, tension:0.35,
-        pointRadius:3, borderWidth:2, pointBackgroundColor:'#f5c842' }
-    ]},
-    options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
-      scales:{ x:{stacked:true, ticks:{color:APP.TC,font:{size:10}}, grid:{color:APP.GC}},
-               y:{ticks:{color:APP.TC,font:{size:10}}, grid:{color:APP.GC}} } }
-  });
-
-  APP.charts['cv-au'] = new Chart(document.getElementById('cv-c-autarky'), {
-    type: 'line',
-    data: { labels, datasets:[{ data:autarkyArr, borderColor:'#3fcf8e',
-      backgroundColor:'rgba(63,207,142,.1)', fill:true, tension:0.35, pointRadius:2, borderWidth:1.5 }] },
-    options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
-      scales:{ x:{ticks:{color:APP.TC,font:{size:10}}, grid:{color:APP.GC}},
-               y:{min:0, max:100, ticks:{color:APP.TC,font:{size:10},callback:v=>v+'%'}, grid:{color:APP.GC}} } }
-  });
-
-  APP.charts['cv-dn'] = new Chart(document.getElementById('cv-c-donut'), {
-    type: 'doughnut',
-    data: { labels:['Netzbezug','PV Eigenverbrauch','PV Einspeisung'],
-      datasets:[{ data:[+gridTotal.toFixed(2), +directTotal.toFixed(2), +feedArr.reduce((a,b)=>a+b,0).toFixed(2)],
-        backgroundColor:['rgba(91,156,246,.75)','rgba(63,207,142,.75)','rgba(245,200,66,.65)'], borderWidth:0 }] },
-    options: { responsive:true, maintainAspectRatio:false, cutout:'60%',
-      plugins:{ legend:{ labels:{ color:APP.TC, font:{size:11}, boxWidth:10 } },
-        tooltip:{ callbacks:{ label:ctx=>ctx.parsed.toFixed(3)+' kWh' } } } }
+    data: { labels, datasets: [{
+      label: 'Netzbezug',
+      data:  gridArr,
+      backgroundColor: 'rgba(91,156,246,.75)',
+      borderRadius: 3
+    }]},
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks:{color:APP.TC,font:{size:10}}, grid:{color:APP.GC} },
+        y: { ticks:{color:APP.TC,font:{size:10}}, grid:{color:APP.GC},
+             title:{display:true,text:'kWh',color:APP.TC,font:{size:10}} }
+      }
+    }
   });
 }
 

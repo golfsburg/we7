@@ -310,8 +310,10 @@ create policy "allow_all" on pv_entries
     </p>
     <div style="font-size:12px;color:var(--tx2);margin-bottom:8px;font-weight:500">▶ Tagesexport (heutiger Tag)</div>
     <div class="code-block">python3.11 ~/Desktop/growatt_tagesexport.py</div>
-    <div style="font-size:12px;color:var(--tx2);margin-top:14px;margin-bottom:8px;font-weight:500">▶ Monatsexport (aktueller Monat)</div>
+    <div style="font-size:12px;color:var(--tx2);margin-top:14px;margin-bottom:8px;font-weight:500">▶ Monatsexport (aktueller Monat — Tageswerte)</div>
     <div class="code-block">python3.11 ~/Desktop/growatt_monatsexport.py</div>
+    <div style="font-size:12px;color:var(--tx2);margin-top:14px;margin-bottom:8px;font-weight:500">▶ Monatsexport (alle Tage aktueller Monat — 5-Minuten-Werte)</div>
+    <div class="code-block">python3.11 ~/Desktop/growatt_monatsexport_tage.py</div>
     <div class="note" style="margin-top:14px">
       💡 Datum ändern: <code>EXPORT_DATE = date(2026, 5, 15)</code> bzw. <code>YEAR = 2025 / MONTH = 12</code> direkt im Skript.
     </div>
