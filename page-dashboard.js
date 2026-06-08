@@ -9,9 +9,11 @@ const HTML = `
   <div><div class="ph-title">Dashboard</div><div class="ph-sub" id="db-sub">Energieübersicht</div></div>
 </div>
 
-<!-- Filter bar: Preset-Schnellwahl + manuelle Von/Bis Datumseingabe -->
-<div class="fbar" style="margin-bottom:20px">
-  <label>Zeitraum</label>
+<!-- Filter bar: Preset + Monat/Jahr-Schnellwahl + manuelle Von/Bis -->
+<div class="fbar" style="margin-bottom:20px;flex-wrap:wrap;row-gap:8px">
+
+  <!-- Schnell-Presets -->
+  <label>Schnellauswahl</label>
   <select id="db-period" onchange="DASH.onPreset()">
     <option value="thismonth">Dieser Monat</option>
     <option value="last30">Letzte 30 Tage</option>
@@ -20,11 +22,29 @@ const HTML = `
     <option value="all" selected>Gesamt</option>
     <option value="custom">Benutzerdefiniert …</option>
   </select>
+
   <span class="fsep">|</span>
+
+  <!-- Monatsauswahl -->
+  <label>Monat</label>
+  <input type="month" id="db-month" onchange="DASH.onMonthPick()"
+    style="background:var(--bg3);border:1px solid var(--b2);color:var(--tx);border-radius:6px;padding:5px 10px;font-family:var(--fm);font-size:12px;outline:none">
+
+  <!-- Jahresauswahl -->
+  <label>Jahr</label>
+  <select id="db-year" onchange="DASH.onYearPick()"
+    style="background:var(--bg3);border:1px solid var(--b2);color:var(--tx);border-radius:6px;padding:5px 10px;font-family:var(--fm);font-size:12px;outline:none">
+    <option value="">—</option>
+  </select>
+
+  <span class="fsep">|</span>
+
+  <!-- Manuelle Von/Bis -->
   <label>Von</label>
   <input type="date" id="db-from" onchange="DASH.onCustomDate()">
   <label>Bis</label>
   <input type="date" id="db-to"   onchange="DASH.onCustomDate()">
+
   <button class="btn-p" onclick="DASH.render()">Anwenden</button>
   <button class="btn-s" onclick="DASH.resetFilter()">Reset</button>
   <span id="db-range-label" style="font-size:11px;color:var(--tx3);margin-left:4px"></span>
@@ -111,10 +131,39 @@ function onPreset() {
   render();
 }
 
-function onCustomDate() {
-  // Switch dropdown to "custom" when user manually edits dates
-  const sel = document.getElementById('db-period');
-  if (sel) sel.value = 'custom';
+function onMonthPick() {
+  const val = document.getElementById('db-month')?.value; // "YYYY-MM"
+  if (!val) return;
+  const [yr, mo] = val.split('-').map(Number);
+  const lastDay  = new Date(yr, mo, 0).getDate();
+  const from     = `${val}-01`;
+  const to       = `${val}-${String(lastDay).padStart(2,'0')}`;
+  const fEl = document.getElementById('db-from');
+  const tEl = document.getElementById('db-to');
+  if (fEl) fEl.value = from;
+  if (tEl) tEl.value = to;
+  // Clear year, set period to custom
+  const yEl = document.getElementById('db-year');
+  if (yEl) yEl.value = '';
+  const pEl = document.getElementById('db-period');
+  if (pEl) pEl.value = 'custom';
+  render();
+}
+
+function onYearPick() {
+  const yr = document.getElementById('db-year')?.value;
+  if (!yr) return;
+  const from = `${yr}-01-01`;
+  const to   = `${yr}-12-31`;
+  const fEl  = document.getElementById('db-from');
+  const tEl  = document.getElementById('db-to');
+  if (fEl) fEl.value = from;
+  if (tEl) tEl.value = to;
+  // Clear month, set period to custom
+  const mEl = document.getElementById('db-month');
+  if (mEl) mEl.value = '';
+  const pEl = document.getElementById('db-period');
+  if (pEl) pEl.value = 'custom';
   render();
 }
 
@@ -134,14 +183,39 @@ function getRange() {
   return { from: from || null, to: to || null };
 }
 
+function onCustomDate() {
+  // Clear month/year pickers, switch to custom
+  const mEl = document.getElementById('db-month');
+  const yEl = document.getElementById('db-year');
+  const pEl = document.getElementById('db-period');
+  if (mEl) mEl.value = '';
+  if (yEl) yEl.value = '';
+  if (pEl) pEl.value = 'custom';
+  render();
+}
+
 function initFilter() {
-  // Set initial Von to earliest available data date
+  // Collect all available years from data
   const allDates = [
     ...APP.entries.map(e => e.date),
     ...APP.consumption.map(c => String(c.date).substring(0,10))
   ].filter(Boolean).sort();
+
   const earliest = allDates.length > 0 ? allDates[0] : null;
   const today    = new Date().toISOString().split('T')[0];
+
+  // Populate year dropdown with available years
+  const yEl = document.getElementById('db-year');
+  if (yEl && yEl.options.length <= 1) {
+    const years = [...new Set(allDates.map(d => d.substring(0,4)))].sort().reverse();
+    years.forEach(yr => {
+      const opt = document.createElement('option');
+      opt.value = yr; opt.textContent = yr;
+      yEl.appendChild(opt);
+    });
+  }
+
+  // Set initial Von/Bis if empty
   const fEl = document.getElementById('db-from');
   const tEl = document.getElementById('db-to');
   if (fEl && !fEl.value) fEl.value = earliest || '';
@@ -362,5 +436,5 @@ function register() {
   });
 }
 
-return { render, onPreset, onCustomDate, resetFilter, register };
+return { render, onPreset, onMonthPick, onYearPick, onCustomDate, resetFilter, register };
 })();
