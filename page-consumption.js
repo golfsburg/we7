@@ -409,6 +409,9 @@ function renderProfile() {
 }
 
 // ── DATEN-TABELLE ─────────────────────────────────────────
+let cvPage = 0;
+const CV_PAGE_SIZE = 200;
+
 function renderTable() {
   const from = document.getElementById('cv-tf-from')?.value;
   const to   = document.getElementById('cv-tf-to')?.value;
@@ -416,25 +419,32 @@ function renderTable() {
   const sort = document.getElementById('cv-tf-sort')?.value || 'date-desc';
 
   let data = getCv();
-  if (from)       data = data.filter(c => c.date >= from);
-  if (to)         data = data.filter(c => c.date <= to);
+  if (from)        data = data.filter(c => c.date >= from);
+  if (to)          data = data.filter(c => c.date <= to);
   if (dir!=='all') data = data.filter(c => c.direction === dir);
 
   if (sort==='date-desc') data.sort((a,b) => b.date!==a.date ? b.date.localeCompare(a.date) : b.hour-a.hour || b.minute-a.minute);
   else if (sort==='date-asc') data.sort((a,b) => a.date!==b.date ? a.date.localeCompare(b.date) : a.hour-b.hour || a.minute-b.minute);
   else data.sort((a,b) => b.kwh - a.kwh);
 
-  set('cv-tcount', data.length + ' Messpunkte');
+  const total   = data.length;
+  const maxPage = Math.max(0, Math.ceil(total / CV_PAGE_SIZE) - 1);
+  if (cvPage > maxPage) cvPage = maxPage;
+  const pageData = data.slice(cvPage * CV_PAGE_SIZE, (cvPage + 1) * CV_PAGE_SIZE);
+
+  set('cv-tcount', `${total.toLocaleString('de')} Messpunkte · Seite ${cvPage+1} / ${maxPage+1}`);
   const tbody = document.getElementById('cv-tbody');
   if (!tbody) return;
 
   if (!data.length) {
     tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--tx3)">Keine Einträge</td></tr>';
-    return;
+    renderCvPager(0, 0); return;
   }
 
-  tbody.innerHTML = data.map(c => {
-    const dirLabel = c.direction === 'grid' ? '<span class="badge good">Netzbezug</span>' : '<span class="badge mid">Einspeisung</span>';
+  tbody.innerHTML = pageData.map(c => {
+    const dirLabel = c.direction === 'grid'
+      ? '<span class="badge good">Netzbezug</span>'
+      : '<span class="badge mid">Einspeisung</span>';
     return `<tr>
       <td><input type="checkbox" class="cv-cb" data-id="${c.id}"></td>
       <td style="font-weight:500">${c.date}</td>
@@ -444,7 +454,28 @@ function renderTable() {
       <td>${dirLabel}</td>
     </tr>`;
   }).join('');
+
+  renderCvPager(cvPage, maxPage);
 }
+
+function renderCvPager(page, maxPage) {
+  let el = document.getElementById('cv-pager');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'cv-pager';
+    el.style.cssText = 'display:flex;gap:8px;align-items:center;justify-content:center;padding:12px;font-size:12px;color:var(--tx2)';
+    document.getElementById('cv-tbody')?.closest('.tcard')?.after(el);
+  }
+  if (maxPage === 0) { el.innerHTML = ''; return; }
+  el.innerHTML = `
+    <button class="btn-s" onclick="CV.cvGoPage(0)" ${page===0?'disabled':''}>«</button>
+    <button class="btn-s" onclick="CV.cvGoPage(${page-1})" ${page===0?'disabled':''}>‹ Zurück</button>
+    <span>Seite ${page+1} von ${maxPage+1} &nbsp;·&nbsp; je ${CV_PAGE_SIZE} Einträge</span>
+    <button class="btn-s" onclick="CV.cvGoPage(${page+1})" ${page===maxPage?'disabled':''}>Weiter ›</button>
+    <button class="btn-s" onclick="CV.cvGoPage(${maxPage})" ${page===maxPage?'disabled':''}>»</button>`;
+}
+
+function cvGoPage(p) { cvPage = p; renderTable(); }
 
 function toggleAll(cb) { document.querySelectorAll('.cv-cb').forEach(c => c.checked = cb.checked); }
 
@@ -453,7 +484,8 @@ function deleteSelected() {
   if (!sel.length) { APP.toast('Keine Zeilen ausgewählt','err'); return; }
   if (!confirm(sel.length + ' Messpunkte löschen?')) return;
   APP.setConsumption(APP.consumption.filter(c => !sel.includes(c.id)));
-  APP.saveCv(); renderTable(); APP.updateSidebar();
+  APP.deleteCvIds(sel);
+  APP.saveCv(false); renderTable(); APP.updateSidebar();
   APP.toast('✓ ' + sel.length + ' gelöscht');
 }
 
@@ -585,15 +617,15 @@ function deleteRange() {
     return;
   }
   if (!confirm(`${toDelete.length} Messpunkte vom ${from} bis ${to} löschen?`)) return;
-  const pw = prompt('Passwort bestätigen:');
-  if (pw !== 'We7-Tracker-P!nggau') { APP.toast('Falsches Passwort','err'); return; }
 
+  const ids  = toDelete.map(c => c.id);
   const days = new Set(toDelete.map(c => String(c.date).substring(0,10))).size;
   APP.setConsumption(APP.consumption.filter(c => {
     const d = String(c.date).substring(0,10);
     return !(d >= from && d <= to);
   }));
-  APP.saveCv(); renderOverview(); APP.updateSidebar();
+  APP.deleteCvIds(ids);
+  APP.saveCv(false); renderOverview(); APP.updateSidebar();
   if (resEl) resEl.innerHTML = `<span style="color:var(--gr)">✓ ${toDelete.length} Messpunkte (${days} Tage) gelöscht.</span>`;
   APP.toast(`✓ ${toDelete.length} Messpunkte gelöscht`);
 }
@@ -602,8 +634,10 @@ function clearAll() {
   if (!confirm('Alle Verbrauchsdaten löschen?')) return;
   const pw = prompt('Passwort bestätigen:');
   if (pw !== 'We7-Tracker-P!nggau') { APP.toast('Falsches Passwort','err'); return; }
+  const ids = APP.consumption.map(c => c.id);
   APP.setConsumption([]);
-  APP.saveCv(); renderOverview(); APP.updateSidebar();
+  APP.deleteCvIds(ids);
+  APP.saveCv(false); renderOverview(); APP.updateSidebar();
   APP.toast('Verbrauchsdaten gelöscht');
 }
 
@@ -635,5 +669,5 @@ function register() {
 }
 
 return { tab, resetFilter, resetProfile, renderOverview, renderProfile, renderTable,
-         toggleAll, deleteSelected, importCSV, deleteRange, clearAll, register };
+         cvGoPage, toggleAll, deleteSelected, importCSV, deleteRange, clearAll, register };
 })();

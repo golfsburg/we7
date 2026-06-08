@@ -28,6 +28,8 @@ let cfg = {
 let theory = [];
 let entries = [];      // PV records
 let consumption = [];  // Smart meter 15-min records
+let tombstones    = new Set(); // PV IDs deleted locally
+let cvTombstones  = new Set(); // CV IDs deleted locally
 let charts = {};
 let sbClient = null;
 let syncTimer = null, syncPending = false;
@@ -37,19 +39,27 @@ let pages = {};        // registered page modules
 function loadStorage() {
   try { const c = localStorage.getItem('pv_cfg');  if (c) cfg         = {...cfg,...JSON.parse(c)}; } catch(e){}
   try { const e = localStorage.getItem('pv_ent');  if (e) entries     = JSON.parse(e); } catch(e){}
-  try {
-    const v = localStorage.getItem('pv_cv');
+  try { const v = localStorage.getItem('pv_cv');
     if (v) {
       const raw = JSON.parse(v);
-      // Sanitize: ensure hour and minute are always integers (may be strings from old saves)
       consumption = raw.map(c => ({
         ...c,
+        date:   String(c.date).substring(0, 10),
         hour:   parseInt(c.hour,   10),
         minute: parseInt(c.minute, 10),
         kwh:    parseFloat(c.kwh)
       }));
     }
   } catch(e){}
+  // Load tombstones (deleted IDs that must never be re-imported from Supabase)
+  try { const t = localStorage.getItem('pv_tombstones'); if (t) tombstones = new Set(JSON.parse(t)); } catch(e){}
+  try { const t = localStorage.getItem('cv_tombstones'); if (t) cvTombstones = new Set(JSON.parse(t)); } catch(e){}
+}
+function saveTombstones() {
+  try { localStorage.setItem('pv_tombstones', JSON.stringify([...tombstones])); } catch(e){}
+}
+function saveCvTombstones() {
+  try { localStorage.setItem('cv_tombstones', JSON.stringify([...cvTombstones])); } catch(e){}
 }
 function savePv(sync=true) {
   try { localStorage.setItem('pv_cfg', JSON.stringify(cfg));
@@ -58,7 +68,7 @@ function savePv(sync=true) {
 }
 function saveCv(sync=true) {
   try { localStorage.setItem('pv_cv', JSON.stringify(consumption)); } catch(e){}
-  if (sync) syncConsumption();
+  if (sync) scheduleSync();
 }
 
 // ── THEORY ───────────────────────────────────────────────
@@ -198,80 +208,117 @@ function scheduleSync() {
   if (syncTimer) clearTimeout(syncTimer);
   syncTimer = setTimeout(doSync, 1500);
 }
+
+// Immediately delete IDs from Supabase table
+async function sbDeleteIds(table, ids) {
+  if (!sbClient || !ids.length) return;
+  for (let i=0; i<ids.length; i+=200) {
+    try {
+      await sbClient.from(table).delete().in('id', ids.slice(i,i+200));
+    } catch(e) { console.warn(`Delete from ${table}:`, e.message); }
+  }
+}
+
+// Called when PV entries are deleted — immediately removes from Supabase
+async function deletePvFromSb(ids) {
+  ids.forEach(id => tombstones.add(id));
+  saveTombstones();
+  await sbDeleteIds(PV_TBL, ids);
+}
+
+// Called when CV entries are deleted — immediately removes from Supabase
+async function deleteCvFromSb(ids) {
+  ids.forEach(id => cvTombstones.add(id));
+  saveCvTombstones();
+  await sbDeleteIds(CV_TBL, ids);
+}
+
 async function doSync() {
   if (!sbClient || !syncPending) return;
   syncPending = false; syncInd('syncing');
   try {
-    const { data: remote, error } = await sbClient.from(PV_TBL).select('*');
-    if (error) throw error;
-    const localIds = new Set(entries.map(e=>e.id));
-    const newFromRemote = remote.filter(r=>!localIds.has(r.id)).map(rowToEntry);
-    if (newFromRemote.length > 0) {
-      entries = [...entries, ...newFromRemote].sort((a,b)=>a.date.localeCompare(b.date));
-      savePv(false); refreshCurrentPage();
+    // ── PV sync ──────────────────────────────────────────
+    // Upsert all local PV entries
+    if (entries.length > 0) {
+      const seen = new Set();
+      const rows = entries.map(entryToRow).filter(r => {
+        if (seen.has(r.id)) return false; seen.add(r.id); return true;
+      });
+      for (let i=0; i<rows.length; i+=100) {
+        const { error } = await sbClient.from(PV_TBL)
+          .upsert(rows.slice(i,i+100), {onConflict:'id'});
+        if (error) throw error;
+      }
     }
-    const rows = entries.map(entryToRow);
-    // Deduplicate by id — prevents "ON CONFLICT DO UPDATE affect row a second time" error
-    const seen = new Set();
-    const uniqueRows = rows.filter(r => { if (seen.has(r.id)) return false; seen.add(r.id); return true; });
-    for (let i=0; i<uniqueRows.length; i+=100) {
-      const { error: e } = await sbClient.from(PV_TBL).upsert(uniqueRows.slice(i,i+100), {onConflict:'id'});
-      if (e) throw e;
+
+    // ── CV sync ──────────────────────────────────────────
+    // Upsert all local CV entries
+    if (consumption.length > 0) {
+      const seen = new Set();
+      const rows = consumption.filter(c => {
+        if (seen.has(c.id)) return false; seen.add(c.id); return true;
+      });
+      for (let i=0; i<rows.length; i+=200) {
+        const { error } = await sbClient.from(CV_TBL)
+          .upsert(rows.slice(i,i+200), {onConflict:'id'});
+        if (error) throw error;
+      }
     }
+
+    // Ensure any tombstoned IDs are deleted (belt-and-suspenders)
+    if (tombstones.size > 0)   await sbDeleteIds(PV_TBL, [...tombstones]);
+    if (cvTombstones.size > 0) await sbDeleteIds(CV_TBL, [...cvTombstones]);
+
     syncInd('ok');
   } catch(e) { syncInd('error'); console.warn('Sync:', e.message); }
 }
+
 async function initialLoad() {
   if (!sbClient) return;
   syncInd('syncing');
   try {
-    const { data, error } = await sbClient.from(PV_TBL).select('*').order('date',{ascending:true});
-    if (error) throw error;
-    if (data.length > 0) {
-      const localIds = new Set(entries.map(e=>e.id));
-      const n = data.filter(r=>!localIds.has(r.id)).map(rowToEntry);
-      if (n.length > 0) {
-        entries = [...entries,...n].sort((a,b)=>a.date.localeCompare(b.date));
-        savePv(false); refreshCurrentPage();
+    // PV — only load if local is empty
+    if (entries.length === 0) {
+      const { data, error } = await sbClient.from(PV_TBL)
+        .select('*').order('date', {ascending:true});
+      if (error) throw error;
+      if (data && data.length > 0) {
+        // Filter out tombstoned IDs
+        entries = data
+          .filter(r => !tombstones.has(r.id))
+          .map(rowToEntry);
+        savePv(false);
+        refreshCurrentPage();
       }
     }
-    syncInd('ok');
-  } catch(e) { syncInd('error'); console.warn('Initial:', e.message); }
-}
-async function syncConsumption() {
-  if (!sbClient || consumption.length === 0) return;
-  try {
-    const seen = new Set();
-    const rows = consumption.filter(c => { if (seen.has(c.id)) return false; seen.add(c.id); return true; });
-    for (let i=0; i<rows.length; i+=200) {
-      const { error } = await sbClient.from(CV_TBL).upsert(rows.slice(i,i+200), {onConflict:'id'});
-      if (error) throw error;
-    }
-  } catch(e) { console.warn('CV sync:', e.message); }
-}
-async function loadConsumption() {
-  if (!sbClient) return;
-  try {
-    const { data, error } = await sbClient.from(CV_TBL).select('*');
-    if (error) throw error;
-    if (data && data.length > 0) {
-      const localIds = new Set(consumption.map(c=>c.id));
-      const n = data.filter(r=>!localIds.has(r.id)).map(r=>({
-        id:       r.id,
-        date:     String(r.date).substring(0, 10),
-        hour:     parseInt(r.hour,   10),
-        minute:   parseInt(r.minute, 10),
-        kwh:      parseFloat(r.kwh),
-        direction: r.direction || 'grid'
-      }));
-      if (n.length > 0) {
-        consumption = [...consumption,...n].sort((a,b)=>a.date!==b.date
-          ? a.date.localeCompare(b.date) : a.hour - b.hour);
+
+    // CV — only load if local is empty
+    if (consumption.length === 0) {
+      const { data: cvData, error: cvErr } = await sbClient.from(CV_TBL).select('*');
+      if (cvErr) throw cvErr;
+      if (cvData && cvData.length > 0) {
+        consumption = cvData
+          .filter(r => !cvTombstones.has(r.id))
+          .map(r => ({
+            id:        r.id,
+            date:      String(r.date).substring(0, 10),
+            hour:      parseInt(r.hour,   10),
+            minute:    parseInt(r.minute, 10),
+            kwh:       parseFloat(r.kwh),
+            direction: r.direction || 'grid'
+          }))
+          .sort((a,b) => a.date !== b.date
+            ? a.date.localeCompare(b.date) : a.hour - b.hour);
         saveCv(false);
       }
     }
-  } catch(e) { console.warn('CV load:', e.message); }
+    syncInd('ok');
+  } catch(e) { syncInd('error'); console.warn('Initial load:', e.message); }
 }
+
+// Legacy wrappers — kept for compatibility
+async function syncConsumption() { scheduleSync(); }
+async function loadConsumption()  { /* handled by initialLoad */ }
 function connectSupabase() {
   const { createClient } = supabase;
   sbClient = createClient(SB_URL, SB_KEY);
@@ -429,6 +476,9 @@ return {
   setEntries(v)     { entries = v; },
   setCfg(v)         { cfg = {...cfg, ...v}; },
   setConsumption(v) { consumption = v; },
+  // delete helpers — immediately remove from Supabase + add to tombstone
+  deletePvIds:  (ids) => deletePvFromSb(ids),
+  deleteCvIds:  (ids) => deleteCvFromSb(ids),
   // utils
   genId, getWeekNum, getTheory, calcEuro, calcDirect,
   getDayGrid, getMonthGrid, getDayPv, getMonthPv,

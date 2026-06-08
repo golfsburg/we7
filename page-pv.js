@@ -468,14 +468,16 @@ function deleteSelected() {
   if (!sel.length) { APP.toast('Keine Zeilen ausgewählt','err'); return; }
   if (!confirm(sel.length + ' Einträge löschen?')) return;
   APP.setEntries(APP.entries.filter(e => !sel.includes(e.id)));
-  APP.savePv(); renderTable(); renderOverview(); APP.updateSidebar();
+  APP.deletePvIds(sel);
+  APP.savePv(false); renderTable(); renderOverview(); APP.updateSidebar();
   APP.toast('✓ ' + sel.length + ' gelöscht');
 }
 function deleteSingle(id) {
   const e = APP.entries.find(x=>x.id===id); if (!e) return;
   if (!confirm('"'+e.date+'" löschen?')) return;
   APP.setEntries(APP.entries.filter(x => x.id !== id));
-  APP.savePv(); renderTable(); renderOverview(); APP.updateSidebar();
+  APP.deletePvIds([id]);
+  APP.savePv(false); renderTable(); renderOverview(); APP.updateSidebar();
   APP.toast('✓ gelöscht');
 }
 function copyEntry(id) {
@@ -684,8 +686,10 @@ function clearAll() {
   if (!confirm('Alle PV-Daten löschen?')) return;
   const pw = prompt('Passwort bestätigen:');
   if (pw !== 'We7-Tracker-P!nggau') { APP.toast('Falsches Passwort','err'); return; }
+  const ids = APP.entries.map(e => e.id);
   APP.setEntries([]);
-  APP.savePv(); APP.updateSidebar(); renderOverview(); renderTable();
+  APP.deletePvIds(ids);
+  APP.savePv(false); APP.updateSidebar(); renderOverview(); renderTable();
   APP.toast('PV-Daten gelöscht');
 }
 
@@ -810,16 +814,16 @@ function deleteRange() {
   if (from > to)    { APP.toast('Von muss vor Bis liegen','err'); return; }
 
   const toDelete = APP.entries.filter(e => e.date >= from && e.date <= to);
-  if (toDelete.length === 0) {
-    if (resEl) resEl.innerHTML = `<span style="color:var(--tx2)">Keine Einträge in diesem Zeitraum gefunden.</span>`;
+  if (!toDelete.length) {
+    if (resEl) resEl.innerHTML = '<span style="color:var(--tx2)">Keine Einträge in diesem Zeitraum.</span>';
     return;
   }
   if (!confirm(`${toDelete.length} Einträge vom ${from} bis ${to} löschen?`)) return;
-  const pw = prompt('Passwort bestätigen:');
-  if (pw !== 'We7-Tracker-P!nggau') { APP.toast('Falsches Passwort','err'); return; }
 
+  const ids = toDelete.map(e => e.id);
   APP.setEntries(APP.entries.filter(e => !(e.date >= from && e.date <= to)));
-  APP.savePv(); APP.updateSidebar(); renderTable(); renderOverview();
+  APP.deletePvIds(ids);
+  APP.savePv(false); APP.updateSidebar(); renderTable(); renderOverview();
   if (resEl) resEl.innerHTML = `<span style="color:var(--gr)">✓ ${toDelete.length} Einträge gelöscht (${from} – ${to})</span>`;
   APP.toast(`✓ ${toDelete.length} Einträge gelöscht`);
 }
