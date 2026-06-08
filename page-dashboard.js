@@ -27,8 +27,10 @@ const HTML = `
 
   <!-- Monatsauswahl -->
   <label>Monat</label>
-  <input type="month" id="db-month" onchange="DASH.onMonthPick()"
+  <select id="db-month" onchange="DASH.onMonthPick()"
     style="background:var(--bg3);border:1px solid var(--b2);color:var(--tx);border-radius:6px;padding:5px 10px;font-family:var(--fm);font-size:12px;outline:none">
+    <option value="">—</option>
+  </select>
 
   <!-- Jahresauswahl -->
   <label>Jahr</label>
@@ -136,13 +138,13 @@ function onMonthPick() {
   if (!val) return;
   const [yr, mo] = val.split('-').map(Number);
   const lastDay  = new Date(yr, mo, 0).getDate();
-  const from     = `${val}-01`;
-  const to       = `${val}-${String(lastDay).padStart(2,'0')}`;
+  const from = `${val}-01`;
+  const to   = `${val}-${String(lastDay).padStart(2,'0')}`;
   const fEl = document.getElementById('db-from');
   const tEl = document.getElementById('db-to');
   if (fEl) fEl.value = from;
   if (tEl) tEl.value = to;
-  // Clear year, set period to custom
+  // Clear year picker, set period to custom
   const yEl = document.getElementById('db-year');
   if (yEl) yEl.value = '';
   const pEl = document.getElementById('db-period');
@@ -195,7 +197,6 @@ function onCustomDate() {
 }
 
 function initFilter() {
-  // Collect all available years from data
   const allDates = [
     ...APP.entries.map(e => e.date),
     ...APP.consumption.map(c => String(c.date).substring(0,10))
@@ -204,7 +205,22 @@ function initFilter() {
   const earliest = allDates.length > 0 ? allDates[0] : null;
   const today    = new Date().toISOString().split('T')[0];
 
-  // Populate year dropdown with available years
+  // Populate month dropdown — all YYYY-MM values from data, newest first
+  const mEl = document.getElementById('db-month');
+  if (mEl && mEl.options.length <= 1) {
+    const months = [...new Set(allDates.map(d => d.substring(0,7)))].sort().reverse();
+    const MONTHS_DE = ['','Jänner','Februar','März','April','Mai','Juni',
+                       'Juli','August','September','Oktober','November','Dezember'];
+    months.forEach(ym => {
+      const [yr, mo] = ym.split('-').map(Number);
+      const opt = document.createElement('option');
+      opt.value = ym;
+      opt.textContent = `${MONTHS_DE[mo]} ${yr}`;
+      mEl.appendChild(opt);
+    });
+  }
+
+  // Populate year dropdown — all years from data, newest first
   const yEl = document.getElementById('db-year');
   if (yEl && yEl.options.length <= 1) {
     const years = [...new Set(allDates.map(d => d.substring(0,4)))].sort().reverse();
