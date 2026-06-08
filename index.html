@@ -260,8 +260,9 @@ tr:last-child td{border-bottom:none} tr:hover td{background:rgba(255,255,255,.02
 <!-- BOOT -->
 <script>
   window.addEventListener('load', () => {
-    APP.registerPages();
-    APP.boot();
+    APP.registerPages();  // injects all page HTML into DOM first
+    APP.boot();           // loads storage, connects supabase
+    APP.nav('dashboard'); // navigate AFTER pages exist in DOM
   });
 </script>
 

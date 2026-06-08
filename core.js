@@ -381,11 +381,12 @@ function initApp() {
   loadStorage(); computeTheory();
   updateSidebar();
   connectSupabase();
-  nav('dashboard');
   // Setup modal close on bg click
-  document.getElementById('edit-modal-bg').addEventListener('click', function(e) {
+  const mb = document.getElementById('edit-modal-bg');
+  if (mb) mb.addEventListener('click', function(e) {
     if (e.target === this) closeModal();
   });
+  // nav() is called AFTER registerPages() in the boot script
 }
 
 // ── EDIT MODAL ───────────────────────────────────────────
