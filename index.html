@@ -160,23 +160,6 @@ tr:last-child td{border-bottom:none} tr:hover td{background:rgba(255,255,255,.02
   display:flex;justify-content:space-between;align-items:center}
 .modal-close{background:transparent;border:none;color:var(--tx2);font-size:20px;cursor:pointer}
 
-/* PW screen */
-.pw-screen{position:fixed;inset:0;background:var(--bg);display:flex;
-  align-items:center;justify-content:center;z-index:9999}
-.pw-box{background:var(--bg2);border:1px solid var(--b2);border-radius:var(--rl);
-  padding:40px 44px;width:360px;text-align:center}
-.pw-logo{font-family:var(--fd);font-size:24px;font-weight:800;margin-bottom:4px}
-.pw-sub{font-size:11px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;margin-bottom:28px}
-.pw-in{width:100%;background:var(--bg3);border:1px solid var(--b2);color:var(--tx);
-  border-radius:8px;padding:12px;font-family:var(--fm);font-size:14px;outline:none;
-  text-align:center;letter-spacing:2px;margin-bottom:13px;transition:border-color .15s}
-.pw-in:focus{border-color:var(--ac)}
-.pw-btn{width:100%;background:var(--ac);color:#1a1200;border:none;padding:12px;
-  border-radius:8px;font-family:var(--fm);font-size:13px;font-weight:700;cursor:pointer}
-.pw-btn:hover{background:var(--ac2)}
-.pw-err{font-size:12px;color:var(--rd);margin-top:9px;min-height:18px}
-.pw-ver{font-size:10px;color:var(--tx3);margin-top:18px}
-
 /* Toast */
 .toast{position:fixed;bottom:22px;right:22px;z-index:9998;background:var(--bg2);
   border:1px solid var(--gr2);color:var(--gr);border-radius:8px;padding:11px 18px;
@@ -200,21 +183,8 @@ tr:last-child td{border-bottom:none} tr:hover td{background:rgba(255,255,255,.02
 </head>
 <body>
 
-<!-- PASSWORD SCREEN -->
-<div class="pw-screen" id="pw-screen">
-  <div class="pw-box">
-    <div class="pw-logo"><span style="color:var(--ac)">●</span> PV Tracker</div>
-    <div class="pw-sub">Pinggau · 800W · SW 35°</div>
-    <input class="pw-in" type="password" id="pw-in" placeholder="Passwort"
-      onkeydown="if(event.key==='Enter')APP.checkPw()">
-    <button class="pw-btn" onclick="APP.checkPw()">Entsperren</button>
-    <div class="pw-err" id="pw-err"></div>
-    <div class="pw-ver">pv-tracker v4.6 · Growatt NEO 800M-X</div>
-  </div>
-</div>
-
 <!-- MAIN APP -->
-<div class="app" id="main-app" style="display:none">
+<div class="app" id="main-app">
 
   <!-- SIDEBAR -->
   <nav class="sidebar">
@@ -222,13 +192,14 @@ tr:last-child td{border-bottom:none} tr:hover td{background:rgba(255,255,255,.02
       <div class="logo-row">
         <span class="logo-dot"></span>
         <span class="logo-name">PV Tracker</span>
-        <span class="logo-ver">v4.6</span>
+        <span class="logo-ver">v4.7</span>
       </div>
       <div class="logo-sub">Pinggau · 800W · SW 35°</div>
     </div>
     <div class="nav">
       <button class="nav-btn active" onclick="APP.nav('dashboard')"><span class="ni">◈</span>Dashboard</button>
       <button class="nav-btn" onclick="APP.nav('pv')"><span class="ni">☀</span>PV Ertrag</button>
+      <button class="nav-btn" onclick="APP.nav('simulation')"><span class="ni">🔬</span>Simulation</button>
       <button class="nav-btn" onclick="APP.nav('consumption')"><span class="ni">⚡</span>Stromverbrauch</button>
       <div class="nav-divider"></div>
       <button class="nav-btn" onclick="APP.nav('settings')"><span class="ni">⚙</span>Einstellungen</button>

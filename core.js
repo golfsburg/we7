@@ -310,7 +310,7 @@ function registerPage(id, module) {
 }
 function registerPages() {
   // Called after all scripts load
-  [DASH, PV, CV, SETT].forEach(m => m.register());
+  [DASH, PV, SIM, CV, SETT].forEach(m => m.register());
 }
 
 // ── PW ───────────────────────────────────────────────────
@@ -328,13 +328,7 @@ function checkPw() {
   }
 }
 function boot() {
-  if (sessionStorage.getItem(PW_KEY) === '1') {
-    document.getElementById('pw-screen').style.display = 'none';
-    document.getElementById('main-app').style.display = 'grid';
-    initApp();
-  } else {
-    setTimeout(() => document.getElementById('pw-in').focus(), 100);
-  }
+  initApp();
 }
 function initApp() {
   loadStorage(); computeTheory();
