@@ -1027,7 +1027,7 @@ function uploadFiles(input) {
   if (!files.length) return;
   const statusEl = document.getElementById('sim-upload-status');
   if (statusEl) statusEl.innerHTML = `Verarbeite ${files.length} Datei(en)…`;
-  let done = 0;
+  let done = 0, saved = 0, failed = 0;
 
   files.forEach(file => {
     const reader = new FileReader();
@@ -1035,14 +1035,26 @@ function uploadFiles(input) {
       const parsed = parseCSV(e.target.result, file.name);
       done++;
       if (!parsed) {
-        if (statusEl) statusEl.innerHTML += `<br><span style="color:var(--rd)">✗ ${file.name}: konnte nicht gelesen werden</span>`;
+        failed++;
+        console.warn('SIM: could not parse', file.name);
       } else {
-        await saveToDb(parsed);
-        library = library.filter(s => s.name !== parsed.name);
-        library.push(parsed);
-        if (statusEl) statusEl.innerHTML = `<span style="color:var(--gr)">✓ ${done}/${files.length} gespeichert</span>`;
+        const ok = await saveToDb(parsed);
+        if (ok) {
+          saved++;
+          // Update or add to local library
+          library = library.filter(s => s.name !== parsed.name);
+          library.push(parsed);
+        } else {
+          failed++;
+        }
       }
       if (done === files.length) {
+        if (statusEl) {
+          if (failed === 0)
+            statusEl.innerHTML = `<span style="color:var(--gr)">✓ ${saved} Szenario(s) gespeichert</span>`;
+          else
+            statusEl.innerHTML = `<span style="color:var(--ac)">✓ ${saved} gespeichert, ${failed} fehlgeschlagen — Details in Konsole (F12)</span>`;
+        }
         renderLibrary();
         input.value = '';
       }
@@ -1052,14 +1064,35 @@ function uploadFiles(input) {
 }
 
 async function saveToDb(s) {
-  if (!APP.sbClient) return;
+  // Wait for sbClient to be ready (max 5 seconds)
+  let tries = 0;
+  while (!APP.sbClient && tries < 10) {
+    await new Promise(r => setTimeout(r, 500));
+    tries++;
+  }
+  if (!APP.sbClient) {
+    console.warn('SIM saveToDb: sbClient not ready');
+    return false;
+  }
   try {
-    await APP.sbClient.from(SIM_TBL).upsert({
-      id: s.id, name: s.name, label: s.label,
-      month: s.month, slope: s.slope, azimuth: s.azimuth,
-      lat: s.lat, lon: s.lon, data: s.data
+    const { error } = await APP.sbClient.from(SIM_TBL).upsert({
+      id:      s.id,
+      name:    s.name,
+      label:   s.label,
+      month:   s.month,
+      slope:   s.slope,
+      azimuth: s.azimuth,
+      lat:     s.lat,
+      lon:     s.lon,
+      data:    s.data
     }, { onConflict: 'name' });
-  } catch(e) { console.warn('SIM save:', e.message); }
+    if (error) throw error;
+    console.log(`SIM saved: ${s.name}`);
+    return true;
+  } catch(e) {
+    console.warn('SIM saveToDb error:', e.message);
+    return false;
+  }
 }
 
 async function loadLibrary() {
