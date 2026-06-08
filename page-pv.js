@@ -877,12 +877,398 @@ return { tab, setEntryMode, resetFilter, renderOverview, renderProfile, resetPro
 })();
 
 // ═══════════════════════════════════════════════════════════
-// SIMULATION MODULE — PVGIS Stundendaten
+// SIMULATION MODULE — PVGIS Stundendaten + Supabase Bibliothek
 // ═══════════════════════════════════════════════════════════
 const SIM = (() => {
 'use strict';
 
+const SIM_TBL = 'pvgis_scenarios';
+const COLORS  = ['#f5c842','#3fcf8e','#5b9cf6','#a78bfa','#f25c5c','#fb923c','#34d399','#60a5fa'];
+
+// ── STATE ───────────────────────────────────────────────
+let scenarios  = [];   // active scenarios for chart display
+let library    = [];   // all saved scenarios from Supabase
+
+// ── HTML ────────────────────────────────────────────────
 const HTML = `
+<div class="ph"><div>
+  <div class="ph-title">🔬 Simulation</div>
+  <div class="ph-sub">PVGIS Strahlungsdaten · Szenarien speichern &amp; vergleichen</div>
+</div></div>
+
+<!-- Upload neue Szenarien -->
+<div class="fcard" style="border-color:rgba(167,139,250,.25)">
+  <div class="fcard-t">📂 PVGIS CSV hochladen &amp; speichern</div>
+  <p style="font-size:13px;color:var(--tx2);margin-bottom:12px">
+    Unter <a href="https://re.jrc.ec.europa.eu/pvg_tools/en/" target="_blank" style="color:var(--ac)">PVGIS Tool</a>
+    → Tages-Strahlungsprofil → Koordinaten &amp; Neigung/Azimuth → CSV exportieren.<br>
+    Mehrere Dateien gleichzeitig wählbar. Gespeicherte Szenarien bleiben dauerhaft in der Bibliothek.
+  </p>
+  <input type="file" id="sim-file" accept=".csv,.txt" multiple
+    style="font-family:var(--fm);font-size:12px;color:var(--tx2);background:var(--bg3);
+           border:1px solid var(--b2);border-radius:8px;padding:8px 10px;width:100%;cursor:pointer"
+    onchange="SIM.uploadFiles(this)">
+  <div id="sim-upload-status" style="font-size:12px;color:var(--tx2);margin-top:8px"></div>
+</div>
+
+<!-- Bibliothek gespeicherter Szenarien -->
+<div class="fcard">
+  <div class="fcard-t" style="justify-content:space-between">
+    <span>📚 Bibliothek</span>
+    <div style="display:flex;gap:8px">
+      <button class="btn-p" style="font-size:11px;padding:4px 12px" onclick="SIM.analyzeSelected()">Auswahl analysieren</button>
+      <button class="btn-s" style="font-size:11px;padding:4px 10px" onclick="SIM.selectAll()">Alle wählen</button>
+      <button class="btn-s" style="font-size:11px;padding:4px 10px" onclick="SIM.selectNone()">Keine</button>
+    </div>
+  </div>
+  <div id="sim-library" style="min-height:60px">
+    <div style="color:var(--tx3);font-size:12px;padding:12px 0">Lade Bibliothek…</div>
+  </div>
+</div>
+
+<!-- Analyse Ergebnis -->
+<div id="sim-metrics" style="display:none">
+  <div class="metrics" id="sim-mc"></div>
+
+  <div class="cc full" style="margin-bottom:14px">
+    <div class="cc-title">Stündliches Strahlungsprofil G(i)</div>
+    <div class="cc-sub" id="sim-chart-sub">W/m² pro Stunde — alle gewählten Szenarien überlagert</div>
+    <div class="leg" id="sim-leg"></div>
+    <div class="cw" style="height:280px"><canvas id="sim-c-profile"></canvas></div>
+  </div>
+  <div class="cgrid">
+    <div class="cc full">
+      <div class="cc-title">Kumulierter Tagesertrag (geschätzt)</div>
+      <div class="cc-sub">kWh über den Tag</div>
+      <div class="leg" id="sim-cum-leg"></div>
+      <div class="cw" style="height:220px"><canvas id="sim-c-cum"></canvas></div>
+    </div>
+    <div class="cc">
+      <div class="cc-title">Vergleich Tagesertrag</div>
+      <div class="cc-sub">kWh pro Szenario</div>
+      <div class="cw" style="height:220px"><canvas id="sim-c-bar"></canvas></div>
+    </div>
+    <div class="cc">
+      <div class="cc-title">Direktstrahlung vs. Diffus</div>
+      <div class="cc-sub">Bestes Szenario</div>
+      <div class="cw" style="height:220px"><canvas id="sim-c-donut"></canvas></div>
+    </div>
+  </div>
+  <div class="fcard">
+    <div class="fcard-t" style="font-size:13px;color:var(--tx2)">⚙ Schätzparameter</div>
+    <div class="fgrid" style="grid-template-columns:1fr 1fr 1fr 1fr">
+      <div class="field"><label>Nennleistung (Wp)</label><input type="number" id="sim-wp"   value="800" step="10"   onchange="SIM.rerender()"></div>
+      <div class="field"><label>Wirkungsgrad (%)</label><input type="number" id="sim-eff"  value="18"  step="1"    onchange="SIM.rerender()"></div>
+      <div class="field"><label>Performance Ratio</label><input type="number" id="sim-pr"  value="0.82" step="0.01" onchange="SIM.rerender()"></div>
+      <div class="field"><label>Fläche (m²)</label><input type="number"       id="sim-area" value="4"   step="0.1"  onchange="SIM.rerender()"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Supabase SQL Hinweis -->
+<div class="fcard" style="border-color:rgba(91,156,246,.2)">
+  <div class="fcard-t" style="font-size:13px;color:var(--tx2)">
+    <span>🗄 Supabase Tabelle <code>pvgis_scenarios</code> (einmalig anlegen)</span>
+    <button class="copy-btn" onclick="APP.copyCode('sim-sql')">Kopieren</button>
+  </div>
+  <div class="code-block" id="sim-sql">create table if not exists pvgis_scenarios (
+  id text primary key,
+  name text not null,
+  label text,
+  month text, slope text, azimuth text,
+  lat text, lon text,
+  data jsonb not null,
+  created_at timestamptz default now()
+);
+alter table pvgis_scenarios enable row level security;
+create policy "allow_all" on pvgis_scenarios
+  for all using (true) with check (true);</div>
+</div>
+`;
+
+// ── CSV PARSER ──────────────────────────────────────────
+function parseCSV(raw, filename) {
+  const cleaned = raw.replace(/^\uFEFF/,'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+  const lines = cleaned.split('\n');
+  let meta = { slope:'?', azimuth:'?', month:'?', lat:'?', lon:'?' };
+  const data = [];
+
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    const parts = line.split('\t').map(p => p.trim()).filter(p => p.length > 0);
+    if (!parts.length) continue;
+    const first = parts[0];
+    if (first.startsWith('Slope'))     meta.slope   = (parts[1]||'').replace(/deg\.?/gi,'').trim();
+    if (first.startsWith('Azimuth'))   meta.azimuth = (parts[1]||'').replace(/deg\.?/gi,'').trim();
+    if (first.startsWith('Results'))   meta.month   = (parts[1]||'').trim();
+    if (first.startsWith('Latitude'))  meta.lat     = (parts[1]||'').trim();
+    if (first.startsWith('Longitude')) meta.lon     = (parts[1]||'').trim();
+    if (/^\d{1,2}:\d{2}$/.test(first) && parts.length >= 4) {
+      const hour = parseInt(first.split(':')[0], 10);
+      const gi   = parseFloat((parts[1]||'0').replace(',','.'));
+      const gbi  = parseFloat((parts[2]||'0').replace(',','.'));
+      const gdi  = parseFloat((parts[3]||'0').replace(',','.'));
+      if (!isNaN(hour) && !isNaN(gi)) data.push({ hour, gi, gbi, gdi });
+    }
+  }
+
+  if (!data.length) return null;
+  const az    = parseFloat(meta.azimuth) || 0;
+  const azStr = az >= 0 ? `+${az}°` : `${az}°`;
+  // Use filename without extension as base name
+  const baseName = filename.replace(/\.[^.]+$/, '');
+  const label = `${meta.month} · ${meta.slope}° · ${azStr}`;
+  return { id: APP.genId(), name: baseName, label, ...meta, data };
+}
+
+// ── UPLOAD & SAVE TO SUPABASE ────────────────────────────
+function uploadFiles(input) {
+  const files = Array.from(input.files);
+  if (!files.length) return;
+  const statusEl = document.getElementById('sim-upload-status');
+  if (statusEl) statusEl.innerHTML = `Verarbeite ${files.length} Datei(en)…`;
+  let done = 0;
+
+  files.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = async e => {
+      const parsed = parseCSV(e.target.result, file.name);
+      done++;
+      if (!parsed) {
+        if (statusEl) statusEl.innerHTML += `<br><span style="color:var(--rd)">✗ ${file.name}: konnte nicht gelesen werden</span>`;
+      } else {
+        await saveToDb(parsed);
+        library = library.filter(s => s.name !== parsed.name);
+        library.push(parsed);
+        if (statusEl) statusEl.innerHTML = `<span style="color:var(--gr)">✓ ${done}/${files.length} gespeichert</span>`;
+      }
+      if (done === files.length) {
+        renderLibrary();
+        input.value = '';
+      }
+    };
+    reader.readAsText(file, 'UTF-8');
+  });
+}
+
+async function saveToDb(s) {
+  if (!APP.sbClient) return;
+  try {
+    await APP.sbClient.from(SIM_TBL).upsert({
+      id: s.id, name: s.name, label: s.label,
+      month: s.month, slope: s.slope, azimuth: s.azimuth,
+      lat: s.lat, lon: s.lon, data: s.data
+    }, { onConflict: 'name' });
+  } catch(e) { console.warn('SIM save:', e.message); }
+}
+
+async function loadLibrary() {
+  if (!APP.sbClient) { renderLibrary(); return; }
+  try {
+    const { data, error } = await APP.sbClient.from(SIM_TBL).select('*').order('created_at');
+    if (error) throw error;
+    library = (data || []).map(r => ({ ...r, data: r.data }));
+  } catch(e) { console.warn('SIM load:', e.message); }
+  renderLibrary();
+}
+
+async function deleteFromDb(id) {
+  if (!APP.sbClient) return;
+  try { await APP.sbClient.from(SIM_TBL).delete().eq('id', id); }
+  catch(e) { console.warn('SIM delete:', e.message); }
+}
+
+// ── LIBRARY UI ───────────────────────────────────────────
+function renderLibrary() {
+  const el = document.getElementById('sim-library');
+  if (!el) return;
+
+  if (!library.length) {
+    el.innerHTML = '<div style="color:var(--tx3);font-size:12px;padding:12px 0">Noch keine Szenarien gespeichert. CSV-Dateien oben hochladen.</div>';
+    return;
+  }
+
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;margin-top:10px">
+      ${library.map((s,i) => `
+        <label style="display:flex;align-items:flex-start;gap:10px;background:var(--bg3);
+               border:1px solid var(--b1);border-radius:var(--r);padding:12px;cursor:pointer;
+               transition:border-color .15s" class="sim-lib-card" data-id="${s.id}">
+          <input type="checkbox" class="sim-cb" data-id="${s.id}" data-idx="${i}"
+            style="margin-top:3px;accent-color:${COLORS[i%COLORS.length]};width:15px;height:15px;flex-shrink:0">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;font-weight:500;color:var(--tx);margin-bottom:2px;
+                 overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+                 title="${s.name}">${s.name}</div>
+            <div style="font-size:11px;color:var(--tx3)">${s.label}</div>
+            <div style="font-size:10px;color:var(--tx3);margin-top:2px">${s.lat}°N ${s.lon}°E · ${s.data.length} Stunden</div>
+          </div>
+          <button onclick="SIM.deleteScenario('${s.id}',event)"
+            style="background:transparent;border:none;color:var(--tx3);cursor:pointer;
+                   font-size:14px;padding:0;flex-shrink:0;line-height:1"
+            title="Löschen">✕</button>
+        </label>`).join('')}
+    </div>
+    <div style="font-size:11px;color:var(--tx3);margin-top:10px">${library.length} Szenario(s) in der Bibliothek</div>`;
+
+  // Highlight checked cards
+  el.querySelectorAll('.sim-cb').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const card = cb.closest('.sim-lib-card');
+      const idx  = parseInt(cb.dataset.idx);
+      card.style.borderColor = cb.checked ? COLORS[idx % COLORS.length] : 'var(--b1)';
+    });
+  });
+}
+
+function selectAll()  { document.querySelectorAll('.sim-cb').forEach(cb => { cb.checked = true;  cb.dispatchEvent(new Event('change')); }); }
+function selectNone() { document.querySelectorAll('.sim-cb').forEach(cb => { cb.checked = false; cb.dispatchEvent(new Event('change')); }); }
+
+async function deleteScenario(id, event) {
+  event.preventDefault(); event.stopPropagation();
+  if (!confirm('Szenario aus Bibliothek löschen?')) return;
+  library = library.filter(s => s.id !== id);
+  // Remove from active scenarios too
+  scenarios = scenarios.filter(s => s.id !== id);
+  await deleteFromDb(id);
+  renderLibrary();
+  if (scenarios.length === 0) {
+    const m = document.getElementById('sim-metrics');
+    if (m) m.style.display = 'none';
+  } else render();
+  APP.toast('✓ Szenario gelöscht');
+}
+
+// ── ANALYSE ──────────────────────────────────────────────
+function analyzeSelected() {
+  const checked = [...document.querySelectorAll('.sim-cb:checked')].map(cb => cb.dataset.id);
+  if (!checked.length) { APP.toast('Bitte mindestens ein Szenario auswählen','err'); return; }
+  scenarios = library.filter(s => checked.includes(s.id));
+  render();
+}
+
+function rerender() { if (scenarios.length) render(); }
+
+function render() {
+  const metricsEl = document.getElementById('sim-metrics');
+  if (!scenarios.length) { if (metricsEl) metricsEl.style.display = 'none'; return; }
+  if (metricsEl) metricsEl.style.display = 'block';
+
+  const area = parseFloat(document.getElementById('sim-area')?.value) || 4;
+  const pr   = parseFloat(document.getElementById('sim-pr')?.value)   || 0.82;
+
+  const yields = scenarios.map(s => {
+    const sumGi = s.data.reduce((a,d) => a + d.gi, 0);
+    return +(sumGi / 1000 * area * pr).toFixed(3);
+  });
+
+  const bestIdx = yields.indexOf(Math.max(...yields));
+
+  // Metrics
+  const mcEl = document.getElementById('sim-mc');
+  if (mcEl) {
+    const maxY = Math.max(...yields), minY = Math.min(...yields);
+    const diff = +(maxY - minY).toFixed(3);
+    mcEl.innerHTML = `
+      <div class="mc hi"><div class="mc-l">Bester Tagesertrag</div><div><span class="mc-v">${maxY}</span><span class="mc-u">kWh</span></div><div class="mc-d">${scenarios[bestIdx].label}</div></div>
+      <div class="mc"><div class="mc-l">Geringster</div><div><span class="mc-v">${minY}</span><span class="mc-u">kWh</span></div></div>
+      <div class="mc gr"><div class="mc-l">Differenz</div><div><span class="mc-v">${diff}</span><span class="mc-u">kWh</span></div><div class="mc-d">${maxY>0?(diff/maxY*100).toFixed(1)+'% Unterschied':''}</div></div>
+      <div class="mc"><div class="mc-l">Hochrechnung/Jahr</div><div><span class="mc-v">${(maxY*365).toFixed(0)}</span><span class="mc-u">kWh</span></div><div class="mc-d">bestes Szenario</div></div>`;
+  }
+
+  const sub = document.getElementById('sim-chart-sub');
+  if (sub) sub.textContent = `W/m² · ${scenarios[0]?.month||''} · ${scenarios.length} Szenario(s)`;
+
+  drawProfile(); drawCumulative(area, pr); drawBar(yields); drawDonut(bestIdx);
+  drawLegend();
+}
+
+function drawProfile() {
+  APP.destroyChart('sim-prof');
+  const labels   = Array.from({length:24}, (_,i) => String(i).padStart(2,'0')+':00');
+  const datasets = scenarios.map((s,i) => {
+    const hd = Array(24).fill(0);
+    s.data.forEach(d => { hd[d.hour] = d.gi; });
+    return { label:s.label, data:hd, borderColor:COLORS[i%COLORS.length],
+      backgroundColor:COLORS[i%COLORS.length]+'18', fill:true, tension:0.4, pointRadius:2, borderWidth:2 };
+  });
+  APP.charts['sim-prof'] = new Chart(document.getElementById('sim-c-profile'), {
+    type:'line', data:{labels, datasets},
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+      scales:{ x:{ticks:{color:APP.TC,font:{size:10}},grid:{color:APP.GC}},
+               y:{ticks:{color:APP.TC,font:{size:10}},grid:{color:APP.GC},
+                  title:{display:true,text:'W/m²',color:APP.TC,font:{size:10}}} } }
+  });
+}
+
+function drawCumulative(area, pr) {
+  APP.destroyChart('sim-cum');
+  const labels   = Array.from({length:24}, (_,i) => String(i).padStart(2,'0')+':00');
+  const datasets = scenarios.map((s,i) => {
+    const hd = Array(24).fill(0);
+    s.data.forEach(d => { hd[d.hour] = d.gi; });
+    let cum = 0;
+    return { label:s.label, data:hd.map(gi => +(cum += gi/1000*area*pr).toFixed(4)),
+      borderColor:COLORS[i%COLORS.length], backgroundColor:'transparent',
+      fill:false, tension:0.3, pointRadius:2, borderWidth:2, borderDash:i>0?[5,3]:[] };
+  });
+  APP.charts['sim-cum'] = new Chart(document.getElementById('sim-c-cum'), {
+    type:'line', data:{labels, datasets},
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+      scales:{ x:{ticks:{color:APP.TC,font:{size:10}},grid:{color:APP.GC}},
+               y:{ticks:{color:APP.TC,font:{size:10}},grid:{color:APP.GC},
+                  title:{display:true,text:'kWh kumuliert',color:APP.TC,font:{size:10}}} } }
+  });
+}
+
+function drawBar(yields) {
+  APP.destroyChart('sim-bar');
+  APP.charts['sim-bar'] = new Chart(document.getElementById('sim-c-bar'), {
+    type:'bar',
+    data:{ labels:scenarios.map(s=>s.label),
+      datasets:[{ data:yields, backgroundColor:scenarios.map((_,i)=>COLORS[i%COLORS.length]+'cc'), borderRadius:4 }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+      scales:{ x:{ticks:{color:APP.TC,font:{size:9},maxRotation:30},grid:{color:APP.GC}},
+               y:{ticks:{color:APP.TC,font:{size:10}},grid:{color:APP.GC},
+                  title:{display:true,text:'kWh/Tag',color:APP.TC,font:{size:10}}} } }
+  });
+}
+
+function drawDonut(bestIdx) {
+  APP.destroyChart('sim-donut');
+  const best  = scenarios[bestIdx];
+  const sumGb = best.data.reduce((a,d) => a+d.gbi, 0);
+  const sumGd = best.data.reduce((a,d) => a+d.gdi, 0);
+  APP.charts['sim-donut'] = new Chart(document.getElementById('sim-c-donut'), {
+    type:'doughnut',
+    data:{ labels:['Direktstrahlung Gb(i)','Diffusstrahlung Gd(i)'],
+      datasets:[{ data:[+sumGb.toFixed(1),+sumGd.toFixed(1)],
+        backgroundColor:['rgba(245,200,66,.8)','rgba(91,156,246,.7)'], borderWidth:0 }] },
+    options:{ responsive:true, maintainAspectRatio:false, cutout:'55%',
+      plugins:{ legend:{labels:{color:APP.TC,font:{size:11},boxWidth:10}},
+        tooltip:{callbacks:{label:ctx=>ctx.parsed.toFixed(1)+' W/m²'}} } }
+  });
+}
+
+function drawLegend() {
+  ['sim-leg','sim-cum-leg'].forEach(id => {
+    const el = document.getElementById(id); if (!el) return;
+    el.innerHTML = scenarios.map((s,i) =>
+      `<div class="li"><span class="ld" style="background:${COLORS[i%COLORS.length]}"></span>${s.label}</div>`
+    ).join('');
+  });
+}
+
+function register() {
+  APP.registerPage('simulation', {
+    html:    HTML,
+    onEnter: () => loadLibrary()
+  });
+}
+
+return { uploadFiles, analyzeSelected, rerender, selectAll, selectNone, deleteScenario, register };
+})();
+
 <div class="ph"><div>
   <div class="ph-title">🔬 Simulation</div>
   <div class="ph-sub">PVGIS Strahlungsdaten · Mehrere Szenarien vergleichen</div>

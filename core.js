@@ -462,6 +462,7 @@ function closeModal() {
 return {
   // Pending import slot (used by CV module)
   _pendingImport: null,
+  get sbClient()    { return sbClient; },
   // state (read-only references)
   get cfg()         { return cfg; },
   get theory()      { return theory; },
