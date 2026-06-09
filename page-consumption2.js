@@ -752,40 +752,17 @@ async function syncReadings() {
     }
   } catch(e) { console.warn('CV2 sync:',e.message); }
 }
-
-async function loadReadings() {
-  // Load from localStorage first
-  try {
-    const v=localStorage.getItem('cv2_readings');
-    if (v) readings=JSON.parse(v);
-  } catch(e){}
-
-  // Then load from Supabase if local is empty
-  if (readings.length===0 && APP.sbClient) {
-    let tries=0;
-    while (!APP.sbClient && tries<10) { await new Promise(r=>setTimeout(r,500)); tries++; }
-    try {
-      const {data,error}=await APP.sbClient.from(CV2_TBL).select('*').order('reading_date');
-      if (!error && data && data.length>0) {
-        readings=data;
-        saveReadings(false);
-      }
-    } catch(e) { console.warn('CV2 load:',e.message); }
-  }
-  renderTable();
-  renderDashboard();
-}
-
 // ── INIT ──────────────────────────────────────────────────
-function initDefaults() {
-  prefillNow();
-  const today = new Date().toISOString().split('T')[0];
+function populateDropdowns() {
+  const today    = new Date().toISOString().split('T')[0];
   const earliest = getEarliestDate();
 
-  // Populate month dropdown
+  // Always rebuild month dropdown from current readings
   const mEl = document.getElementById('cv2-month');
-  if (mEl && mEl.options.length <= 1) {
-    const dates = readings.map(r => r.reading_date.substring(0,7)).filter(Boolean);
+  if (mEl) {
+    const current = mEl.value;
+    mEl.innerHTML = '<option value="">—</option>';
+    const dates  = readings.map(r => r.reading_date.substring(0,7)).filter(Boolean);
     const months = [...new Set(dates)].sort().reverse();
     const MN = ['','Jänner','Februar','März','April','Mai','Juni',
                 'Juli','August','September','Oktober','November','Dezember'];
@@ -793,37 +770,76 @@ function initDefaults() {
       const [yr, mo] = ym.split('-').map(Number);
       const opt = document.createElement('option');
       opt.value = ym; opt.textContent = `${MN[mo]} ${yr}`;
+      if (ym === current) opt.selected = true;
       mEl.appendChild(opt);
     });
   }
 
-  // Populate year dropdown
+  // Always rebuild year dropdown from current readings
   const yEl = document.getElementById('cv2-year');
-  if (yEl && yEl.options.length <= 1) {
+  if (yEl) {
+    const current = yEl.value;
+    yEl.innerHTML = '<option value="">—</option>';
     const years = [...new Set(readings.map(r => r.reading_date.substring(0,4)))].sort().reverse();
     years.forEach(yr => {
       const opt = document.createElement('option');
       opt.value = yr; opt.textContent = yr;
+      if (yr === current) opt.selected = true;
       yEl.appendChild(opt);
     });
   }
 
+  // Set Von to earliest, Bis to today
   const fEl = document.getElementById('cv2-from');
   const tEl = document.getElementById('cv2-to');
-  if (fEl) fEl.value = earliest || today;
-  if (tEl) tEl.value = today;
+  if (fEl && !fEl.value) fEl.value = earliest || today;
+  if (tEl && !tEl.value) tEl.value = today;
 
+  prefillNow();
   const d30 = new Date(); d30.setDate(d30.getDate()-30);
   const df = document.getElementById('cv2-del-from');
   const dt = document.getElementById('cv2-del-to');
-  if (df) df.value = d30.toISOString().split('T')[0];
-  if (dt) dt.value = today;
+  if (df && !df.value) df.value = d30.toISOString().split('T')[0];
+  if (dt && !dt.value) dt.value = today;
+}
+
+async function loadReadings() {
+  // Load from localStorage first
+  try {
+    const v = localStorage.getItem('cv2_readings');
+    if (v) readings = JSON.parse(v);
+  } catch(e) {}
+
+  // Load from Supabase if local is empty
+  if (readings.length === 0) {
+    let tries = 0;
+    while (!APP.sbClient && tries < 10) { await new Promise(r => setTimeout(r,500)); tries++; }
+    if (APP.sbClient) {
+      try {
+        const { data, error } = await APP.sbClient.from(CV2_TBL).select('*').order('reading_date');
+        if (!error && data && data.length > 0) {
+          readings = data;
+          saveReadings(false);
+        }
+      } catch(e) { console.warn('CV2 load:', e.message); }
+    }
+  }
+
+  // Always populate dropdowns AFTER data is loaded, then render
+  populateDropdowns();
+
+  // Set Von to earliest data if currently empty
+  const fEl = document.getElementById('cv2-from');
+  if (fEl && !fEl.value) fEl.value = getEarliestDate() || new Date().toISOString().split('T')[0];
+
+  renderDashboard();
+  renderTable();
 }
 
 function register() {
   APP.registerPage('consumption2', {
     html: HTML,
-    onEnter: () => { loadReadings().then(() => { initDefaults(); }); }
+    onEnter: () => loadReadings()
   });
 }
 
