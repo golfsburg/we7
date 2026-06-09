@@ -122,7 +122,19 @@ const HTML = `
       · <strong>Tab-getrennt</strong> (neuere Exporte): gleiche Spaltenreihenfolge, Datum DD.MM.YY oder DD.MM.YYYY<br>
       <strong>Lieferung</strong> = Netzbezug · <strong>Einspeisung</strong> = Einspeisung
     </div>
-    <textarea class="csv-area" id="cv-csv-in" placeholder="CSV-Inhalt hier einfügen..."></textarea>
+    <!-- File picker -->
+    <div style="margin-bottom:12px">
+      <label style="display:block;font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--tx2);font-weight:500;margin-bottom:6px">CSV Datei auswählen</label>
+      <input type="file" id="cv-file" accept=".csv,.txt"
+        style="font-family:var(--fm);font-size:12px;color:var(--tx2);background:var(--bg3);border:1px solid var(--b2);border-radius:8px;padding:8px 10px;width:100%;cursor:pointer"
+        onchange="CV.loadFile(this)">
+      <div id="cv-file-info" style="font-size:11px;color:var(--tx3);margin-top:4px"></div>
+    </div>
+    <!-- Manual paste fallback -->
+    <div style="margin-bottom:10px">
+      <label style="display:block;font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--tx2);font-weight:500;margin-bottom:6px">Oder CSV-Inhalt einfügen</label>
+      <textarea class="csv-area" id="cv-csv-in" placeholder="CSV-Inhalt hier einfügen..."></textarea>
+    </div>
     <div class="brow">
       <button class="btn-p" onclick="CV.importCSV(false)">Importieren (hinzufügen)</button>
       <button class="btn-s" onclick="CV.importCSV(true)">↺ Neu importieren (überschreiben)</button>
@@ -434,6 +446,21 @@ function deleteSelected() {
   APP.toast('✓ ' + sel.length + ' gelöscht');
 }
 
+// ── FILE LOAD ─────────────────────────────────────────────
+function loadFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const info = document.getElementById('cv-file-info');
+  if (info) info.textContent = `📄 ${file.name} (${(file.size/1024).toFixed(1)} KB) — wird geladen…`;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const ta = document.getElementById('cv-csv-in');
+    if (ta) ta.value = e.target.result;
+    if (info) info.textContent = `📄 ${file.name} (${(file.size/1024).toFixed(1)} KB) ✓ — bereit zum Importieren`;
+  };
+  reader.readAsText(file);
+}
+
 // ── IMPORT ────────────────────────────────────────────────
 function importCSV(overwrite = false) {
   const raw   = document.getElementById('cv-csv-in')?.value.trim();
@@ -538,6 +565,12 @@ function importCSV(overwrite = false) {
 
   APP.saveCv(); renderOverview(); APP.updateSidebar();
 
+  // Reset file input
+  const fi = document.getElementById('cv-file');
+  if (fi) fi.value = '';
+  const info = document.getElementById('cv-file-info');
+  if (info) info.textContent = '';
+
   const days = importDates.size;
   const msg  = overwrite
     ? `✓ ${parsed.length} Messpunkte für ${days} Tage importiert (überschrieben).`
@@ -615,5 +648,5 @@ function register() {
 }
 
 return { tab, resetFilter, resetProfile, renderOverview, renderProfile, renderTable,
-         cvGoPage, toggleAll, deleteSelected, importCSV, deleteRange, clearAll, register };
+         cvGoPage, toggleAll, loadFile, deleteSelected, importCSV, deleteRange, clearAll, register };
 })();
