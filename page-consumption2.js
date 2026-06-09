@@ -14,6 +14,8 @@ const HTML = `
   <div class="ph-sub">Zählerablesen · Solar · Fernwärme · Wasser · Strom</div>
 </div></div>
 
+<div id="cv2-timeline"></div>
+
 <div class="mtabs" id="cv2-tabs">
   <button class="mtab active" onclick="CV2.tab('dashboard',this)">Dashboard</button>
   <button class="mtab"        onclick="CV2.tab('records',this)">Verbrauchsaufzeichnung</button>
@@ -837,7 +839,18 @@ async function loadReadings() {
 function register() {
   APP.registerPage('consumption2', {
     html: HTML,
-    onEnter: () => loadReadings()
+    onEnter: async () => {
+      await loadReadings();
+      APP.Timeline.create('cv2-timeline', {
+        fromField: 'cv2-from', toField: 'cv2-to',
+        onRange: (f,t) => {
+          const el=document.getElementById('cv2-from'); if(el) el.value=f;
+          const el2=document.getElementById('cv2-to'); if(el2) el2.value=t;
+          const pEl=document.getElementById('cv2-period'); if(pEl) pEl.value='custom';
+          renderDashboard();
+        }
+      });
+    }
   });
 }
 

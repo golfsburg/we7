@@ -459,8 +459,175 @@ function closeModal() {
   document.getElementById('edit-modal-bg').style.display = 'none';
 }
 
-// ── PUBLIC API ───────────────────────────────────────────
-return {
+// ── TIMELINE RANGE PICKER ────────────────────────────────
+// Usage: APP.Timeline.create(containerId, { onRange: (from, to) => {} })
+// The timeline auto-reads all available dates from entries + consumption
+const Timeline = (() => {
+  const instances = {}; // containerId → state
+
+  function getAllDates() {
+    const dates = [
+      ...entries.map(e => e.date),
+      ...consumption.map(c => String(c.date).substring(0,10))
+    ].filter(Boolean).sort();
+    return dates;
+  }
+
+  function dateToMs(d) { return new Date(d + 'T00:00:00').getTime(); }
+  function msToDate(ms) { return new Date(ms).toISOString().split('T')[0]; }
+
+  function pct(ms, minMs, maxMs) {
+    return Math.min(1, Math.max(0, (ms - minMs) / (maxMs - minMs)));
+  }
+
+  function create(containerId, opts = {}) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const dates  = getAllDates();
+    if (dates.length < 2) return;
+
+    const minMs  = dateToMs(dates[0]);
+    const maxMs  = dateToMs(dates[dates.length - 1]);
+    const rangeMs = maxMs - minMs;
+
+    // Initial selection = full range
+    let selFrom = minMs, selTo = maxMs;
+
+    // Read existing from/to from linked fields if provided
+    if (opts.fromField && document.getElementById(opts.fromField)?.value)
+      selFrom = dateToMs(document.getElementById(opts.fromField).value);
+    if (opts.toField && document.getElementById(opts.toField)?.value)
+      selTo   = dateToMs(document.getElementById(opts.toField).value);
+
+    // Build tick marks (years + months)
+    const yearMs = {};
+    dates.forEach(d => {
+      const yr = d.substring(0,4), mo = d.substring(0,7);
+      if (!yearMs[yr]) yearMs[yr] = dateToMs(yr + '-01-01');
+    });
+
+    const ticksHtml = Object.entries(yearMs).map(([yr, ms]) => {
+      const p = pct(ms, minMs, maxMs) * 100;
+      return `<div class="tl-tick" style="left:${p}%"></div>
+              <div class="tl-tick-lbl" style="left:${p}%">${yr}</div>`;
+    }).join('');
+
+    container.innerHTML = `
+      <div class="tl-wrap">
+        <div class="tl-track" id="${containerId}-track">
+          <div class="tl-ticks">${ticksHtml}</div>
+          <div class="tl-fill"  id="${containerId}-fill"></div>
+          <div class="tl-handle" id="${containerId}-hl" title="Von"></div>
+          <div class="tl-handle" id="${containerId}-hr" title="Bis"></div>
+          <div class="tl-sel-lbl" id="${containerId}-lbl"></div>
+        </div>
+      </div>`;
+
+    const track = document.getElementById(`${containerId}-track`);
+    const fill  = document.getElementById(`${containerId}-fill`);
+    const hl    = document.getElementById(`${containerId}-hl`);
+    const hr    = document.getElementById(`${containerId}-hr`);
+    const lbl   = document.getElementById(`${containerId}-lbl`);
+
+    function update() {
+      const pFrom = pct(selFrom, minMs, maxMs) * 100;
+      const pTo   = pct(selTo,   minMs, maxMs) * 100;
+      fill.style.left  = pFrom + '%';
+      fill.style.width = (pTo - pFrom) + '%';
+      hl.style.left    = pFrom + '%';
+      hr.style.left    = pTo   + '%';
+      const fd = msToDate(selFrom), td = msToDate(selTo);
+      lbl.textContent  = `${fd}  →  ${td}`;
+      // Sync linked fields
+      if (opts.fromField) { const el=document.getElementById(opts.fromField); if(el) el.value=fd; }
+      if (opts.toField)   { const el=document.getElementById(opts.toField);   if(el) el.value=td; }
+    }
+
+    function msFromX(x) {
+      const rect = track.getBoundingClientRect();
+      const p    = Math.min(1, Math.max(0, (x - rect.left) / rect.width));
+      return minMs + p * rangeMs;
+    }
+
+    function snapToDay(ms) {
+      // Snap to nearest day
+      const day = 86400000;
+      return Math.round(ms / day) * day;
+    }
+
+    function makeDraggable(handle, which) {
+      handle.addEventListener('mousedown', e => {
+        e.preventDefault();
+        const onMove = ev => {
+          const ms = snapToDay(msFromX(ev.clientX));
+          if (which === 'from') {
+            selFrom = Math.min(ms, selTo - 86400000);
+          } else {
+            selTo = Math.max(ms, selFrom + 86400000);
+          }
+          update();
+        };
+        const onUp = () => {
+          document.removeEventListener('mousemove', onMove);
+          document.removeEventListener('mouseup', onUp);
+          if (opts.onRange) opts.onRange(msToDate(selFrom), msToDate(selTo));
+        };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+      });
+
+      // Touch support
+      handle.addEventListener('touchstart', e => {
+        e.preventDefault();
+        const onMove = ev => {
+          const ms = snapToDay(msFromX(ev.touches[0].clientX));
+          if (which === 'from') {
+            selFrom = Math.min(ms, selTo - 86400000);
+          } else {
+            selTo = Math.max(ms, selFrom + 86400000);
+          }
+          update();
+        };
+        const onEnd = () => {
+          document.removeEventListener('touchmove', onMove);
+          document.removeEventListener('touchend', onEnd);
+          if (opts.onRange) opts.onRange(msToDate(selFrom), msToDate(selTo));
+        };
+        document.addEventListener('touchmove', onMove, {passive:false});
+        document.addEventListener('touchend', onEnd);
+      }, {passive:false});
+    }
+
+    // Click on track to set nearest handle
+    track.addEventListener('click', e => {
+      if (e.target === hl || e.target === hr) return;
+      const ms = snapToDay(msFromX(e.clientX));
+      const dFrom = Math.abs(ms - selFrom), dTo = Math.abs(ms - selTo);
+      if (dFrom < dTo) selFrom = Math.min(ms, selTo - 86400000);
+      else             selTo   = Math.max(ms, selFrom + 86400000);
+      update();
+      if (opts.onRange) opts.onRange(msToDate(selFrom), msToDate(selTo));
+    });
+
+    makeDraggable(hl, 'from');
+    makeDraggable(hr, 'to');
+    update();
+
+    instances[containerId] = { update, setRange: (f, t) => {
+      selFrom = dateToMs(f); selTo = dateToMs(t); update();
+    }};
+    return instances[containerId];
+  }
+
+  function setRange(containerId, from, to) {
+    if (instances[containerId]) instances[containerId].setRange(from, to);
+  }
+
+  return { create, setRange };
+})();
+
+
   // Pending import slot (used by CV module)
   _pendingImport: null,
   get sbClient()    { return sbClient; },
@@ -481,6 +648,8 @@ return {
   // delete helpers — immediately remove from Supabase + add to tombstone
   deletePvIds:  (ids) => deletePvFromSb(ids),
   deleteCvIds:  (ids) => deleteCvFromSb(ids),
+  // Timeline range picker
+  Timeline,
   // utils
   genId, getWeekNum, getTheory, calcEuro, calcDirect,
   getDayGrid, getMonthGrid, getDayPv, getMonthPv,

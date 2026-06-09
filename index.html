@@ -168,6 +168,26 @@ tr:last-child td{border-bottom:none} tr:hover td{background:rgba(255,255,255,.02
 .toast.show{opacity:1;transform:translateY(0)}
 .toast.err{border-color:rgba(242,92,92,.5);color:var(--rd)}
 
+/* ── TIMELINE RANGE PICKER ───────────────────────────────── */
+.tl-wrap{position:relative;margin:0 0 20px;user-select:none}
+.tl-track{position:relative;height:36px;background:var(--bg3);border:1px solid var(--b2);
+  border-radius:8px;cursor:crosshair;overflow:hidden}
+.tl-fill{position:absolute;top:0;bottom:0;background:rgba(245,200,66,.18);
+  border-left:2px solid var(--ac);border-right:2px solid var(--ac);pointer-events:none}
+.tl-handle{position:absolute;top:50%;transform:translate(-50%,-50%);
+  width:14px;height:26px;background:var(--ac);border-radius:4px;cursor:ew-resize;z-index:2;
+  display:flex;align-items:center;justify-content:center}
+.tl-handle::after{content:'⋮';color:#1a1200;font-size:14px;line-height:1}
+.tl-labels{display:flex;justify-content:space-between;margin-top:3px;
+  font-size:10px;color:var(--tx3);padding:0 2px}
+.tl-ticks{position:absolute;top:0;bottom:0;left:0;right:0;pointer-events:none}
+.tl-tick{position:absolute;top:0;bottom:0;width:1px;background:rgba(255,255,255,.06)}
+.tl-tick-lbl{position:absolute;top:50%;transform:translateX(-50%) translateY(-50%);
+  font-size:9px;color:var(--tx3);white-space:nowrap;pointer-events:none}
+.tl-sel-lbl{position:absolute;top:2px;left:50%;transform:translateX(-50%);
+  font-size:10px;color:var(--ac);font-weight:500;white-space:nowrap;pointer-events:none;
+  background:rgba(8,9,10,.7);padding:0 4px;border-radius:3px}
+
 /* Scrollbar */
 ::-webkit-scrollbar{width:5px} ::-webkit-scrollbar-track{background:var(--bg)}
 ::-webkit-scrollbar-thumb{background:var(--bg3);border-radius:3px}

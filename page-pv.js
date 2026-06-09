@@ -10,6 +10,8 @@ const HTML = `
   <div class="ph-sub">Growatt NEO 800M-X · 800 Wp</div>
 </div></div>
 
+<div id="pv-timeline"></div>
+
 <div class="mtabs" id="pv-tabs">
   <button class="mtab active"  onclick="PV.tab('overview',this)">Übersicht</button>
   <button class="mtab"         onclick="PV.tab('profile',this)">Ertragsprofil</button>
@@ -865,7 +867,18 @@ function initDefaults() {
 function register() {
   APP.registerPage('pv', {
     html: HTML,
-    onEnter: () => { initDefaults(); renderOverview(); renderTable(); }
+    onEnter: () => {
+      initDefaults();
+      APP.Timeline.create('pv-timeline', {
+        fromField: 'pv-from', toField: 'pv-to',
+        onRange: (f,t) => {
+          const el=document.getElementById('pv-from'); if(el) el.value=f;
+          const el2=document.getElementById('pv-to'); if(el2) el2.value=t;
+          renderOverview();
+        }
+      });
+      renderOverview(); renderTable();
+    }
   });
 }
 

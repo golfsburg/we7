@@ -12,6 +12,8 @@ const HTML = `
   <div class="ph-sub">Smart Meter · Viertelstundenwerte · EVN / Netz NÖ</div>
 </div></div>
 
+<div id="cv-timeline"></div>
+
 <div class="mtabs" id="cv-tabs">
   <button class="mtab active" onclick="CV.tab('overview',this)">Übersicht</button>
   <button class="mtab"        onclick="CV.tab('profile',this)">Lastprofil</button>
@@ -643,7 +645,18 @@ function initDefaults() {
 function register() {
   APP.registerPage('consumption', {
     html:    HTML,
-    onEnter: () => { initDefaults(); renderOverview(); }
+    onEnter: () => {
+      initDefaults();
+      APP.Timeline.create('cv-timeline', {
+        fromField: 'cv-from', toField: 'cv-to',
+        onRange: (f,t) => {
+          const el=document.getElementById('cv-from'); if(el) el.value=f;
+          const el2=document.getElementById('cv-to'); if(el2) el2.value=t;
+          renderOverview();
+        }
+      });
+      renderOverview();
+    }
   });
 }
 

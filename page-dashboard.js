@@ -9,6 +9,9 @@ const HTML = `
   <div><div class="ph-title">Dashboard</div><div class="ph-sub" id="db-sub">Energieübersicht</div></div>
 </div>
 
+<!-- Interaktive Zeitachse -->
+<div id="db-timeline"></div>
+
 <!-- Filter bar: Preset + Monat/Jahr-Schnellwahl + manuelle Von/Bis -->
 <div class="fbar" style="margin-bottom:20px;flex-wrap:wrap;row-gap:8px">
 
@@ -265,18 +268,33 @@ function initFilter() {
 }
 
 function render() {
+  // Init/update timeline
+  APP.Timeline.create('db-timeline', {
+    fromField: 'db-from',
+    toField:   'db-to',
+    onRange:   (from, to) => {
+      const pEl = document.getElementById('db-period');
+      const mEl = document.getElementById('db-month');
+      const yEl = document.getElementById('db-year');
+      if (pEl) pEl.value = 'custom';
+      if (mEl) mEl.value = '';
+      if (yEl) yEl.value = '';
+      renderCore(from, to);
+    }
+  });
   initFilter();
   const { from, to } = getRange();
+  // Sync timeline handles to current from/to
+  APP.Timeline.setRange('db-timeline', from || '', to || '');
+  renderCore(from, to);
+}
+
+function renderCore(from, to) {
   const entries = APP.entries;
   const consumption = APP.consumption;
 
-  // Update range label
   const labelEl = document.getElementById('db-range-label');
-  if (labelEl) {
-    if (from && to) labelEl.textContent = `${from} – ${to}`;
-    else if (from)  labelEl.textContent = `ab ${from}`;
-    else            labelEl.textContent = 'Alle Daten';
-  }
+  if (labelEl) labelEl.style.display = 'none';
 
   let pvD = entries.filter(e => (!from || e.date >= from) && (!to || e.date <= to));
   let cvD = consumption.filter(c => c.direction==='grid' && (!from||c.date>=from) && (!to||c.date<=to));
