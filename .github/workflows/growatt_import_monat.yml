@@ -1,0 +1,35 @@
+name: Growatt → Supabase Monatsimport
+
+on:
+  # Nur manuell startbar — mit Monatsauswahl
+  workflow_dispatch:
+    inputs:
+      import_month:
+        description: 'Monat importieren (YYYY-MM), z.B. 2026-05'
+        required: true
+        default: ''
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+
+      - name: Python einrichten
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Abhängigkeiten installieren
+        run: pip install growattServer
+
+      - name: Growatt Monatsimport ausführen
+        env:
+          GROWATT_USER:  ${{ secrets.GROWATT_USER }}
+          GROWATT_PASS:  ${{ secrets.GROWATT_PASS }}
+          SUPABASE_URL:  ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY:  ${{ secrets.SUPABASE_KEY }}
+          IMPORT_MONTH:  ${{ github.event.inputs.import_month }}
+        run: python growatt_import_monat.py
