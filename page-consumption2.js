@@ -21,15 +21,30 @@ const HTML = `
 
 <!-- ── DASHBOARD ── -->
 <div id="cv2-t-dashboard">
-  <div class="fbar">
-    <label>Ansicht</label>
-    <select id="cv2-view" onchange="CV2.renderDashboard()">
-      <option value="month" selected>Monatswerte</option>
-      <option value="day">Tageswerte (Ø)</option>
+  <div class="fbar" style="flex-wrap:wrap;row-gap:8px">
+    <label>Schnellauswahl</label>
+    <select id="cv2-period" onchange="CV2.onPreset()">
+      <option value="thismonth">Dieser Monat</option>
+      <option value="last30">Letzte 30 Tage</option>
+      <option value="last90">Letzte 90 Tage</option>
+      <option value="thisyear">Dieses Jahr</option>
+      <option value="all" selected>Gesamt</option>
+      <option value="custom">Benutzerdefiniert …</option>
     </select>
     <span class="fsep">|</span>
-    <label>Von</label><input type="date" id="cv2-from" onchange="CV2.renderDashboard()">
-    <label>Bis</label><input type="date" id="cv2-to"   onchange="CV2.renderDashboard()">
+    <label>Monat</label>
+    <select id="cv2-month" onchange="CV2.onMonthPick()"
+      style="background:var(--bg3);border:1px solid var(--b2);color:var(--tx);border-radius:6px;padding:5px 10px;font-family:var(--fm);font-size:12px;outline:none">
+      <option value="">—</option>
+    </select>
+    <label>Jahr</label>
+    <select id="cv2-year" onchange="CV2.onYearPick()"
+      style="background:var(--bg3);border:1px solid var(--b2);color:var(--tx);border-radius:6px;padding:5px 10px;font-family:var(--fm);font-size:12px;outline:none">
+      <option value="">—</option>
+    </select>
+    <span class="fsep">|</span>
+    <label>Von</label><input type="date" id="cv2-from" onchange="CV2.onCustomDate()">
+    <label>Bis</label><input type="date" id="cv2-to"   onchange="CV2.onCustomDate()">
     <button class="btn-p" onclick="CV2.renderDashboard()">Anwenden</button>
     <button class="btn-s" onclick="CV2.resetFilter()">Reset</button>
   </div>
@@ -338,11 +353,91 @@ function recTab(name, btn) {
 }
 
 // ── FILTER ────────────────────────────────────────────────
+function calcPresetRange(p) {
+  const today = new Date().toISOString().split('T')[0];
+  const yr    = new Date().getFullYear();
+  const ym    = today.substring(0,7);
+  if (p==='thismonth') return { from: ym+'-01', to: today };
+  if (p==='last30')  { const d=new Date(); d.setDate(d.getDate()-30); return { from:d.toISOString().split('T')[0], to:today }; }
+  if (p==='last90')  { const d=new Date(); d.setDate(d.getDate()-90); return { from:d.toISOString().split('T')[0], to:today }; }
+  if (p==='thisyear') return { from: yr+'-01-01', to: today };
+  return { from: null, to: null };
+}
+
+function getEarliestDate() {
+  const dates = readings.map(r => r.reading_date.substring(0,10)).filter(Boolean).sort();
+  return dates.length > 0 ? dates[0] : null;
+}
+
+function onPreset() {
+  const p     = document.getElementById('cv2-period')?.value;
+  if (p === 'custom') return;
+  const today = new Date().toISOString().split('T')[0];
+  const { from, to } = calcPresetRange(p);
+  let actualFrom = from;
+  if (p === 'all') actualFrom = getEarliestDate();
+  const fEl = document.getElementById('cv2-from');
+  const tEl = document.getElementById('cv2-to');
+  if (fEl) fEl.value = actualFrom || '';
+  if (tEl) tEl.value = to || today;
+  const mEl = document.getElementById('cv2-month');
+  const yEl = document.getElementById('cv2-year');
+  if (mEl) mEl.value = '';
+  if (yEl) yEl.value = '';
+  renderDashboard();
+}
+
+function onMonthPick() {
+  const val = document.getElementById('cv2-month')?.value;
+  if (!val) return;
+  const [yr, mo] = val.split('-').map(Number);
+  const lastDay  = new Date(yr, mo, 0).getDate();
+  const fEl = document.getElementById('cv2-from');
+  const tEl = document.getElementById('cv2-to');
+  if (fEl) fEl.value = `${val}-01`;
+  if (tEl) tEl.value = `${val}-${String(lastDay).padStart(2,'0')}`;
+  const yEl = document.getElementById('cv2-year');
+  const pEl = document.getElementById('cv2-period');
+  if (yEl) yEl.value = '';
+  if (pEl) pEl.value = 'custom';
+  renderDashboard();
+}
+
+function onYearPick() {
+  const yr = document.getElementById('cv2-year')?.value;
+  if (!yr) return;
+  const fEl = document.getElementById('cv2-from');
+  const tEl = document.getElementById('cv2-to');
+  if (fEl) fEl.value = `${yr}-01-01`;
+  if (tEl) tEl.value = `${yr}-12-31`;
+  const mEl = document.getElementById('cv2-month');
+  const pEl = document.getElementById('cv2-period');
+  if (mEl) mEl.value = '';
+  if (pEl) pEl.value = 'custom';
+  renderDashboard();
+}
+
+function onCustomDate() {
+  const mEl = document.getElementById('cv2-month');
+  const yEl = document.getElementById('cv2-year');
+  const pEl = document.getElementById('cv2-period');
+  if (mEl) mEl.value = '';
+  if (yEl) yEl.value = '';
+  if (pEl) pEl.value = 'custom';
+  renderDashboard();
+}
+
 function resetFilter() {
-  const dates = readings.map(r => r.reading_date.substring(0,10)).sort();
-  const f = document.getElementById('cv2-from'), t = document.getElementById('cv2-to');
-  if (f) f.value = dates[0] || '';
-  if (t) t.value = new Date().toISOString().split('T')[0];
+  const pEl = document.getElementById('cv2-period');
+  const mEl = document.getElementById('cv2-month');
+  const yEl = document.getElementById('cv2-year');
+  if (pEl) pEl.value = 'all';
+  if (mEl) mEl.value = '';
+  if (yEl) yEl.value = '';
+  const fEl = document.getElementById('cv2-from');
+  const tEl = document.getElementById('cv2-to');
+  if (fEl) fEl.value = getEarliestDate() || '';
+  if (tEl) tEl.value = new Date().toISOString().split('T')[0];
   renderDashboard();
 }
 
@@ -350,7 +445,6 @@ function resetFilter() {
 function renderDashboard() {
   const from  = document.getElementById('cv2-from')?.value;
   const to    = document.getElementById('cv2-to')?.value;
-  const view  = document.getElementById('cv2-view')?.value || 'month';
 
   const cons = calcConsumption(readings).filter(c => {
     const d = c.from.substring(0,10);
@@ -685,15 +779,45 @@ async function loadReadings() {
 // ── INIT ──────────────────────────────────────────────────
 function initDefaults() {
   prefillNow();
-  const today=new Date().toISOString().split('T')[0];
-  const dates=readings.map(r=>r.reading_date.substring(0,10)).sort();
-  const f=document.getElementById('cv2-from'), t=document.getElementById('cv2-to');
-  if(f) f.value=dates[0]||today;
-  if(t) t.value=today;
-  const d30=new Date(); d30.setDate(d30.getDate()-30);
-  const df=document.getElementById('cv2-del-from'), dt=document.getElementById('cv2-del-to');
-  if(df) df.value=d30.toISOString().split('T')[0];
-  if(dt) dt.value=today;
+  const today = new Date().toISOString().split('T')[0];
+  const earliest = getEarliestDate();
+
+  // Populate month dropdown
+  const mEl = document.getElementById('cv2-month');
+  if (mEl && mEl.options.length <= 1) {
+    const dates = readings.map(r => r.reading_date.substring(0,7)).filter(Boolean);
+    const months = [...new Set(dates)].sort().reverse();
+    const MN = ['','Jänner','Februar','März','April','Mai','Juni',
+                'Juli','August','September','Oktober','November','Dezember'];
+    months.forEach(ym => {
+      const [yr, mo] = ym.split('-').map(Number);
+      const opt = document.createElement('option');
+      opt.value = ym; opt.textContent = `${MN[mo]} ${yr}`;
+      mEl.appendChild(opt);
+    });
+  }
+
+  // Populate year dropdown
+  const yEl = document.getElementById('cv2-year');
+  if (yEl && yEl.options.length <= 1) {
+    const years = [...new Set(readings.map(r => r.reading_date.substring(0,4)))].sort().reverse();
+    years.forEach(yr => {
+      const opt = document.createElement('option');
+      opt.value = yr; opt.textContent = yr;
+      yEl.appendChild(opt);
+    });
+  }
+
+  const fEl = document.getElementById('cv2-from');
+  const tEl = document.getElementById('cv2-to');
+  if (fEl) fEl.value = earliest || today;
+  if (tEl) tEl.value = today;
+
+  const d30 = new Date(); d30.setDate(d30.getDate()-30);
+  const df = document.getElementById('cv2-del-from');
+  const dt = document.getElementById('cv2-del-to');
+  if (df) df.value = d30.toISOString().split('T')[0];
+  if (dt) dt.value = today;
 }
 
 function register() {
@@ -703,7 +827,8 @@ function register() {
   });
 }
 
-return { tab, recTab, resetFilter, renderDashboard, renderTable,
+return { tab, recTab, onPreset, onMonthPick, onYearPick, onCustomDate,
+         resetFilter, renderDashboard, renderTable,
          toggleAll, prefillNow, addEntry, importCSV,
          deleteSingle, deleteSelected, deleteRange, clearAll, register };
 })();
