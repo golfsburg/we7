@@ -483,9 +483,17 @@ const FilterBar = (() => {
 
   function dateToMs(d) {
     if (!d) return null;
-    return new Date(String(d).substring(0,10) + 'T00:00:00').getTime();
+    // Parse as local date to avoid timezone offset issues
+    const parts = String(d).substring(0,10).split('-');
+    return new Date(+parts[0], +parts[1]-1, +parts[2]).getTime();
   }
-  function msToDate(ms) { return new Date(ms).toISOString().split('T')[0]; }
+  function msToDate(ms) {
+    // Use local date methods to avoid UTC conversion shifting the day
+    const d = new Date(ms);
+    return d.getFullYear() + '-' +
+      String(d.getMonth()+1).padStart(2,'0') + '-' +
+      String(d.getDate()).padStart(2,'0');
+  }
   function clamp(v,a,b) { return Math.min(b, Math.max(a, v)); }
   function pct(ms, minMs, rangeMs) { return clamp((ms-minMs)/rangeMs, 0, 1); }
 
