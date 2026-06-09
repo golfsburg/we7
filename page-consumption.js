@@ -117,7 +117,10 @@ const HTML = `
       Export unter <strong>meinestrom.at</strong> → Verbrauch → Viertelstundenwerte → CSV → hier einfügen.
     </p>
     <div class="note" style="margin-bottom:12px">
-      📋 Semikolon-getrennt · Spalte 7 = Von-Zeit (DD.MM.YYYY HH:MM) · Spalte 15 = kWh · <strong>Lieferung</strong> = Netzbezug · <strong>Einspeisung</strong> = Einspeisung
+      📋 Unterstützte Formate:<br>
+      · <strong>Semikolon-getrennt</strong> (ältere EVN Exporte): Spalte 6 = Energierichtung, Spalte 7 = Von-Zeit, Spalte 15 = kWh<br>
+      · <strong>Tab-getrennt</strong> (neuere Exporte): gleiche Spaltenreihenfolge, Datum DD.MM.YY oder DD.MM.YYYY<br>
+      <strong>Lieferung</strong> = Netzbezug · <strong>Einspeisung</strong> = Einspeisung
     </div>
     <textarea class="csv-area" id="cv-csv-in" placeholder="CSV-Inhalt hier einfügen..."></textarea>
     <div class="brow">
@@ -445,11 +448,12 @@ function importCSV(overwrite = false) {
   let skipped  = 0;
 
   lines.forEach((line, idx) => {
-    // Skip header line (contains column names)
+    // Skip header line
     if (line.startsWith('Export_Bezeichnung') || line.startsWith('"Export_Bezeichnung')) return;
 
-    const cols = line.split(';');
-    // Need at least 15 columns (index 0–14)
+    // Auto-detect separator per line: tab or semicolon
+    const sep  = line.includes('\t') ? '\t' : ';';
+    const cols = line.split(sep);
     if (cols.length < 15) { skipped++; return; }
 
     try {
