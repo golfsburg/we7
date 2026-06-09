@@ -24,6 +24,13 @@ const HTML = `
 <!-- ÜBERSICHT -->
 <div id="cv-t-overview">
   <div id="cv-timeline-filter"></div>
+  <div class="fbar" style="margin-bottom:12px">
+    <label>Granularität</label>
+    <select id="cv-gran" onchange="CV.renderOverview()">
+      <option value="day">Täglich</option>
+      <option value="month" selected>Monatlich</option>
+    </select>
+  </div>
   <div class="metrics">
     <div class="mc bl"><div class="mc-l">Netzbezug</div><div><span class="mc-v" id="cv-m-grid">—</span><span class="mc-u">kWh</span></div><div class="mc-d" id="cv-m-grid2"></div></div>
     <div class="mc"><div class="mc-l">Ø pro Tag</div><div><span class="mc-v" id="cv-m-avg">—</span><span class="mc-u">kWh</span></div></div>
@@ -41,19 +48,7 @@ const HTML = `
 
 <!-- LASTPROFIL -->
 <div id="cv-t-profile" style="display:none">
-  <div class="fbar">
-    <label>Granularität</label>
-    <select id="pr-gran" onchange="CV.renderProfile()">
-      <option value="day" selected>Täglich</option>
-      <option value="week">Wöchentlich</option>
-      <option value="month">Monatlich</option>
-    </select>
-    <span class="fsep">|</span>
-    <label>Von</label><input type="date" id="pr-from" onchange="CV.renderProfile()">
-    <label>Bis</label><input type="date"  id="pr-to"   onchange="CV.renderProfile()">
-    <button class="btn-p" onclick="CV.renderProfile()">Anwenden</button>
-    <button class="btn-s" onclick="CV.resetProfile()">Reset</button>
-  </div>
+<div id="cv-profile-timeline"></div>
   <div class="metrics">
     <div class="mc"><div class="mc-l">Ø Tagesverbrauch</div><div><span class="mc-v" id="pr-avg">—</span><span class="mc-u">kWh</span></div></div>
     <div class="mc"><div class="mc-l">Spitzenstunde</div><div><span class="mc-v" id="pr-peak">—</span><span class="mc-u">Uhr</span></div></div>
@@ -70,8 +65,6 @@ const HTML = `
 <!-- DATEN -->
 <div id="cv-t-data" style="display:none">
   <div class="fbar">
-    <label>Von</label><input type="date" id="cv-tf-from" onchange="CV.renderTable()">
-    <label>Bis</label><input type="date" id="cv-tf-to"   onchange="CV.renderTable()">
     <label>Richtung</label>
     <select id="cv-tf-dir" onchange="CV.renderTable()">
       <option value="all">Alle</option>
@@ -221,8 +214,9 @@ function resetFilter() {
 // ── OVERVIEW ─────────────────────────────────────────────
 function renderOverview() {
   const gran = document.getElementById('cv-gran')?.value || 'month';
-  const from = document.getElementById('cv-from')?.value;
-  const to   = document.getElementById('cv-to')?.value;
+  const range = APP.FilterBar.getRange('cv-timeline');
+  const from  = range.from;
+  const to    = range.to;
 
   const cv = getCv().filter(c =>
     c.direction === 'grid' &&

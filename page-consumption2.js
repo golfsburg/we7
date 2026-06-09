@@ -23,33 +23,7 @@ const HTML = `
 
 <!-- ── DASHBOARD ── -->
 <div id="cv2-t-dashboard">
-  <div class="fbar" style="flex-wrap:wrap;row-gap:8px">
-    <label>Schnellauswahl</label>
-    <select id="cv2-period" onchange="CV2.onPreset()">
-      <option value="thismonth">Dieser Monat</option>
-      <option value="last30">Letzte 30 Tage</option>
-      <option value="last90">Letzte 90 Tage</option>
-      <option value="thisyear">Dieses Jahr</option>
-      <option value="all" selected>Gesamt</option>
-      <option value="custom">Benutzerdefiniert …</option>
-    </select>
-    <span class="fsep">|</span>
-    <label>Monat</label>
-    <select id="cv2-month" onchange="CV2.onMonthPick()"
-      style="background:var(--bg3);border:1px solid var(--b2);color:var(--tx);border-radius:6px;padding:5px 10px;font-family:var(--fm);font-size:12px;outline:none">
-      <option value="">—</option>
-    </select>
-    <label>Jahr</label>
-    <select id="cv2-year" onchange="CV2.onYearPick()"
-      style="background:var(--bg3);border:1px solid var(--b2);color:var(--tx);border-radius:6px;padding:5px 10px;font-family:var(--fm);font-size:12px;outline:none">
-      <option value="">—</option>
-    </select>
-    <span class="fsep">|</span>
-    <label>Von</label><input type="date" id="cv2-from" onchange="CV2.onCustomDate()">
-    <label>Bis</label><input type="date" id="cv2-to"   onchange="CV2.onCustomDate()">
-    <button class="btn-p" onclick="CV2.renderDashboard()">Anwenden</button>
-    <button class="btn-s" onclick="CV2.resetFilter()">Reset</button>
-  </div>
+
 
   <!-- KPI Cards -->
   <div class="metrics">
@@ -445,8 +419,9 @@ function resetFilter() {
 
 // ── DASHBOARD ─────────────────────────────────────────────
 function renderDashboard() {
-  const from  = document.getElementById('cv2-from')?.value;
-  const to    = document.getElementById('cv2-to')?.value;
+  const range = APP.FilterBar.getRange('cv2-timeline');
+  const from  = range.from || document.getElementById('cv2-from')?.value;
+  const to    = range.to   || document.getElementById('cv2-to')?.value;
 
   const cons = calcConsumption(readings).filter(c => {
     const d = c.from.substring(0,10);
@@ -810,28 +785,34 @@ async function loadReadings() {
     if (v) readings = JSON.parse(v);
   } catch(e) {}
 
-  // Load from Supabase if local is empty
-  if (readings.length === 0) {
-    let tries = 0;
-    while (!APP.sbClient && tries < 10) { await new Promise(r => setTimeout(r,500)); tries++; }
-    if (APP.sbClient) {
-      try {
-        const { data, error } = await APP.sbClient.from(CV2_TBL).select('*').order('reading_date');
-        if (!error && data && data.length > 0) {
+  // Always sync from Supabase — merge any new entries
+  let tries = 0;
+  while (!APP.sbClient && tries < 10) { await new Promise(r => setTimeout(r,500)); tries++; }
+  if (APP.sbClient) {
+    try {
+      const { data, error } = await APP.sbClient.from(CV2_TBL).select('*').order('reading_date');
+      if (!error && data && data.length > 0) {
+        // Merge: keep local + add any from Supabase not yet local
+        const localIds = new Set(readings.map(r => r.id));
+        const newFromSb = data.filter(r => !localIds.has(r.id));
+        if (newFromSb.length > 0) {
+          readings = [...readings, ...newFromSb]
+            .sort((a,b) => a.reading_date.localeCompare(b.reading_date));
+          saveReadings(false);
+        }
+        // If local was empty, use Supabase data directly
+        if (readings.length === 0) {
           readings = data;
           saveReadings(false);
         }
-      } catch(e) { console.warn('CV2 load:', e.message); }
-    }
+      }
+    } catch(e) { console.warn('CV2 load:', e.message); }
   }
 
-  // Always populate dropdowns AFTER data is loaded, then render
+  // Populate dropdowns and render
   populateDropdowns();
-
-  // Set Von to earliest data if currently empty
   const fEl = document.getElementById('cv2-from');
   if (fEl && !fEl.value) fEl.value = getEarliestDate() || new Date().toISOString().split('T')[0];
-
   renderDashboard();
   renderTable();
 }
