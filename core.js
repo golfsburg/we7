@@ -627,7 +627,8 @@ const Timeline = (() => {
   return { create, setRange };
 })();
 
-
+// ── PUBLIC API ───────────────────────────────────────────
+return {
   // Pending import slot (used by CV module)
   _pendingImport: null,
   get sbClient()    { return sbClient; },
