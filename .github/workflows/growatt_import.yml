@@ -1,0 +1,39 @@
+name: Growatt → Supabase Auto-Import
+
+on:
+  schedule:
+    # Täglich um 23:30 Uhr (UTC) = 01:30 Uhr österreichischer Zeit (MESZ)
+    - cron: '30 23 * * *'
+  
+  # Manueller Start über GitHub Actions UI
+  workflow_dispatch:
+    inputs:
+      import_date:
+        description: 'Datum importieren (YYYY-MM-DD), leer = heute'
+        required: false
+        default: ''
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+
+      - name: Python einrichten
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Abhängigkeiten installieren
+        run: pip install growattServer
+
+      - name: Growatt Tagesimport ausführen
+        env:
+          GROWATT_USER: ${{ secrets.GROWATT_USER }}
+          GROWATT_PASS: ${{ secrets.GROWATT_PASS }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          IMPORT_DATE:  ${{ github.event.inputs.import_date }}
+        run: python growatt_import.py
