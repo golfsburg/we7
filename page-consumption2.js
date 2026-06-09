@@ -270,6 +270,8 @@ function parseDate(s) {
 
 // ── CONSUMPTION CALCULATION ───────────────────────────────
 // Returns array of consumption periods between consecutive readings
+// Rule: if newer value < older value → diff = 0 (meter reset/exchange)
+// Exception: Solar is ENERGY GAINED, positive diff = production
 function calcConsumption(data) {
   if (data.length < 2) return [];
   const sorted = [...data].sort((a,b) => a.reading_date.localeCompare(b.reading_date));
@@ -278,25 +280,37 @@ function calcConsumption(data) {
     const prev = sorted[i-1], curr = sorted[i];
     const d1   = new Date(prev.reading_date);
     const d2   = new Date(curr.reading_date);
-    const days  = Math.max(1, (d2-d1) / (1000*60*60*24));
+    const days = Math.max(1, (d2-d1) / (1000*60*60*24));
+
+    // Helper: calc diff, clamp negative to 0 (meter reset)
+    const diff = (a, b) => {
+      if (a == null || b == null) return null;
+      const d = b - a;
+      return d < 0 ? 0 : +d.toFixed(3);
+    };
+
+    // Solar: energy PRODUCED — positive diff = good
+    const solar = diff(prev.solar_kwh,  curr.solar_kwh);
+    // Fernwärme: energy CONSUMED — negative diff → 0
+    const fw    = diff(prev.fw_kwh,     curr.fw_kwh);
+    // Wasser: volume CONSUMED — negative diff → 0
+    const water = diff(prev.water_m3,   curr.water_m3);
+    // Strom: energy CONSUMED — negative diff → 0
+    const strom = diff(prev.strom_kwh,  curr.strom_kwh);
+
     const entry = {
       from:       prev.reading_date,
       to:         curr.reading_date,
       days,
-      solar:      curr.solar_kwh  != null && prev.solar_kwh  != null ? +(curr.solar_kwh  - prev.solar_kwh).toFixed(3)  : null,
-      fw:         curr.fw_kwh     != null && prev.fw_kwh     != null ? +(curr.fw_kwh     - prev.fw_kwh).toFixed(3)     : null,
-      water:      curr.water_m3   != null && prev.water_m3   != null ? +(curr.water_m3   - prev.water_m3).toFixed(3)   : null,
-      strom:      curr.strom_kwh  != null && prev.strom_kwh  != null ? +(curr.strom_kwh  - prev.strom_kwh).toFixed(2)  : null,
+      solar, fw, water, strom,
       temp:       curr.temp_c,
       fw_status:  curr.fw_status,
       note:       curr.note,
-      // Daily averages
-      solar_day:  null, fw_day: null, water_day: null, strom_day: null
+      solar_day:  solar != null ? +(solar / days).toFixed(3) : null,
+      fw_day:     fw    != null ? +(fw    / days).toFixed(3) : null,
+      water_day:  water != null ? +(water / days).toFixed(3) : null,
+      strom_day:  strom != null ? +(strom / days).toFixed(2) : null,
     };
-    if (entry.solar  != null) entry.solar_day  = +(entry.solar  / days).toFixed(3);
-    if (entry.fw     != null) entry.fw_day     = +(entry.fw     / days).toFixed(3);
-    if (entry.water  != null) entry.water_day  = +(entry.water  / days).toFixed(3);
-    if (entry.strom  != null) entry.strom_day  = +(entry.strom  / days).toFixed(2);
     result.push(entry);
   }
   return result;
@@ -349,28 +363,30 @@ function renderDashboard() {
     return;
   }
 
-  const totalDays  = cons.reduce((s,c) => s+c.days, 0);
-  const totalMonths= totalDays / 30.44;
+  const totalDays   = cons.reduce((s,c) => s+c.days, 0);
+  const totalMonths = totalDays / 30.44;
 
-  const sumSolar = cons.reduce((s,c) => s+(c.solar||0),0);
-  const sumFw    = cons.reduce((s,c) => s+(c.fw||0),0);
-  const sumWater = cons.reduce((s,c) => s+(c.water||0),0);
-  const sumStrom = cons.reduce((s,c) => s+(c.strom||0),0);
+  // Sum only non-null, non-zero periods (skip meter resets for averages)
+  const sumSolar = cons.reduce((s,c) => s+(c.solar??0), 0);
+  const sumFw    = cons.reduce((s,c) => s+(c.fw??0),    0);
+  const sumWater = cons.reduce((s,c) => s+(c.water??0), 0);
+  const sumStrom = cons.reduce((s,c) => s+(c.strom??0), 0);
 
-  // Monthly averages
-  set('cv2-m-solar', (sumSolar/totalMonths).toFixed(1));
-  set('cv2-m-fw',    (sumFw/totalMonths).toFixed(1));
-  set('cv2-m-water', (sumWater/totalMonths).toFixed(2));
-  set('cv2-m-strom', (sumStrom/totalMonths).toFixed(1));
+  // Monthly averages (÷ total months in range)
+  set('cv2-m-solar', totalMonths>0 ? (sumSolar/totalMonths).toFixed(1) : '—');
+  set('cv2-m-fw',    totalMonths>0 ? (sumFw   /totalMonths).toFixed(1) : '—');
+  set('cv2-m-water', totalMonths>0 ? (sumWater/totalMonths).toFixed(2) : '—');
+  set('cv2-m-strom', totalMonths>0 ? (sumStrom/totalMonths).toFixed(1) : '—');
   set('cv2-m-solar2', `${sumSolar.toFixed(1)} kWh gesamt`);
   set('cv2-m-fw2',    `${sumFw.toFixed(1)} kWh gesamt`);
   set('cv2-m-water2', `${sumWater.toFixed(2)} m³ gesamt`);
   set('cv2-m-strom2', `${sumStrom.toFixed(1)} kWh gesamt`);
-  // Daily averages
-  set('cv2-d-solar', (sumSolar/totalDays).toFixed(2));
-  set('cv2-d-fw',    (sumFw/totalDays).toFixed(2));
-  set('cv2-d-water', ((sumWater/totalDays)*1000).toFixed(0)); // convert to liters
-  set('cv2-d-strom', (sumStrom/totalDays).toFixed(2));
+
+  // Daily averages (÷ total days)
+  set('cv2-d-solar', totalDays>0 ? (sumSolar/totalDays).toFixed(2) : '—');
+  set('cv2-d-fw',    totalDays>0 ? (sumFw   /totalDays).toFixed(2) : '—');
+  set('cv2-d-water', totalDays>0 ? ((sumWater/totalDays)*1000).toFixed(0) : '—');
+  set('cv2-d-strom', totalDays>0 ? (sumStrom/totalDays).toFixed(2) : '—');
 
   set('cv2-chart-sub', `${cons.length} Perioden · ${Math.round(totalDays)} Tage`);
 

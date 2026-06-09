@@ -123,13 +123,26 @@ function calcPresetRange(preset) {
 }
 
 function onPreset() {
-  const p = document.getElementById('db-period')?.value;
-  if (p === 'custom') return; // don't overwrite manual dates
+  const p     = document.getElementById('db-period')?.value;
+  if (p === 'custom') return;
+  const today = new Date().toISOString().split('T')[0];
   const { from, to } = calcPresetRange(p);
+  let actualFrom = from;
+  if (p === 'all') {
+    const allDates = [
+      ...APP.entries.map(e => e.date),
+      ...APP.consumption.map(c => String(c.date).substring(0,10))
+    ].filter(Boolean).sort();
+    actualFrom = allDates.length > 0 ? allDates[0] : null;
+  }
   const fEl = document.getElementById('db-from');
   const tEl = document.getElementById('db-to');
-  if (fEl) fEl.value = from || '';
-  if (tEl) tEl.value = to   || '';
+  if (fEl) fEl.value = actualFrom || '';
+  if (tEl) tEl.value = to || today;
+  const mEl = document.getElementById('db-month');
+  const yEl = document.getElementById('db-year');
+  if (mEl) mEl.value = '';
+  if (yEl) yEl.value = '';
   render();
 }
 
@@ -172,9 +185,18 @@ function onYearPick() {
 function resetFilter() {
   const sel = document.getElementById('db-period');
   if (sel) sel.value = 'all';
+  const mEl = document.getElementById('db-month');
+  const yEl = document.getElementById('db-year');
+  if (mEl) mEl.value = '';
+  if (yEl) yEl.value = '';
+  const allDates = [
+    ...APP.entries.map(e => e.date),
+    ...APP.consumption.map(c => String(c.date).substring(0,10))
+  ].filter(Boolean).sort();
+  const earliest = allDates.length > 0 ? allDates[0] : '';
   const fEl = document.getElementById('db-from');
   const tEl = document.getElementById('db-to');
-  if (fEl) fEl.value = '';
+  if (fEl) fEl.value = earliest;
   if (tEl) tEl.value = new Date().toISOString().split('T')[0];
   render();
 }
@@ -205,7 +227,7 @@ function initFilter() {
   const earliest = allDates.length > 0 ? allDates[0] : null;
   const today    = new Date().toISOString().split('T')[0];
 
-  // Populate month dropdown — all YYYY-MM values from data, newest first
+  // Populate month dropdown — newest first, only months with data
   const mEl = document.getElementById('db-month');
   if (mEl && mEl.options.length <= 1) {
     const months = [...new Set(allDates.map(d => d.substring(0,7)))].sort().reverse();
@@ -220,7 +242,7 @@ function initFilter() {
     });
   }
 
-  // Populate year dropdown — all years from data, newest first
+  // Populate year dropdown — newest first, only years with data
   const yEl = document.getElementById('db-year');
   if (yEl && yEl.options.length <= 1) {
     const years = [...new Set(allDates.map(d => d.substring(0,4)))].sort().reverse();
@@ -231,11 +253,15 @@ function initFilter() {
     });
   }
 
-  // Set initial Von/Bis if empty
+  // Set Von to earliest data date, Bis to today — only if empty
   const fEl = document.getElementById('db-from');
   const tEl = document.getElementById('db-to');
-  if (fEl && !fEl.value) fEl.value = earliest || '';
-  if (tEl && !tEl.value) tEl.value = today;
+  if (fEl) fEl.value = earliest || '';
+  if (tEl) tEl.value = today;
+
+  // Hide range label (redundant with the date fields)
+  const lbl = document.getElementById('db-range-label');
+  if (lbl) lbl.style.display = 'none';
 }
 
 function render() {
