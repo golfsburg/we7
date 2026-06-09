@@ -484,8 +484,8 @@ function renderDashboard() {
 
   set('cv2-chart-sub', `${cons.length} Perioden · ${Math.round(totalDays)} Tage`);
 
-  drawEnergyChart(cons, view);
-  drawWaterChart(cons, view);
+  drawEnergyChart(cons);
+  drawWaterChart(cons);
   drawTempChart(cons);
   drawDonut(sumSolar, sumFw, sumStrom);
 }
@@ -495,40 +495,38 @@ function periodLabel(c) {
   return `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`;
 }
 
-function drawEnergyChart(cons, view) {
+function drawEnergyChart(cons) {
   APP.destroyChart('cv2-energy');
   const labels = cons.map(periodLabel);
-  const factor = view==='day' ? (c => c.days) : (() => 1);
   APP.charts['cv2-energy'] = new Chart(document.getElementById('cv2-c-energy'), {
     type:'bar',
     data:{ labels, datasets:[
-      { label:'Solar',     data:cons.map(c=>c.solar!=null  ? +(c.solar /factor(c)).toFixed(2):null), backgroundColor:'rgba(245,200,66,.8)', borderRadius:3 },
-      { label:'Fernwärme', data:cons.map(c=>c.fw!=null     ? +(c.fw    /factor(c)).toFixed(2):null), backgroundColor:'rgba(251,146,60,.75)',borderRadius:3 },
-      { label:'Strom',     data:cons.map(c=>c.strom!=null  ? +(c.strom /factor(c)).toFixed(2):null), backgroundColor:'rgba(91,156,246,.75)', borderRadius:3 }
+      { label:'Solar',     data:cons.map(c=>c.solar!=null  ? +c.solar.toFixed(2):null),  backgroundColor:'rgba(245,200,66,.8)',  borderRadius:3 },
+      { label:'Fernwärme', data:cons.map(c=>c.fw!=null     ? +c.fw.toFixed(2):null),     backgroundColor:'rgba(251,146,60,.75)', borderRadius:3 },
+      { label:'Strom',     data:cons.map(c=>c.strom!=null  ? +c.strom.toFixed(2):null),  backgroundColor:'rgba(91,156,246,.75)', borderRadius:3 }
     ]},
     options:{ responsive:true, maintainAspectRatio:false,
       plugins:{ legend:{ labels:{ color:APP.TC, font:{size:11}, boxWidth:10 } } },
       scales:{ x:{ticks:{color:APP.TC,font:{size:10}},grid:{color:APP.GC}},
                y:{ticks:{color:APP.TC,font:{size:10}},grid:{color:APP.GC},
-                  title:{display:true,text:view==='day'?'kWh/Tag':'kWh',color:APP.TC,font:{size:10}}} } }
+                  title:{display:true,text:'kWh',color:APP.TC,font:{size:10}}} } }
   });
 }
 
-function drawWaterChart(cons, view) {
+function drawWaterChart(cons) {
   APP.destroyChart('cv2-water');
   const labels = cons.map(periodLabel);
-  const factor = view==='day' ? (c => c.days) : (() => 1);
   APP.charts['cv2-water'] = new Chart(document.getElementById('cv2-c-water'), {
     type:'bar',
     data:{ labels, datasets:[{
-      data: cons.map(c=>c.water!=null ? +(c.water/factor(c)).toFixed(3):null),
+      data: cons.map(c=>c.water!=null ? +c.water.toFixed(3):null),
       backgroundColor:'rgba(91,156,246,.7)', borderRadius:3
     }]},
     options:{ responsive:true, maintainAspectRatio:false,
       plugins:{ legend:{display:false} },
       scales:{ x:{ticks:{color:APP.TC,font:{size:10}},grid:{color:APP.GC}},
                y:{ticks:{color:APP.TC,font:{size:10}},grid:{color:APP.GC},
-                  title:{display:true,text:view==='day'?'m³/Tag':'m³',color:APP.TC,font:{size:10}}} } }
+                  title:{display:true,text:'m³',color:APP.TC,font:{size:10}}} } }
   });
 }
 
