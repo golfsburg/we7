@@ -869,11 +869,10 @@ function register() {
     html: HTML,
     onEnter: () => {
       initDefaults();
-      APP.Timeline.create('pv-timeline', {
-        fromField: 'pv-from', toField: 'pv-to',
-        onRange: (f,t) => {
-          const el=document.getElementById('pv-from'); if(el) el.value=f;
-          const el2=document.getElementById('pv-to'); if(el2) el2.value=t;
+      APP.FilterBar.create('pv-timeline', {
+        onRange: (f, t) => {
+          const fe=document.getElementById('pv-from'); if(fe) fe.value=f;
+          const te=document.getElementById('pv-to');   if(te) te.value=t;
           renderOverview();
         }
       });

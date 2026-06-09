@@ -459,172 +459,344 @@ function closeModal() {
   document.getElementById('edit-modal-bg').style.display = 'none';
 }
 
-// ── TIMELINE RANGE PICKER ────────────────────────────────
-// Usage: APP.Timeline.create(containerId, { onRange: (from, to) => {} })
-// The timeline auto-reads all available dates from entries + consumption
-const Timeline = (() => {
-  const instances = {}; // containerId → state
+// ── FILTERBAR — zentrale Komponente für alle Seiten ──────
+// Erzeugt eine vollständige Filterleiste mit Zeitachse, Schnellauswahl,
+// Monat/Jahr-Dropdown und Von/Bis — alles vollständig synchronisiert.
+//
+// Usage:
+//   APP.FilterBar.create('my-container', { onRange: (from, to) => {} })
+//   APP.FilterBar.setRange('my-container', from, to)
 
-  function getAllDates() {
-    const dates = [
+const FilterBar = (() => {
+  const instances = {};
+
+  const MONTHS_DE = ['','Jän','Feb','Mär','Apr','Mai','Jun',
+                     'Jul','Aug','Sep','Okt','Nov','Dez'];
+
+  function getAllDates(extraDates=[]) {
+    return [
       ...entries.map(e => e.date),
-      ...consumption.map(c => String(c.date).substring(0,10))
+      ...consumption.map(c => String(c.date).substring(0,10)),
+      ...extraDates
     ].filter(Boolean).sort();
-    return dates;
   }
 
-  function dateToMs(d) { return new Date(d + 'T00:00:00').getTime(); }
+  function dateToMs(d) {
+    if (!d) return null;
+    return new Date(String(d).substring(0,10) + 'T00:00:00').getTime();
+  }
   function msToDate(ms) { return new Date(ms).toISOString().split('T')[0]; }
+  function clamp(v,a,b) { return Math.min(b, Math.max(a, v)); }
+  function pct(ms, minMs, rangeMs) { return clamp((ms-minMs)/rangeMs, 0, 1); }
 
-  function pct(ms, minMs, maxMs) {
-    return Math.min(1, Math.max(0, (ms - minMs) / (maxMs - minMs)));
-  }
-
-  function create(containerId, opts = {}) {
+  function create(containerId, opts={}) {
     const container = document.getElementById(containerId);
     if (!container) return;
 
-    const dates  = getAllDates();
-    if (dates.length < 2) return;
+    const allDates = getAllDates(opts.extraDates || []);
+    const today    = new Date().toISOString().split('T')[0];
 
-    const minMs  = dateToMs(dates[0]);
-    const maxMs  = dateToMs(dates[dates.length - 1]);
-    const rangeMs = maxMs - minMs;
+    const minDate  = allDates.length > 0 ? allDates[0] : today;
+    const maxDate  = today;
+    const minMs    = dateToMs(minDate);
+    const maxMs    = dateToMs(maxDate);
+    const rangeMs  = Math.max(1, maxMs - minMs);
+    const prefix   = containerId;
 
-    // Initial selection = full range
+    // Initial selection
     let selFrom = minMs, selTo = maxMs;
 
-    // Read existing from/to from linked fields if provided
-    if (opts.fromField && document.getElementById(opts.fromField)?.value)
-      selFrom = dateToMs(document.getElementById(opts.fromField).value);
-    if (opts.toField && document.getElementById(opts.toField)?.value)
-      selTo   = dateToMs(document.getElementById(opts.toField).value);
+    // Unique months and years from data
+    const monthSet = [...new Set(allDates.map(d=>d.substring(0,7)))].sort().reverse();
+    const yearSet  = [...new Set(allDates.map(d=>d.substring(0,4)))].sort().reverse();
 
-    // Build tick marks (years + months)
-    const yearMs = {};
-    dates.forEach(d => {
-      const yr = d.substring(0,4), mo = d.substring(0,7);
-      if (!yearMs[yr]) yearMs[yr] = dateToMs(yr + '-01-01');
-    });
+    const monthOpts = monthSet.map(ym => {
+      const [y,m] = ym.split('-').map(Number);
+      return `<option value="${ym}">${MONTHS_DE[m]} ${y}</option>`;
+    }).join('');
+    const yearOpts = yearSet.map(y =>
+      `<option value="${y}">${y}</option>`
+    ).join('');
 
-    const ticksHtml = Object.entries(yearMs).map(([yr, ms]) => {
-      const p = pct(ms, minMs, maxMs) * 100;
+    // Year ticks for timeline
+    const yearTicks = yearSet.map(y => {
+      const ms = dateToMs(y+'-01-01');
+      if (ms < minMs || ms > maxMs) return '';
+      const p = pct(ms, minMs, rangeMs)*100;
       return `<div class="tl-tick" style="left:${p}%"></div>
-              <div class="tl-tick-lbl" style="left:${p}%">${yr}</div>`;
+              <div class="tl-tick-lbl" style="left:${p}%">${y}</div>`;
     }).join('');
 
     container.innerHTML = `
-      <div class="tl-wrap">
-        <div class="tl-track" id="${containerId}-track">
-          <div class="tl-ticks">${ticksHtml}</div>
-          <div class="tl-fill"  id="${containerId}-fill"></div>
-          <div class="tl-handle" id="${containerId}-hl" title="Von"></div>
-          <div class="tl-handle" id="${containerId}-hr" title="Bis"></div>
-          <div class="tl-sel-lbl" id="${containerId}-lbl"></div>
-        </div>
-      </div>`;
+<div style="margin-bottom:18px">
+  <!-- Zeitachse -->
+  <div class="tl-track" id="${prefix}-track" style="margin-bottom:6px">
+    <div class="tl-ticks">${yearTicks}</div>
+    <div class="tl-fill"   id="${prefix}-fill"></div>
+    <div class="tl-handle" id="${prefix}-hl"></div>
+    <div class="tl-handle" id="${prefix}-hr"></div>
+    <div class="tl-sel-lbl" id="${prefix}-lbl"></div>
+  </div>
+  <!-- Filter-Leiste -->
+  <div class="fbar" style="flex-wrap:wrap;row-gap:6px">
+    <label>Schnellauswahl</label>
+    <select id="${prefix}-preset" onchange="APP.FilterBar._onPreset('${prefix}')">
+      <option value="thismonth">Dieser Monat</option>
+      <option value="last30">Letzte 30 Tage</option>
+      <option value="last90">Letzte 90 Tage</option>
+      <option value="thisyear">Dieses Jahr</option>
+      <option value="all" selected>Gesamt</option>
+      <option value="custom">Benutzerdefiniert …</option>
+    </select>
+    <span class="fsep">|</span>
+    <label>Monat</label>
+    <select id="${prefix}-month" onchange="APP.FilterBar._onMonth('${prefix}')">
+      <option value="">—</option>${monthOpts}
+    </select>
+    <label>Jahr</label>
+    <select id="${prefix}-year" onchange="APP.FilterBar._onYear('${prefix}')">
+      <option value="">—</option>${yearOpts}
+    </select>
+    <span class="fsep">|</span>
+    <label>Von</label>
+    <input type="date" id="${prefix}-from" min="${minDate}" max="${maxDate}"
+      onchange="APP.FilterBar._onManual('${prefix}')">
+    <label>Bis</label>
+    <input type="date" id="${prefix}-to"   min="${minDate}" max="${maxDate}"
+      onchange="APP.FilterBar._onManual('${prefix}')">
+    <button class="btn-p" onclick="APP.FilterBar._apply('${prefix}')">Anwenden</button>
+    <button class="btn-s" onclick="APP.FilterBar._reset('${prefix}')">Reset</button>
+  </div>
+</div>`;
 
-    const track = document.getElementById(`${containerId}-track`);
-    const fill  = document.getElementById(`${containerId}-fill`);
-    const hl    = document.getElementById(`${containerId}-hl`);
-    const hr    = document.getElementById(`${containerId}-hr`);
-    const lbl   = document.getElementById(`${containerId}-lbl`);
-
-    function update() {
-      const pFrom = pct(selFrom, minMs, maxMs) * 100;
-      const pTo   = pct(selTo,   minMs, maxMs) * 100;
-      fill.style.left  = pFrom + '%';
-      fill.style.width = (pTo - pFrom) + '%';
-      hl.style.left    = pFrom + '%';
-      hr.style.left    = pTo   + '%';
+    // ── Internal update: sync all UI elements from selFrom/selTo
+    function syncUI() {
       const fd = msToDate(selFrom), td = msToDate(selTo);
-      lbl.textContent  = `${fd}  →  ${td}`;
-      // Sync linked fields
-      if (opts.fromField) { const el=document.getElementById(opts.fromField); if(el) el.value=fd; }
-      if (opts.toField)   { const el=document.getElementById(opts.toField);   if(el) el.value=td; }
+      // Timeline
+      const p1 = pct(selFrom, minMs, rangeMs)*100;
+      const p2 = pct(selTo,   minMs, rangeMs)*100;
+      const fill=document.getElementById(`${prefix}-fill`);
+      const hl  =document.getElementById(`${prefix}-hl`);
+      const hr  =document.getElementById(`${prefix}-hr`);
+      const lbl =document.getElementById(`${prefix}-lbl`);
+      if (fill) { fill.style.left=p1+'%'; fill.style.width=(p2-p1)+'%'; }
+      if (hl)   hl.style.left=p1+'%';
+      if (hr)   hr.style.left=p2+'%';
+      if (lbl)  lbl.textContent=`${fd}  →  ${td}`;
+      // Date fields
+      const fEl=document.getElementById(`${prefix}-from`);
+      const tEl=document.getElementById(`${prefix}-to`);
+      if (fEl) fEl.value=fd;
+      if (tEl) tEl.value=td;
+      // Preset: detect which preset matches
+      const p=document.getElementById(`${prefix}-preset`);
+      if (p && p.value !== 'custom') {
+        const match = detectPreset(fd, td);
+        if (p.value !== match) p.value = match;
+      }
+      // Month: detect if range = single month
+      const mEl=document.getElementById(`${prefix}-month`);
+      const yEl=document.getElementById(`${prefix}-year`);
+      if (mEl) {
+        const ym = fd.substring(0,7);
+        const lastDay = new Date(+ym.split('-')[0], +ym.split('-')[1], 0).getDate();
+        const monthEnd = `${ym}-${String(lastDay).padStart(2,'0')}`;
+        mEl.value = (fd===ym+'-01' && td===monthEnd) ? ym : '';
+      }
+      if (yEl) {
+        const yr = fd.substring(0,4);
+        yEl.value = (fd===yr+'-01-01' && td===yr+'-12-31') ? yr : '';
+      }
     }
 
-    function msFromX(x) {
-      const rect = track.getBoundingClientRect();
-      const p    = Math.min(1, Math.max(0, (x - rect.left) / rect.width));
-      return minMs + p * rangeMs;
+    function detectPreset(fd, td) {
+      const t = today;
+      const yr = t.substring(0,4), ym = t.substring(0,7);
+      if (fd===ym+'-01' && td===t) return 'thismonth';
+      const d30=new Date(); d30.setDate(d30.getDate()-30);
+      if (fd===d30.toISOString().split('T')[0] && td===t) return 'last30';
+      const d90=new Date(); d90.setDate(d90.getDate()-90);
+      if (fd===d90.toISOString().split('T')[0] && td===t) return 'last90';
+      if (fd===yr+'-01-01' && td===t) return 'thisyear';
+      if (fd===minDate && td===t) return 'all';
+      return 'custom';
     }
 
-    function snapToDay(ms) {
-      // Snap to nearest day
-      const day = 86400000;
-      return Math.round(ms / day) * day;
+    function fire() {
+      if (opts.onRange) opts.onRange(msToDate(selFrom), msToDate(selTo));
     }
 
-    function makeDraggable(handle, which) {
-      handle.addEventListener('mousedown', e => {
+    // ── Timeline drag
+    function initDrag(handleId, which) {
+      const h = document.getElementById(handleId);
+      if (!h) return;
+      function onMove(x) {
+        const track = document.getElementById(`${prefix}-track`);
+        if (!track) return;
+        const rect = track.getBoundingClientRect();
+        const p    = clamp((x - rect.left) / rect.width, 0, 1);
+        const ms   = Math.round((minMs + p * rangeMs) / 86400000) * 86400000;
+        if (which==='from') selFrom = clamp(ms, minMs, selTo - 86400000);
+        else                selTo   = clamp(ms, selFrom + 86400000, maxMs);
+        syncUI();
+      }
+      h.addEventListener('mousedown', e => {
         e.preventDefault();
-        const onMove = ev => {
-          const ms = snapToDay(msFromX(ev.clientX));
-          if (which === 'from') {
-            selFrom = Math.min(ms, selTo - 86400000);
-          } else {
-            selTo = Math.max(ms, selFrom + 86400000);
-          }
-          update();
-        };
-        const onUp = () => {
-          document.removeEventListener('mousemove', onMove);
-          document.removeEventListener('mouseup', onUp);
-          if (opts.onRange) opts.onRange(msToDate(selFrom), msToDate(selTo));
-        };
-        document.addEventListener('mousemove', onMove);
-        document.addEventListener('mouseup', onUp);
+        const mv = e2 => onMove(e2.clientX);
+        const up = () => { document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up); fire(); };
+        document.addEventListener('mousemove', mv);
+        document.addEventListener('mouseup', up);
       });
-
-      // Touch support
-      handle.addEventListener('touchstart', e => {
+      h.addEventListener('touchstart', e => {
         e.preventDefault();
-        const onMove = ev => {
-          const ms = snapToDay(msFromX(ev.touches[0].clientX));
-          if (which === 'from') {
-            selFrom = Math.min(ms, selTo - 86400000);
-          } else {
-            selTo = Math.max(ms, selFrom + 86400000);
-          }
-          update();
-        };
-        const onEnd = () => {
-          document.removeEventListener('touchmove', onMove);
-          document.removeEventListener('touchend', onEnd);
-          if (opts.onRange) opts.onRange(msToDate(selFrom), msToDate(selTo));
-        };
-        document.addEventListener('touchmove', onMove, {passive:false});
-        document.addEventListener('touchend', onEnd);
+        const mv = e2 => onMove(e2.touches[0].clientX);
+        const up = () => { document.removeEventListener('touchmove',mv); document.removeEventListener('touchend',up); fire(); };
+        document.addEventListener('touchmove', mv, {passive:false});
+        document.addEventListener('touchend', up);
       }, {passive:false});
     }
 
-    // Click on track to set nearest handle
-    track.addEventListener('click', e => {
-      if (e.target === hl || e.target === hr) return;
-      const ms = snapToDay(msFromX(e.clientX));
-      const dFrom = Math.abs(ms - selFrom), dTo = Math.abs(ms - selTo);
-      if (dFrom < dTo) selFrom = Math.min(ms, selTo - 86400000);
-      else             selTo   = Math.max(ms, selFrom + 86400000);
-      update();
-      if (opts.onRange) opts.onRange(msToDate(selFrom), msToDate(selTo));
-    });
+    // Click on track
+    const track = document.getElementById(`${prefix}-track`);
+    if (track) {
+      track.addEventListener('click', e => {
+        if (e.target.classList.contains('tl-handle')) return;
+        const rect = track.getBoundingClientRect();
+        const p    = clamp((e.clientX - rect.left) / rect.width, 0, 1);
+        const ms   = Math.round((minMs + p * rangeMs) / 86400000) * 86400000;
+        if (Math.abs(ms-selFrom) < Math.abs(ms-selTo))
+          selFrom = clamp(ms, minMs, selTo - 86400000);
+        else
+          selTo   = clamp(ms, selFrom + 86400000, maxMs);
+        syncUI(); fire();
+      });
+    }
 
-    makeDraggable(hl, 'from');
-    makeDraggable(hr, 'to');
-    update();
+    initDrag(`${prefix}-hl`, 'from');
+    initDrag(`${prefix}-hr`, 'to');
 
-    instances[containerId] = { update, setRange: (f, t) => {
-      selFrom = dateToMs(f); selTo = dateToMs(t); update();
-    }};
-    return instances[containerId];
+    // Store instance
+    instances[prefix] = {
+      getFrom: () => msToDate(selFrom),
+      getTo:   () => msToDate(selTo),
+      setRange(f, t) {
+        selFrom = clamp(dateToMs(f)||minMs, minMs, maxMs);
+        selTo   = clamp(dateToMs(t)||maxMs, minMs, maxMs);
+        syncUI();
+      },
+      syncUI,
+      fire
+    };
+
+    // Initial render
+    syncUI();
+    return instances[prefix];
+  }
+
+  // ── Static handlers (called from HTML onchange/onclick)
+  function _onPreset(prefix) {
+    const inst = instances[prefix];
+    if (!inst) return;
+    const p     = document.getElementById(`${prefix}-preset`)?.value;
+    if (p === 'custom') return;
+    const today = new Date().toISOString().split('T')[0];
+    const yr    = today.substring(0,4), ym = today.substring(0,7);
+    let fd, td = today;
+    if (p==='thismonth') fd=ym+'-01';
+    else if (p==='last30') { const d=new Date(); d.setDate(d.getDate()-30); fd=d.toISOString().split('T')[0]; }
+    else if (p==='last90') { const d=new Date(); d.setDate(d.getDate()-90); fd=d.toISOString().split('T')[0]; }
+    else if (p==='thisyear') fd=yr+'-01-01';
+    else { // all
+      const all=getAllDates(); fd=all.length>0?all[0]:today;
+    }
+    // Clear month/year selects
+    const mEl=document.getElementById(`${prefix}-month`);
+    const yEl=document.getElementById(`${prefix}-year`);
+    if (mEl) mEl.value='';
+    if (yEl) yEl.value='';
+    inst.setRange(fd, td);
+    inst.fire();
+  }
+
+  function _onMonth(prefix) {
+    const inst = instances[prefix];
+    if (!inst) return;
+    const ym = document.getElementById(`${prefix}-month`)?.value;
+    if (!ym) return;
+    const [y,m] = ym.split('-').map(Number);
+    const last  = new Date(y, m, 0).getDate();
+    const fd    = `${ym}-01`;
+    const td    = `${ym}-${String(last).padStart(2,'0')}`;
+    const pEl=document.getElementById(`${prefix}-preset`);
+    const yEl=document.getElementById(`${prefix}-year`);
+    if (pEl) pEl.value='custom';
+    if (yEl) yEl.value='';
+    inst.setRange(fd, td);
+    inst.fire();
+  }
+
+  function _onYear(prefix) {
+    const inst = instances[prefix];
+    if (!inst) return;
+    const yr = document.getElementById(`${prefix}-year`)?.value;
+    if (!yr) return;
+    const pEl=document.getElementById(`${prefix}-preset`);
+    const mEl=document.getElementById(`${prefix}-month`);
+    if (pEl) pEl.value='custom';
+    if (mEl) mEl.value='';
+    inst.setRange(`${yr}-01-01`, `${yr}-12-31`);
+    inst.fire();
+  }
+
+  function _onManual(prefix) {
+    const inst = instances[prefix];
+    if (!inst) return;
+    const fd = document.getElementById(`${prefix}-from`)?.value;
+    const td = document.getElementById(`${prefix}-to`)?.value;
+    if (!fd || !td) return;
+    const pEl=document.getElementById(`${prefix}-preset`);
+    const mEl=document.getElementById(`${prefix}-month`);
+    const yEl=document.getElementById(`${prefix}-year`);
+    if (pEl) pEl.value='custom';
+    if (mEl) mEl.value='';
+    if (yEl) yEl.value='';
+    inst.setRange(fd, td);
+    // Don't fire yet — wait for Anwenden button or next render
+    inst.syncUI();
+  }
+
+  function _apply(prefix) {
+    const inst = instances[prefix];
+    if (!inst) return;
+    inst.fire();
+  }
+
+  function _reset(prefix) {
+    const inst = instances[prefix];
+    if (!inst) return;
+    const pEl=document.getElementById(`${prefix}-preset`);
+    const mEl=document.getElementById(`${prefix}-month`);
+    const yEl=document.getElementById(`${prefix}-year`);
+    if (pEl) pEl.value='all';
+    if (mEl) mEl.value='';
+    if (yEl) yEl.value='';
+    const all=getAllDates();
+    const fd=all.length>0?all[0]:new Date().toISOString().split('T')[0];
+    const td=new Date().toISOString().split('T')[0];
+    inst.setRange(fd, td);
+    inst.fire();
   }
 
   function setRange(containerId, from, to) {
     if (instances[containerId]) instances[containerId].setRange(from, to);
   }
 
-  return { create, setRange };
+  function getRange(containerId) {
+    if (!instances[containerId]) return { from: null, to: null };
+    return { from: instances[containerId].getFrom(), to: instances[containerId].getTo() };
+  }
+
+  return { create, setRange, getRange, _onPreset, _onMonth, _onYear, _onManual, _apply, _reset };
 })();
 
 // ── PUBLIC API ───────────────────────────────────────────
@@ -649,8 +821,9 @@ return {
   // delete helpers — immediately remove from Supabase + add to tombstone
   deletePvIds:  (ids) => deletePvFromSb(ids),
   deleteCvIds:  (ids) => deleteCvFromSb(ids),
-  // Timeline range picker
-  Timeline,
+  // FilterBar — zentrale Zeitraum-Komponente
+  FilterBar,
+  Timeline: FilterBar, // backwards compat alias
   // utils
   genId, getWeekNum, getTheory, calcEuro, calcDirect,
   getDayGrid, getMonthGrid, getDayPv, getMonthPv,

@@ -841,12 +841,12 @@ function register() {
     html: HTML,
     onEnter: async () => {
       await loadReadings();
-      APP.Timeline.create('cv2-timeline', {
-        fromField: 'cv2-from', toField: 'cv2-to',
-        onRange: (f,t) => {
-          const el=document.getElementById('cv2-from'); if(el) el.value=f;
-          const el2=document.getElementById('cv2-to'); if(el2) el2.value=t;
-          const pEl=document.getElementById('cv2-period'); if(pEl) pEl.value='custom';
+      APP.FilterBar.create('cv2-timeline', {
+        extraDates: readings.map(r => r.reading_date.substring(0,10)),
+        onRange: (f, t) => {
+          const fe=document.getElementById('cv2-from'); if(fe) fe.value=f;
+          const te=document.getElementById('cv2-to');   if(te) te.value=t;
+          const pe=document.getElementById('cv2-period'); if(pe) pe.value='custom';
           renderDashboard();
         }
       });

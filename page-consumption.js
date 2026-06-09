@@ -23,18 +23,7 @@ const HTML = `
 
 <!-- ÜBERSICHT -->
 <div id="cv-t-overview">
-  <div class="fbar">
-    <label>Granularität</label>
-    <select id="cv-gran" onchange="CV.renderOverview()">
-      <option value="day">Täglich</option>
-      <option value="month" selected>Monatlich</option>
-    </select>
-    <span class="fsep">|</span>
-    <label>Von</label><input type="date"  id="cv-from" onchange="CV.renderOverview()">
-    <label>Bis</label><input type="date"  id="cv-to"   onchange="CV.renderOverview()">
-    <button class="btn-p" onclick="CV.renderOverview()">Anwenden</button>
-    <button class="btn-s" onclick="CV.resetFilter()">Reset</button>
-  </div>
+  <div id="cv-timeline-filter"></div>
   <div class="metrics">
     <div class="mc bl"><div class="mc-l">Netzbezug</div><div><span class="mc-v" id="cv-m-grid">—</span><span class="mc-u">kWh</span></div><div class="mc-d" id="cv-m-grid2"></div></div>
     <div class="mc"><div class="mc-l">Ø pro Tag</div><div><span class="mc-v" id="cv-m-avg">—</span><span class="mc-u">kWh</span></div></div>
@@ -647,11 +636,10 @@ function register() {
     html:    HTML,
     onEnter: () => {
       initDefaults();
-      APP.Timeline.create('cv-timeline', {
-        fromField: 'cv-from', toField: 'cv-to',
-        onRange: (f,t) => {
-          const el=document.getElementById('cv-from'); if(el) el.value=f;
-          const el2=document.getElementById('cv-to'); if(el2) el2.value=t;
+      APP.FilterBar.create('cv-timeline', {
+        onRange: (f, t) => {
+          const fe=document.getElementById('cv-from'); if(fe) fe.value=f;
+          const te=document.getElementById('cv-to');   if(te) te.value=t;
           renderOverview();
         }
       });

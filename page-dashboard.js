@@ -9,51 +9,8 @@ const HTML = `
   <div><div class="ph-title">Dashboard</div><div class="ph-sub" id="db-sub">Energieübersicht</div></div>
 </div>
 
-<!-- Interaktive Zeitachse -->
+<!-- Interaktive Zeitachse + Filter -->
 <div id="db-timeline"></div>
-
-<!-- Filter bar: Preset + Monat/Jahr-Schnellwahl + manuelle Von/Bis -->
-<div class="fbar" style="margin-bottom:20px;flex-wrap:wrap;row-gap:8px">
-
-  <!-- Schnell-Presets -->
-  <label>Schnellauswahl</label>
-  <select id="db-period" onchange="DASH.onPreset()">
-    <option value="thismonth">Dieser Monat</option>
-    <option value="last30">Letzte 30 Tage</option>
-    <option value="last90">Letzte 90 Tage</option>
-    <option value="thisyear">Dieses Jahr</option>
-    <option value="all" selected>Gesamt</option>
-    <option value="custom">Benutzerdefiniert …</option>
-  </select>
-
-  <span class="fsep">|</span>
-
-  <!-- Monatsauswahl -->
-  <label>Monat</label>
-  <select id="db-month" onchange="DASH.onMonthPick()"
-    style="background:var(--bg3);border:1px solid var(--b2);color:var(--tx);border-radius:6px;padding:5px 10px;font-family:var(--fm);font-size:12px;outline:none">
-    <option value="">—</option>
-  </select>
-
-  <!-- Jahresauswahl -->
-  <label>Jahr</label>
-  <select id="db-year" onchange="DASH.onYearPick()"
-    style="background:var(--bg3);border:1px solid var(--b2);color:var(--tx);border-radius:6px;padding:5px 10px;font-family:var(--fm);font-size:12px;outline:none">
-    <option value="">—</option>
-  </select>
-
-  <span class="fsep">|</span>
-
-  <!-- Manuelle Von/Bis -->
-  <label>Von</label>
-  <input type="date" id="db-from" onchange="DASH.onCustomDate()">
-  <label>Bis</label>
-  <input type="date" id="db-to"   onchange="DASH.onCustomDate()">
-
-  <button class="btn-p" onclick="DASH.render()">Anwenden</button>
-  <button class="btn-s" onclick="DASH.resetFilter()">Reset</button>
-  <span id="db-range-label" style="font-size:11px;color:var(--tx3);margin-left:4px"></span>
-</div>
 
 <!-- KPI row -->
 <div class="metrics">
@@ -114,178 +71,11 @@ const HTML = `
 `;
 
 // ── FILTER LOGIC ─────────────────────────────────────────
-function calcPresetRange(preset) {
-  const today = new Date().toISOString().split('T')[0];
-  const yr = new Date().getFullYear();
-  const ym = today.substring(0,7);
-  if (preset==='thismonth') return { from: ym+'-01', to: today };
-  if (preset==='last30')  { const d=new Date(); d.setDate(d.getDate()-30); return { from: d.toISOString().split('T')[0], to: today }; }
-  if (preset==='last90')  { const d=new Date(); d.setDate(d.getDate()-90); return { from: d.toISOString().split('T')[0], to: today }; }
-  if (preset==='thisyear') return { from: yr+'-01-01', to: today };
-  return { from: null, to: null }; // 'all' or 'custom'
-}
-
-function onPreset() {
-  const p     = document.getElementById('db-period')?.value;
-  if (p === 'custom') return;
-  const today = new Date().toISOString().split('T')[0];
-  const { from, to } = calcPresetRange(p);
-  let actualFrom = from;
-  if (p === 'all') {
-    const allDates = [
-      ...APP.entries.map(e => e.date),
-      ...APP.consumption.map(c => String(c.date).substring(0,10))
-    ].filter(Boolean).sort();
-    actualFrom = allDates.length > 0 ? allDates[0] : null;
-  }
-  const fEl = document.getElementById('db-from');
-  const tEl = document.getElementById('db-to');
-  if (fEl) fEl.value = actualFrom || '';
-  if (tEl) tEl.value = to || today;
-  const mEl = document.getElementById('db-month');
-  const yEl = document.getElementById('db-year');
-  if (mEl) mEl.value = '';
-  if (yEl) yEl.value = '';
-  render();
-}
-
-function onMonthPick() {
-  const val = document.getElementById('db-month')?.value; // "YYYY-MM"
-  if (!val) return;
-  const [yr, mo] = val.split('-').map(Number);
-  const lastDay  = new Date(yr, mo, 0).getDate();
-  const from = `${val}-01`;
-  const to   = `${val}-${String(lastDay).padStart(2,'0')}`;
-  const fEl = document.getElementById('db-from');
-  const tEl = document.getElementById('db-to');
-  if (fEl) fEl.value = from;
-  if (tEl) tEl.value = to;
-  // Clear year picker, set period to custom
-  const yEl = document.getElementById('db-year');
-  if (yEl) yEl.value = '';
-  const pEl = document.getElementById('db-period');
-  if (pEl) pEl.value = 'custom';
-  render();
-}
-
-function onYearPick() {
-  const yr = document.getElementById('db-year')?.value;
-  if (!yr) return;
-  const from = `${yr}-01-01`;
-  const to   = `${yr}-12-31`;
-  const fEl  = document.getElementById('db-from');
-  const tEl  = document.getElementById('db-to');
-  if (fEl) fEl.value = from;
-  if (tEl) tEl.value = to;
-  // Clear month, set period to custom
-  const mEl = document.getElementById('db-month');
-  if (mEl) mEl.value = '';
-  const pEl = document.getElementById('db-period');
-  if (pEl) pEl.value = 'custom';
-  render();
-}
-
-function resetFilter() {
-  const sel = document.getElementById('db-period');
-  if (sel) sel.value = 'all';
-  const mEl = document.getElementById('db-month');
-  const yEl = document.getElementById('db-year');
-  if (mEl) mEl.value = '';
-  if (yEl) yEl.value = '';
-  const allDates = [
-    ...APP.entries.map(e => e.date),
-    ...APP.consumption.map(c => String(c.date).substring(0,10))
-  ].filter(Boolean).sort();
-  const earliest = allDates.length > 0 ? allDates[0] : '';
-  const fEl = document.getElementById('db-from');
-  const tEl = document.getElementById('db-to');
-  if (fEl) fEl.value = earliest;
-  if (tEl) tEl.value = new Date().toISOString().split('T')[0];
-  render();
-}
-
-function getRange() {
-  const from = document.getElementById('db-from')?.value || null;
-  const to   = document.getElementById('db-to')?.value   || null;
-  return { from: from || null, to: to || null };
-}
-
-function onCustomDate() {
-  // Clear month/year pickers, switch to custom
-  const mEl = document.getElementById('db-month');
-  const yEl = document.getElementById('db-year');
-  const pEl = document.getElementById('db-period');
-  if (mEl) mEl.value = '';
-  if (yEl) yEl.value = '';
-  if (pEl) pEl.value = 'custom';
-  render();
-}
-
-function initFilter() {
-  const allDates = [
-    ...APP.entries.map(e => e.date),
-    ...APP.consumption.map(c => String(c.date).substring(0,10))
-  ].filter(Boolean).sort();
-
-  const earliest = allDates.length > 0 ? allDates[0] : null;
-  const today    = new Date().toISOString().split('T')[0];
-
-  // Populate month dropdown — newest first, only months with data
-  const mEl = document.getElementById('db-month');
-  if (mEl && mEl.options.length <= 1) {
-    const months = [...new Set(allDates.map(d => d.substring(0,7)))].sort().reverse();
-    const MONTHS_DE = ['','Jänner','Februar','März','April','Mai','Juni',
-                       'Juli','August','September','Oktober','November','Dezember'];
-    months.forEach(ym => {
-      const [yr, mo] = ym.split('-').map(Number);
-      const opt = document.createElement('option');
-      opt.value = ym;
-      opt.textContent = `${MONTHS_DE[mo]} ${yr}`;
-      mEl.appendChild(opt);
-    });
-  }
-
-  // Populate year dropdown — newest first, only years with data
-  const yEl = document.getElementById('db-year');
-  if (yEl && yEl.options.length <= 1) {
-    const years = [...new Set(allDates.map(d => d.substring(0,4)))].sort().reverse();
-    years.forEach(yr => {
-      const opt = document.createElement('option');
-      opt.value = yr; opt.textContent = yr;
-      yEl.appendChild(opt);
-    });
-  }
-
-  // Set Von to earliest data date, Bis to today — only if empty
-  const fEl = document.getElementById('db-from');
-  const tEl = document.getElementById('db-to');
-  if (fEl) fEl.value = earliest || '';
-  if (tEl) tEl.value = today;
-
-  // Hide range label (redundant with the date fields)
-  const lbl = document.getElementById('db-range-label');
-  if (lbl) lbl.style.display = 'none';
-}
-
 function render() {
-  // Init/update timeline
-  APP.Timeline.create('db-timeline', {
-    fromField: 'db-from',
-    toField:   'db-to',
-    onRange:   (from, to) => {
-      const pEl = document.getElementById('db-period');
-      const mEl = document.getElementById('db-month');
-      const yEl = document.getElementById('db-year');
-      if (pEl) pEl.value = 'custom';
-      if (mEl) mEl.value = '';
-      if (yEl) yEl.value = '';
-      renderCore(from, to);
-    }
+  APP.FilterBar.create('db-timeline', {
+    onRange: (from, to) => renderCore(from, to)
   });
-  initFilter();
-  const { from, to } = getRange();
-  // Sync timeline handles to current from/to
-  APP.Timeline.setRange('db-timeline', from || '', to || '');
+  const { from, to } = APP.FilterBar.getRange('db-timeline');
   renderCore(from, to);
 }
 
@@ -492,9 +282,9 @@ function drawMonthly() {
 function register() {
   APP.registerPage('dashboard', {
     html: HTML,
-    onEnter: () => { initFilter(); render(); }
+    onEnter: () => render()
   });
 }
 
-return { render, onPreset, onMonthPick, onYearPick, onCustomDate, resetFilter, register };
+return { render, register };
 })();
