@@ -24,13 +24,6 @@ const HTML = `
 <!-- ÜBERSICHT -->
 <div id="cv-t-overview">
   <div id="cv-timeline-filter"></div>
-  <div class="fbar" style="margin-bottom:12px">
-    <label>Granularität</label>
-    <select id="cv-gran" onchange="CV.renderOverview()">
-      <option value="day">Täglich</option>
-      <option value="month" selected>Monatlich</option>
-    </select>
-  </div>
   <div class="metrics">
     <div class="mc bl"><div class="mc-l">Netzbezug</div><div><span class="mc-v" id="cv-m-grid">—</span><span class="mc-u">kWh</span></div><div class="mc-d" id="cv-m-grid2"></div></div>
     <div class="mc"><div class="mc-l">Ø pro Tag</div><div><span class="mc-v" id="cv-m-avg">—</span><span class="mc-u">kWh</span></div></div>
@@ -213,7 +206,7 @@ function resetFilter() {
 
 // ── OVERVIEW ─────────────────────────────────────────────
 function renderOverview() {
-  const gran = document.getElementById('cv-gran')?.value || 'month';
+  const gran  = 'month';
   const range = APP.FilterBar.getRange('cv-timeline');
   const from  = range.from;
   const to    = range.to;

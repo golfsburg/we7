@@ -23,19 +23,7 @@ const HTML = `
 
 <!-- ── ERTRAGSPROFIL ── -->
 <div id="pv-t-profile" style="display:none">
-  <div class="fbar">
-    <label>Granularität</label>
-    <select id="pp-gran" onchange="PV.renderProfile()">
-      <option value="day" selected>Täglich</option>
-      <option value="week">Wöchentlich</option>
-      <option value="month">Monatlich</option>
-    </select>
-    <span class="fsep">|</span>
-    <label>Von</label><input type="date" id="pp-from" onchange="PV.renderProfile()">
-    <label>Bis</label><input type="date" id="pp-to"   onchange="PV.renderProfile()">
-    <button class="btn-p" onclick="PV.renderProfile()">Anwenden</button>
-    <button class="btn-s" onclick="PV.resetProfile()">Reset</button>
-  </div>
+  <div id="pv-profile-timeline"></div>
   <div class="metrics">
     <div class="mc hi"><div class="mc-l">Ertrag (Zeitraum)</div><div><span class="mc-v" id="pp-m-total">—</span><span class="mc-u">kWh</span></div><div class="mc-d" id="pp-m-total2"></div></div>
     <div class="mc"><div class="mc-l">Ø pro Eintrag</div><div><span class="mc-v" id="pp-m-avg">—</span><span class="mc-u">kWh</span></div></div>
@@ -63,19 +51,7 @@ const HTML = `
 
 
 <div id="pv-t-overview">
-  <div class="fbar">
-    <label>Granularität</label>
-    <select id="pv-gran" onchange="PV.renderOverview()">
-      <option value="day">Täglich</option>
-      <option value="week">Wöchentlich</option>
-      <option value="month" selected>Monatlich</option>
-    </select>
-    <span class="fsep">|</span>
-    <label>Von</label><input type="date" id="pv-from" onchange="PV.renderOverview()">
-    <label>Bis</label><input type="date" id="pv-to"   onchange="PV.renderOverview()">
-    <button class="btn-p" onclick="PV.renderOverview()">Anwenden</button>
-    <button class="btn-s" onclick="PV.resetFilter()">Reset</button>
-  </div>
+  <div id="pv-overview-timeline"></div>
   <div class="metrics">
     <div class="mc hi"><div class="mc-l">Ertrag</div><div><span class="mc-v" id="pv-m-total">—</span><span class="mc-u">kWh</span></div><div class="mc-d" id="pv-m-total2"></div></div>
     <div class="mc"><div class="mc-l">Theoretisch</div><div><span class="mc-v" id="pv-m-th">—</span><span class="mc-u">kWh</span></div></div>
@@ -354,9 +330,10 @@ function resetFilter() {
   renderOverview();
 }
 function renderOverview() {
-  const gran = document.getElementById('pv-gran')?.value || 'month';
-  const from = document.getElementById('pv-from')?.value;
-  const to   = document.getElementById('pv-to')?.value;
+  const gran = 'month'; // default, can be extended later
+  const range = APP.FilterBar.getRange('pv-timeline');
+  const from  = range.from;
+  const to    = range.to;
   let filtered = APP.entries.filter(e => (!from || e.date >= from) && (!to || e.date <= to))
     .sort((a,b) => a.date.localeCompare(b.date));
 
@@ -708,9 +685,10 @@ function resetProfile() {
 }
 
 function renderProfile() {
-  const gran = document.getElementById('pp-gran')?.value || 'day';
-  const from = document.getElementById('pp-from')?.value;
-  const to   = document.getElementById('pp-to')?.value;
+  const gran = 'month';
+  const range = APP.FilterBar.getRange('pv-timeline');
+  const from  = range.from;
+  const to    = range.to;
 
   let filtered = APP.entries
     .filter(e => (!from || e.date >= from) && (!to || e.date <= to))

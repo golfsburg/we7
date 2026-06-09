@@ -500,6 +500,8 @@ const FilterBar = (() => {
     const maxDate  = today;
     const minMs    = dateToMs(minDate);
     const maxMs    = dateToMs(maxDate);
+    // Allow selTo to go beyond today (e.g. end of current month)
+    const maxSelMs = dateToMs(new Date(new Date().getFullYear(), new Date().getMonth()+1, 0).toISOString().split('T')[0]);
     const rangeMs  = Math.max(1, maxMs - minMs);
     const prefix   = containerId;
 
@@ -601,7 +603,9 @@ const FilterBar = (() => {
         const ym = fd.substring(0,7);
         const lastDay = new Date(+ym.split('-')[0], +ym.split('-')[1], 0).getDate();
         const monthEnd = `${ym}-${String(lastDay).padStart(2,'0')}`;
-        mEl.value = (fd===ym+'-01' && td===monthEnd) ? ym : '';
+        // Match if fd=first of month AND td=last of month OR today (current month)
+        const isMonth = fd===ym+'-01' && (td===monthEnd || td===today);
+        mEl.value = isMonth ? ym : '';
       }
       if (yEl) {
         const yr = fd.substring(0,4);
@@ -681,7 +685,8 @@ const FilterBar = (() => {
       getTo:   () => msToDate(selTo),
       setRange(f, t) {
         selFrom = clamp(dateToMs(f)||minMs, minMs, maxMs);
-        selTo   = clamp(dateToMs(t)||maxMs, minMs, maxMs);
+        // Allow selTo beyond maxMs (e.g. end of current month > today)
+        selTo   = Math.max(selFrom + 86400000, Math.min(dateToMs(t)||maxMs, maxSelMs));
         syncUI();
       },
       syncUI,
