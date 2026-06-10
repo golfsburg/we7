@@ -26,9 +26,8 @@ jobs:
           pip install "growattServer==2.2.0" requests
           SITE=$(python -c "import site; print(site.getsitepackages()[0])")
           FILE="$SITE/growattServer/open_api_v1/devices/abstract_device.py"
-          echo "Patching: $FILE"
           sed -i 's/type ParameterValue = str | float | bool | list\[Any\] | dict\[str, Any\]/ParameterValue = str/g' "$FILE"
-          echo "After patch:"; grep "ParameterValue" "$FILE"
+          echo "✓ Patched"
 
       - name: Growatt Monatsimport ausführen
         env:
@@ -38,3 +37,17 @@ jobs:
           SUPABASE_KEY:  ${{ secrets.SUPABASE_KEY }}
           IMPORT_MONTH:  ${{ github.event.inputs.import_month }}
         run: python growatt_import_monat.py
+
+      - name: Cache-Buster in index.html aktualisieren
+        run: |
+          TS=$(date +%s)
+          sed -i "s/\.js?v=[0-9]*/\.js?v=$TS/g" index.html
+          echo "✓ Cache-Buster: $TS"
+
+      - name: Änderungen committen
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git diff --staged --quiet || git commit -m "Monatsimport ${{ github.event.inputs.import_month }} [cache-bust]"
+          git push
