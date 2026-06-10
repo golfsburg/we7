@@ -277,26 +277,57 @@ async function initialLoad() {
   if (!sbClient) return;
   syncInd('syncing');
   try {
-    // PV — only load if local is empty
-    if (entries.length === 0) {
-      const { data, error } = await sbClient.from(PV_TBL)
-        .select('*').order('date', {ascending:true});
-      if (error) throw error;
-      if (data && data.length > 0) {
-        // Filter out tombstoned IDs
-        entries = data
-          .filter(r => !tombstones.has(r.id))
-          .map(rowToEntry);
+    // PV — always merge from Supabase (pick up new entries from GitHub Actions)
+    const { data, error } = await sbClient.from(PV_TBL)
+      .select('*').order('date', {ascending:true});
+    if (error) throw error;
+    if (data && data.length > 0) {
+      const localIds = new Set(entries.map(e => e.id));
+      const newFromSb = data.filter(r =>
+        !tombstones.has(r.id) && !localIds.has(r.id)
+      ).map(rowToEntry);
+      if (newFromSb.length > 0) {
+        entries = [...entries, ...newFromSb]
+          .sort((a,b) => a.date.localeCompare(b.date));
+        savePv(false);
+        refreshCurrentPage();
+        console.log(`[Sync] ${newFromSb.length} neue PV-Einträge von Supabase geladen`);
+      }
+      // If local was completely empty, load everything
+      if (entries.length === 0) {
+        entries = data.filter(r => !tombstones.has(r.id)).map(rowToEntry);
         savePv(false);
         refreshCurrentPage();
       }
     }
 
-    // CV — only load if local is empty
-    if (consumption.length === 0) {
+    // CV — always merge from Supabase
+    if (consumption.length > 0) {
       const { data: cvData, error: cvErr } = await sbClient.from(CV_TBL).select('*');
-      if (cvErr) throw cvErr;
-      if (cvData && cvData.length > 0) {
+      if (!cvErr && cvData && cvData.length > 0) {
+        const localCvIds = new Set(consumption.map(c => c.id));
+        const newCv = cvData.filter(r =>
+          !cvTombstones.has(r.id) && !localCvIds.has(r.id)
+        ).map(r => ({
+          id:        r.id,
+          date:      String(r.date).substring(0, 10),
+          hour:      parseInt(r.hour,   10),
+          minute:    parseInt(r.minute, 10),
+          kwh:       parseFloat(r.kwh),
+          direction: r.direction || 'grid'
+        }));
+        if (newCv.length > 0) {
+          consumption = [...consumption, ...newCv]
+            .sort((a,b) => a.date !== b.date
+              ? a.date.localeCompare(b.date) : a.hour - b.hour);
+          saveCv(false);
+          console.log(`[Sync] ${newCv.length} neue CV-Einträge von Supabase geladen`);
+        }
+      }
+    } else {
+      // Local CV empty — load from Supabase
+      const { data: cvData, error: cvErr } = await sbClient.from(CV_TBL).select('*');
+      if (!cvErr && cvData && cvData.length > 0) {
         consumption = cvData
           .filter(r => !cvTombstones.has(r.id))
           .map(r => ({
@@ -312,6 +343,7 @@ async function initialLoad() {
         saveCv(false);
       }
     }
+
     syncInd('ok');
   } catch(e) { syncInd('error'); console.warn('Initial load:', e.message); }
 }
