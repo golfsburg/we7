@@ -1,7 +1,6 @@
 """
 Growatt → Supabase Auto-Import
-Läuft täglich via GitHub Actions
-Verwendet growattServer==0.4.0
+growattServer==0.1.1
 """
 import growattServer, os, sys, json, hashlib
 from datetime import date, datetime
@@ -24,74 +23,77 @@ def supabase_upsert(entries):
     req.add_header('Prefer', 'resolution=merge-duplicates')
     try:
         with urlopen(req) as r:
-            r.read()
-            return True
+            r.read(); return True
     except HTTPError as e:
-        print(f"  Supabase Error {e.code}: {e.read().decode()}")
-        return False
+        print(f"  Supabase Error {e.code}: {e.read().decode()}"); return False
 
 def gen_id(date_str):
     return hashlib.md5(f"growatt-{date_str}".encode()).hexdigest()[:20]
 
 # ── Login ──────────────────────────────────────────────────
-print(f"🔌 Growatt Login...")
+print("🔌 Growatt Login...")
 api = growattServer.GrowattApi()
 api.server_url = "https://server-api.growatt.com/"
-login    = api.login(GROWATT_USER, GROWATT_PASS)
-uid      = login['user']['id']
-plant_id = api.plant_list(uid)['data'][0]['plantId']
-devices  = api.device_list(plant_id)
-sn       = devices[0]['deviceSn']
-print(f"✓ Login OK | Anlage: {plant_id} | WR: {sn}")
+login = api.login(GROWATT_USER, GROWATT_PASS)
+
+# v0.1.1 API: plant_list takes no argument
+plants   = api.plant_list()
+plant_id = plants[0]['id'] if isinstance(plants, list) else plants['data'][0]['plantId']
+print(f"✓ Login OK | Anlage: {plant_id}")
+
+# device list
+try:
+    devices = api.inverter_list(plant_id)
+    sn = devices[0].get('deviceSn') or devices[0].get('sn')
+except:
+    devices = api.device_list(plant_id)
+    sn = devices[0].get('deviceSn') or devices[0].get('sn')
+print(f"WR: {sn}")
 
 # ── Tagesdaten ─────────────────────────────────────────────
 export_date = date.fromisoformat(IMPORT_DATE)
 print(f"📅 Importiere: {export_date}")
 
-data     = api.tlx_data(sn, date=export_date)
+try:
+    data = api.tlx_data(sn, date=export_date)
+except AttributeError:
+    # Fallback für ältere API
+    data = api.mix_detail(plant_id, sn,
+               timespan=growattServer.Timespan.day,
+               date=export_date)
+    data = data.get('obj', {})
+
 etoday   = float(data.get('eToday', 0))
-etotal   = float(data.get('eTotal', 0))
-pac_data = data.get('invPacData', {})
+pac_data = data.get('invPacData', data.get('pacChart', {}))
 
 if not pac_data:
-    print(f"⚠ Keine Daten für {export_date}")
-    sys.exit(0)
+    print(f"⚠ Keine Daten für {export_date}"); sys.exit(0)
 
 peak_pac = max((float(v) for v in pac_data.values()), default=0)
 
 if etoday == 0 and peak_pac > 0:
-    pac_sum = sum(float(v) for v in pac_data.values())
-    etoday  = round(pac_sum * (5/60) / 1000, 3)
+    etoday = round(sum(float(v) for v in pac_data.values()) * (5/60) / 1000, 3)
     print(f"ℹ eToday geschätzt: {etoday} kWh")
 
 if etoday <= 0:
-    print(f"⚠ Kein Ertrag für {export_date}")
-    sys.exit(0)
+    print(f"⚠ Kein Ertrag für {export_date}"); sys.exit(0)
 
-print(f"☀ {etoday} kWh | Peak: {round(peak_pac)} W | Gesamt: {etotal} kWh")
+print(f"☀ {etoday} kWh | Peak: {round(peak_pac)} W")
 
 # ── Supabase ───────────────────────────────────────────────
 entry = {
-    "id":         gen_id(str(export_date)),
-    "type":       "day",
-    "date":       str(export_date),
-    "kwh":        round(etoday, 3),
-    "peak":       round(peak_pac) if peak_pac > 0 else None,
-    "hours":      None,
-    "self_kwh":   None,
-    "feed_kwh":   None,
-    "weather":    "⛅",
-    "temp":       None,
-    "note":       "Growatt API Auto-Import",
-    "source":     "growatt",
+    "id": gen_id(str(export_date)), "type": "day",
+    "date": str(export_date), "kwh": round(etoday, 3),
+    "peak": round(peak_pac) if peak_pac > 0 else None,
+    "hours": None, "self_kwh": None, "feed_kwh": None,
+    "weather": "⛅", "temp": None,
+    "note": "Growatt API Auto-Import", "source": "growatt",
     "updated_at": datetime.utcnow().isoformat() + "Z"
 }
 
-print(f"💾 Schreibe in Supabase...")
+print("💾 Schreibe in Supabase...")
 if supabase_upsert([entry]):
     print(f"✓ Gespeichert: {export_date} → {etoday} kWh")
 else:
-    print(f"✗ Fehler beim Speichern")
-    sys.exit(1)
-
-print(f"✅ Fertig")
+    print("✗ Fehler beim Speichern"); sys.exit(1)
+print("✅ Fertig")
