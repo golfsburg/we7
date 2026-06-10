@@ -23,7 +23,9 @@ jobs:
           python-version: '3.11'
 
       - name: Abhängigkeiten installieren
-        run: pip install growattServer
+        run: |
+          pip install --upgrade pip
+          pip install "growattServer>=1.0.0" --upgrade
 
       - name: Growatt Monatsimport ausführen
         env:
