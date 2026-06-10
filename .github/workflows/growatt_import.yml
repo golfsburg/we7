@@ -29,7 +29,7 @@ jobs:
       - name: Abhängigkeiten installieren
         run: |
           pip install --upgrade pip
-          pip install "growattServer==0.4.0"
+          pip install "growattServer==0.5.0"
 
       - name: Growatt Tagesimport ausführen
         env:
