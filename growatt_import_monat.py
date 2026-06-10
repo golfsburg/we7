@@ -1,6 +1,6 @@
 """
 Growatt → Supabase Monatsimport
-growattServer==0.1.1
+growattServer==2.2.0 (mit Syntax-Patch)
 """
 import growattServer, os, sys, json, hashlib, calendar, time
 from datetime import date, datetime
@@ -33,17 +33,10 @@ def gen_id(date_str):
 print("🔌 Growatt Login...")
 api = growattServer.GrowattApi()
 api.server_url = "https://server-api.growatt.com/"
-login = api.login(GROWATT_USER, GROWATT_PASS)
-
-plants   = api.plant_list()
-plant_id = plants[0]['id'] if isinstance(plants, list) else plants['data'][0]['plantId']
-
-try:
-    devices = api.inverter_list(plant_id)
-    sn = devices[0].get('deviceSn') or devices[0].get('sn')
-except:
-    devices = api.device_list(plant_id)
-    sn = devices[0].get('deviceSn') or devices[0].get('sn')
+login    = api.login(GROWATT_USER, GROWATT_PASS)
+uid      = login['user']['id']
+plant_id = api.plant_list(uid)['data'][0]['plantId']
+sn       = api.device_list(plant_id)[0]['deviceSn']
 print(f"✓ Login OK | Anlage: {plant_id} | WR: {sn}")
 
 year, month   = map(int, IMPORT_MONTH.split('-'))
@@ -57,15 +50,9 @@ for d in range(1, days_in_month + 1):
     if day > date.today(): break
     date_str = day.strftime('%Y-%m-%d')
     try:
-        try:
-            data = api.tlx_data(sn, date=day)
-        except AttributeError:
-            data = api.mix_detail(plant_id, sn,
-                       timespan=growattServer.Timespan.day, date=day)
-            data = data.get('obj', {})
-
+        data     = api.tlx_data(sn, date=day)
         etoday   = float(data.get('eToday', 0))
-        pac_data = data.get('invPacData', data.get('pacChart', {}))
+        pac_data = data.get('invPacData', {})
 
         if not pac_data:
             print(f"  {date_str}: keine Daten")
@@ -91,7 +78,6 @@ for d in range(1, days_in_month + 1):
         total_kwh += etoday
         print(f"  {date_str}: {etoday} kWh | Peak: {round(peak_pac)} W")
         time.sleep(0.5)
-
     except Exception as e:
         print(f"  {date_str}: Fehler — {e}")
         skipped.append(date_str)
