@@ -276,78 +276,55 @@ async function doSync() {
 async function initialLoad() {
   if (!sbClient) return;
   syncInd('syncing');
+  let changed = false;
   try {
-    // PV — always merge from Supabase (pick up new entries from GitHub Actions)
+    // PV: merge new entries from Supabase
     const { data, error } = await sbClient.from(PV_TBL)
       .select('*').order('date', {ascending:true});
     if (error) throw error;
     if (data && data.length > 0) {
-      const localIds = new Set(entries.map(e => e.id));
-      const newFromSb = data.filter(r =>
-        !tombstones.has(r.id) && !localIds.has(r.id)
-      ).map(rowToEntry);
-      if (newFromSb.length > 0) {
-        entries = [...entries, ...newFromSb]
-          .sort((a,b) => a.date.localeCompare(b.date));
-        savePv(false);
-        refreshCurrentPage();
-        console.log(`[Sync] ${newFromSb.length} neue PV-Einträge von Supabase geladen`);
-      }
-      // If local was completely empty, load everything
       if (entries.length === 0) {
         entries = data.filter(r => !tombstones.has(r.id)).map(rowToEntry);
-        savePv(false);
-        refreshCurrentPage();
-      }
-    }
-
-    // CV — always merge from Supabase
-    if (consumption.length > 0) {
-      const { data: cvData, error: cvErr } = await sbClient.from(CV_TBL).select('*');
-      if (!cvErr && cvData && cvData.length > 0) {
-        const localCvIds = new Set(consumption.map(c => c.id));
-        const newCv = cvData.filter(r =>
-          !cvTombstones.has(r.id) && !localCvIds.has(r.id)
-        ).map(r => ({
-          id:        r.id,
-          date:      String(r.date).substring(0, 10),
-          hour:      parseInt(r.hour,   10),
-          minute:    parseInt(r.minute, 10),
-          kwh:       parseFloat(r.kwh),
-          direction: r.direction || 'grid'
-        }));
-        if (newCv.length > 0) {
-          consumption = [...consumption, ...newCv]
-            .sort((a,b) => a.date !== b.date
-              ? a.date.localeCompare(b.date) : a.hour - b.hour);
-          saveCv(false);
-          console.log(`[Sync] ${newCv.length} neue CV-Einträge von Supabase geladen`);
+        savePv(false); changed = true;
+      } else {
+        const localIds = new Set(entries.map(e => e.id));
+        const fresh = data
+          .filter(r => !tombstones.has(r.id) && !localIds.has(r.id))
+          .map(rowToEntry);
+        if (fresh.length > 0) {
+          entries = [...entries, ...fresh].sort((a,b) => a.date.localeCompare(b.date));
+          savePv(false); changed = true;
+          console.log('[Sync] +'+fresh.length+' PV entries from Supabase');
         }
       }
-    } else {
-      // Local CV empty — load from Supabase
-      const { data: cvData, error: cvErr } = await sbClient.from(CV_TBL).select('*');
-      if (!cvErr && cvData && cvData.length > 0) {
-        consumption = cvData
-          .filter(r => !cvTombstones.has(r.id))
-          .map(r => ({
-            id:        r.id,
-            date:      String(r.date).substring(0, 10),
-            hour:      parseInt(r.hour,   10),
-            minute:    parseInt(r.minute, 10),
-            kwh:       parseFloat(r.kwh),
-            direction: r.direction || 'grid'
-          }))
-          .sort((a,b) => a.date !== b.date
-            ? a.date.localeCompare(b.date) : a.hour - b.hour);
-        saveCv(false);
+    }
+    // CV: merge new entries from Supabase
+    const { data: cvData, error: cvErr } = await sbClient.from(CV_TBL).select('*');
+    if (!cvErr && cvData && cvData.length > 0) {
+      const mapCv = r => ({
+        id: r.id, date: String(r.date).substring(0,10),
+        hour: parseInt(r.hour,10), minute: parseInt(r.minute,10),
+        kwh: parseFloat(r.kwh), direction: r.direction||'grid'
+      });
+      if (consumption.length === 0) {
+        consumption = cvData.filter(r=>!cvTombstones.has(r.id)).map(mapCv)
+          .sort((a,b)=>a.date!==b.date?a.date.localeCompare(b.date):a.hour-b.hour);
+        saveCv(false); changed = true;
+      } else {
+        const localIds = new Set(consumption.map(c=>c.id));
+        const fresh = cvData.filter(r=>!cvTombstones.has(r.id)&&!localIds.has(r.id)).map(mapCv);
+        if (fresh.length > 0) {
+          consumption = [...consumption,...fresh]
+            .sort((a,b)=>a.date!==b.date?a.date.localeCompare(b.date):a.hour-b.hour);
+          saveCv(false); changed = true;
+          console.log('[Sync] +'+fresh.length+' CV entries from Supabase');
+        }
       }
     }
-
     syncInd('ok');
+    if (changed) { updateSidebar(); refreshCurrentPage(); }
   } catch(e) { syncInd('error'); console.warn('Initial load:', e.message); }
 }
-
 // Legacy wrappers — kept for compatibility
 async function syncConsumption() { scheduleSync(); }
 async function loadConsumption()  { /* handled by initialLoad */ }
