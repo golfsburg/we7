@@ -1,7 +1,6 @@
 name: Growatt → Supabase Monatsimport
 
 on:
-  # Nur manuell startbar — mit Monatsauswahl
   workflow_dispatch:
     inputs:
       import_month:
@@ -12,7 +11,6 @@ on:
 jobs:
   import:
     runs-on: ubuntu-latest
-    
     steps:
       - name: Repository auschecken
         uses: actions/checkout@v4
@@ -22,16 +20,15 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Abhängigkeiten installieren
+      - name: Abhängigkeiten installieren und patchen
         run: |
           pip install --upgrade pip
           pip install "growattServer==2.2.0" requests
-
-      - name: Syntax-Patch für growattServer open_api_v1
-        run: |
-          FILE=$(python -c "import growattServer.open_api_v1.devices.abstract_device as m; import inspect; print(inspect.getfile(m))")
-          sed -i 's/ParameterValue = str | float | bool | list\[Any\] | dict\[str, Any\]/ParameterValue = str/' "$FILE"
-          echo "Patched: $FILE"
+          SITE=$(python -c "import site; print(site.getsitepackages()[0])")
+          FILE="$SITE/growattServer/open_api_v1/devices/abstract_device.py"
+          echo "Patching: $FILE"
+          sed -i 's/type ParameterValue = str | float | bool | list\[Any\] | dict\[str, Any\]/ParameterValue = str/g' "$FILE"
+          echo "After patch:"; grep "ParameterValue" "$FILE"
 
       - name: Growatt Monatsimport ausführen
         env:
