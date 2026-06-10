@@ -25,7 +25,13 @@ jobs:
       - name: Abhängigkeiten installieren
         run: |
           pip install --upgrade pip
-          pip install "growattServer==0.1.1" requests
+          pip install "growattServer==2.2.0" requests
+
+      - name: Syntax-Patch für growattServer open_api_v1
+        run: |
+          FILE=$(python -c "import growattServer.open_api_v1.devices.abstract_device as m; import inspect; print(inspect.getfile(m))")
+          sed -i 's/ParameterValue = str | float | bool | list\[Any\] | dict\[str, Any\]/ParameterValue = str/' "$FILE"
+          echo "Patched: $FILE"
 
       - name: Growatt Monatsimport ausführen
         env:
