@@ -259,7 +259,23 @@ const HTML = `
 );
 alter table pv_entries enable row level security;
 create policy "allow_all" on pv_entries
-  for all using (true) with check (true);</div>
+  for all using (true) with check (true);
+
+-- 5-Minuten-Werte (Growatt API Auto-Import)
+create table if not exists growatt_5min (
+  id text primary key,
+  date date not null,
+  ts timestamptz not null,
+  pac_w numeric not null,
+  etoday_kwh numeric,
+  etotal_kwh numeric,
+  created_at timestamptz default now()
+);
+alter table growatt_5min enable row level security;
+create policy "allow_all" on growatt_5min
+  for all using (true) with check (true);
+create index if not exists idx_5min_date on growatt_5min(date);
+create index if not exists idx_5min_ts   on growatt_5min(ts);</div>
   </div>
 
   <div class="fcard" style="border-color:rgba(242,92,92,.2)">
