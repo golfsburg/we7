@@ -359,55 +359,117 @@ function renderOverview() {
   const from  = range.from;
   const to    = range.to;
 
-  let data = APP.entries.filter(e => (!from||e.date>=from)&&(!to||e.date<=to));
+  const g5    = APP.growatt5min.filter(r => (!from||r.date>=from)&&(!to||r.date<=to));
+  const pvEnt = APP.entries.filter(e => (!from||e.date>=from)&&(!to||e.date<=to));
 
   let labels=[], kwArr=[], pkArr=[], thArr=[];
+  const set = (id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
 
-  if (gran === '15min' || gran === 'day') {
-    // Day-level (PV has no 15min data, show daily)
-    const days = [...new Set(data.map(e=>e.date))].sort();
-    labels = days.map(d=>{const dt=new Date(d+'T00:00:00');return `${String(dt.getDate()).padStart(2,'0')}.${String(dt.getMonth()+1).padStart(2,'0')}`;});
-    kwArr  = days.map(d=>+data.filter(e=>e.type==='day'&&e.date===d).reduce((s,e)=>s+e.kwh,0).toFixed(2));
-    pkArr  = days.map(d=>data.filter(e=>e.date===d).reduce((mx,e)=>Math.max(mx,e.peak||0),0));
-    thArr  = days.map(d=>+(APP.theory[new Date(d+'T00:00:00').getMonth()]/30).toFixed(2));
-  } else if (gran === 'month') {
-    const months = [...new Set(data.map(e=>e.date.substring(0,7)))].sort();
-    labels = months.map(m=>APP.MONTHS[new Date(m+'-01').getMonth()]+' '+m.substring(2,4));
-    kwArr  = months.map(m=>{
-      const me=APP.entries.find(e=>e.type==='month'&&e.date===m+'-01');
-      if(me) return +me.kwh.toFixed(2);
-      return +data.filter(e=>e.date.startsWith(m)).reduce((s,e)=>s+e.kwh,0).toFixed(2);
+  if (gran === '15min') {
+    // ── 5-Minuten-Werte direkt aus growatt_5min ──────────
+    const sorted = [...g5].sort((a,b)=>a.ts.localeCompare(b.ts));
+    labels = sorted.map(r => {
+      const d = new Date(r.ts);
+      return `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')} `
+           + `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
     });
-    pkArr  = months.map(m=>data.filter(e=>e.date.startsWith(m)).reduce((mx,e)=>Math.max(mx,e.peak||0),0));
+    kwArr  = sorted.map(r => +r.pac_w.toFixed(0));   // Watt
+    pkArr  = sorted.map(r => r.pac_w);
+    thArr  = [];
+
+    const peakW = pkArr.reduce((mx,v)=>Math.max(mx,v),0);
+    const days  = [...new Set(g5.map(r=>r.date))];
+    const totalKwh = days.reduce((s,d) => {
+      const dayRows = g5.filter(r=>r.date===d);
+      if (!dayRows.length) return s;
+      return s + dayRows.reduce((sum,r)=>sum+r.pac_w,0) * (5/60) / 1000;
+    }, 0);
+
+    set('pv-total', totalKwh.toFixed(2));
+    set('pv-peak',  peakW > 0 ? Math.round(peakW) + ' W' : '—');
+    set('pv-count', g5.length + ' Messpunkte');
+    set('pv-overview-sub', `15-Minuten-Werte (Pac in W) · ${days.length} Tage`);
+
+    APP.destroyChart('pv-ov');
+    APP.charts['pv-ov'] = new Chart(document.getElementById('pv-c-overview'), {
+      data:{ labels, datasets:[
+        { type:'bar', label:'Pac (W)', data:kwArr,
+          backgroundColor:'rgba(245,200,66,.75)', borderRadius:1 }
+      ]},
+      options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+        scales:{
+          x:{ ticks:{color:APP.TC,font:{size:8},maxRotation:45,maxTicksLimit:48}, grid:{color:APP.GC} },
+          y:{ ticks:{color:APP.TC,font:{size:10},callback:v=>v+'W'}, grid:{color:APP.GC} }
+        } }
+    });
+    return;
+  }
+
+  // ── Tag / Monat / Jahr: aus growatt_5min aggregieren ─────
+  // Gruppiere 5min-Daten nach Tag → Tagesertrag in kWh
+  const dayKwh = {};  // date → { kwh, peak }
+  const dayMap = {};
+  g5.forEach(r => {
+    if (!dayMap[r.date]) dayMap[r.date] = [];
+    dayMap[r.date].push(r.pac_w);
+  });
+  Object.entries(dayMap).forEach(([d, pacs]) => {
+    const kwh  = pacs.reduce((s,v)=>s+v,0) * (5/60) / 1000;
+    const peak = Math.max(...pacs);
+    dayKwh[d] = { kwh: +kwh.toFixed(3), peak };
+  });
+
+  // Fallback: wenn kein growatt_5min → pv_entries
+  if (Object.keys(dayKwh).length === 0) {
+    pvEnt.forEach(e => {
+      if (!dayKwh[e.date]) dayKwh[e.date] = { kwh:e.kwh, peak:e.peak||0 };
+    });
+  }
+
+  const allDays = Object.keys(dayKwh).sort();
+
+  if (gran === 'day') {
+    labels = allDays.map(d=>{const dt=new Date(d+'T00:00:00');return `${String(dt.getDate()).padStart(2,'0')}.${String(dt.getMonth()+1).padStart(2,'0')}`;});
+    kwArr  = allDays.map(d=>dayKwh[d].kwh);
+    pkArr  = allDays.map(d=>dayKwh[d].peak);
+    thArr  = allDays.map(d=>+(APP.theory[new Date(d+'T00:00:00').getMonth()]/30).toFixed(2));
+  } else if (gran === 'month') {
+    const months = [...new Set(allDays.map(d=>d.substring(0,7)))].sort();
+    labels = months.map(m=>APP.MONTHS[new Date(m+'-01').getMonth()]+' '+m.substring(2,4));
+    kwArr  = months.map(m=>+allDays.filter(d=>d.startsWith(m)).reduce((s,d)=>s+dayKwh[d].kwh,0).toFixed(2));
+    pkArr  = months.map(m=>allDays.filter(d=>d.startsWith(m)).reduce((mx,d)=>Math.max(mx,dayKwh[d].peak),0));
     thArr  = months.map(m=>APP.theory[new Date(m+'-01').getMonth()]||0);
   } else if (gran === 'year') {
-    const years = [...new Set(data.map(e=>e.date.substring(0,4)))].sort();
+    const years = [...new Set(allDays.map(d=>d.substring(0,4)))].sort();
     labels = years;
-    kwArr  = years.map(y=>+data.filter(e=>e.date.startsWith(y)).reduce((s,e)=>s+e.kwh,0).toFixed(1));
-    pkArr  = years.map(y=>data.filter(e=>e.date.startsWith(y)).reduce((mx,e)=>Math.max(mx,e.peak||0),0));
+    kwArr  = years.map(y=>+allDays.filter(d=>d.startsWith(y)).reduce((s,d)=>s+dayKwh[d].kwh,0).toFixed(1));
+    pkArr  = years.map(y=>allDays.filter(d=>d.startsWith(y)).reduce((mx,d)=>Math.max(mx,dayKwh[d].peak),0));
     thArr  = years.map(()=>+APP.theory.reduce((s,v)=>s+v,0).toFixed(0));
   }
 
   const total = kwArr.reduce((s,v)=>s+v,0);
   const peak  = pkArr.reduce((mx,v)=>Math.max(mx,v),0);
-  const set   = (id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
-  set('pv-total', total.toFixed(1));
-  set('pv-peak',  peak || '—');
-  set('pv-count', data.length + ' Einträge');
+  set('pv-total', total.toFixed(gran==='year'?1:2));
+  set('pv-peak',  peak > 0 ? Math.round(peak) + ' W' : '—');
+  set('pv-count', allDays.length + ' Tage · ' + g5.length + ' Messpunkte');
 
-  const granLabel = {'15min':'Tageswerte','day':'Tageswerte','month':'Monatswerte','year':'Jahreswerte'}[gran];
-  set('pv-overview-sub', granLabel);
+  const granLabel = {'day':'Tageswerte','month':'Monatswerte','year':'Jahreswerte'}[gran];
+  set('pv-overview-sub', granLabel + ' aus growatt_5min');
 
   APP.destroyChart('pv-ov');
   APP.charts['pv-ov'] = new Chart(document.getElementById('pv-c-overview'), {
     data:{ labels, datasets:[
-      { type:'bar',  label:'PV Ertrag', data:kwArr, backgroundColor:'rgba(245,200,66,.8)', borderRadius:3, order:2 },
-      { type:'line', label:'Theorie',   data:thArr, borderColor:'rgba(255,180,40,.5)',
-        backgroundColor:'rgba(255,180,40,.07)', fill:true, tension:0.4, pointRadius:2, borderWidth:1.5, order:1 }
+      { type:'bar',  label:'PV Ertrag (kWh)', data:kwArr,
+        backgroundColor:'rgba(245,200,66,.8)', borderRadius:3, order:2 },
+      { type:'line', label:'Theorie', data:thArr,
+        borderColor:'rgba(255,180,40,.5)', backgroundColor:'rgba(255,180,40,.07)',
+        fill:true, tension:0.4, pointRadius:2, borderWidth:1.5, order:1 }
     ]},
     options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
-      scales:{x:{ticks:{color:APP.TC,font:{size:10}},grid:{color:APP.GC}},
-               y:{ticks:{color:APP.TC,font:{size:10}},grid:{color:APP.GC}}} }
+      scales:{
+        x:{ticks:{color:APP.TC,font:{size:10}},grid:{color:APP.GC}},
+        y:{ticks:{color:APP.TC,font:{size:10},callback:v=>v+' kWh'},grid:{color:APP.GC}}
+      } }
   });
 }
 

@@ -11,6 +11,7 @@ const APP_PW  = 'We7-Tracker-P!nggau';
 const PW_KEY  = 'pv_unlocked';
 const PV_TBL  = 'pv_entries';
 const CV_TBL  = 'consumption_15min';
+const G5_TBL  = 'growatt_5min';
 
 // ── CONSTANTS ────────────────────────────────────────────
 const MONTHS      = ['Jän','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
@@ -26,7 +27,8 @@ let cfg = {
   inv:'Growatt NEO 800M-X', price:0.30, feedRate:0.082, selfPct:50
 };
 let theory = [];
-let entries = [];      // PV records
+let entries = [];      // PV daily/monthly records (pv_entries)
+let growatt5min = [];  // 5-minute PV measurements (growatt_5min)
 let consumption = [];  // Smart meter 15-min records
 let tombstones    = new Set(); // PV IDs deleted locally
 let cvTombstones  = new Set(); // CV IDs deleted locally
@@ -39,6 +41,7 @@ let pages = {};        // registered page modules
 function loadStorage() {
   try { const c = localStorage.getItem('pv_cfg');  if (c) cfg         = {...cfg,...JSON.parse(c)}; } catch(e){}
   try { const e = localStorage.getItem('pv_ent');  if (e) entries     = JSON.parse(e); } catch(e){}
+  try { const g = localStorage.getItem('pv_g5');   if (g) growatt5min = JSON.parse(g); } catch(e){}
   try { const v = localStorage.getItem('pv_cv');
     if (v) {
       const raw = JSON.parse(v);
@@ -65,6 +68,9 @@ function savePv(sync=true) {
   try { localStorage.setItem('pv_cfg', JSON.stringify(cfg));
         localStorage.setItem('pv_ent', JSON.stringify(entries)); } catch(e){}
   if (sync) scheduleSync();
+}
+function saveG5(sync=false) {
+  try { localStorage.setItem('pv_g5', JSON.stringify(growatt5min)); } catch(e){}
 }
 function saveCv(sync=true) {
   try { localStorage.setItem('pv_cv', JSON.stringify(consumption)); } catch(e){}
@@ -318,6 +324,32 @@ async function initialLoad() {
             .sort((a,b)=>a.date!==b.date?a.date.localeCompare(b.date):a.hour-b.hour);
           saveCv(false); changed = true;
           console.log('[Sync] +'+fresh.length+' CV entries from Supabase');
+        }
+      }
+    }
+    // G5: load 5-minute Growatt data (primary source for PV Ertrag page)
+    const { data: g5Data, error: g5Err } = await sbClient.from(G5_TBL)
+      .select('id,date,ts,pac_w,etoday_kwh,etotal_kwh')
+      .order('ts', {ascending:true});
+    if (!g5Err && g5Data && g5Data.length > 0) {
+      const mapG5 = r => ({
+        id:         r.id,
+        date:       String(r.date).substring(0,10),
+        ts:         r.ts,
+        pac_w:      parseFloat(r.pac_w)      || 0,
+        etoday_kwh: parseFloat(r.etoday_kwh) || 0,
+        etotal_kwh: parseFloat(r.etotal_kwh) || 0
+      });
+      if (growatt5min.length === 0) {
+        growatt5min = g5Data.map(mapG5);
+        saveG5(); changed = true;
+      } else {
+        const localIds = new Set(growatt5min.map(r=>r.id));
+        const fresh5   = g5Data.filter(r=>!localIds.has(r.id)).map(mapG5);
+        if (fresh5.length > 0) {
+          growatt5min = [...growatt5min,...fresh5].sort((a,b)=>a.ts.localeCompare(b.ts));
+          saveG5(); changed = true;
+          console.log('[Sync] +'+fresh5.length+' 5min entries from Supabase');
         }
       }
     }
@@ -830,6 +862,7 @@ return {
   get cfg()         { return cfg; },
   get theory()      { return theory; },
   get entries()     { return entries; },
+  get growatt5min() { return growatt5min; },
   get consumption() { return consumption; },
   get charts()      { return charts; },
   get MONTHS()      { return MONTHS; },
