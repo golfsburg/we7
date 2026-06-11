@@ -4,7 +4,8 @@ Schreibt BEIDE Tabellen:
   - pv_entries:   Tagessummen
   - growatt_5min: 5-Minuten-Werte für jeden Tag
 """
-import growattServer, os, sys, json, hashlib, calendar, time
+import growattServer, os, sys, json, hashlib
+from zoneinfo import ZoneInfo
 from datetime import date, datetime
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError
@@ -89,7 +90,8 @@ for d in range(1, days_in_month + 1):
         rows_5min = []
         for ts, pac in sorted(pac_data.items()):
             try:
-                dt = datetime.strptime(ts, "%Y-%m-%d %H:%M")
+                tz_vienna = ZoneInfo("Europe/Vienna")
+                dt = datetime.strptime(ts, "%Y-%m-%d %H:%M").replace(tzinfo=tz_vienna)
                 rows_5min.append({
                     "id":         gen_id(f"5min-{ts}"),
                     "date":       date_str,

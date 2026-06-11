@@ -5,6 +5,7 @@ Schreibt BEIDE Tabellen:
   - growatt_5min:      5-Minuten-Werte (bis zu 288 Einträge pro Tag)
 """
 import growattServer, os, sys, json, hashlib
+from zoneinfo import ZoneInfo
 from datetime import date, datetime
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError
@@ -13,7 +14,15 @@ GROWATT_USER = os.environ['GROWATT_USER']
 GROWATT_PASS = os.environ['GROWATT_PASS']
 SUPABASE_URL = os.environ['SUPABASE_URL'].rstrip('/')
 SUPABASE_KEY = os.environ['SUPABASE_KEY']
-IMPORT_DATE  = os.environ.get('IMPORT_DATE', '') or date.today().strftime('%Y-%m-%d')
+# Default: gestern (Script läuft um 23:30 MESZ = nach Tagesende)
+# Bei manuellem Start ohne Datum wird ebenfalls gestern verwendet
+_env_date = os.environ.get('IMPORT_DATE', '').strip()
+if _env_date:
+    IMPORT_DATE = _env_date
+else:
+    from datetime import timedelta
+    IMPORT_DATE = (date.today() - timedelta(days=1)).strftime('%Y-%m-%d')
+print(f"Import-Datum: {IMPORT_DATE}")
 
 def supabase_upsert(table, rows):
     url  = f"{SUPABASE_URL}/rest/v1/{table}"
@@ -90,7 +99,8 @@ print("💾 Schreibe 5-Minuten-Werte → growatt_5min...")
 rows_5min = []
 for ts, pac in sorted(pac_data.items()):
     try:
-        dt = datetime.strptime(ts, "%Y-%m-%d %H:%M")
+        tz_vienna = ZoneInfo("Europe/Vienna")
+        dt = datetime.strptime(ts, "%Y-%m-%d %H:%M").replace(tzinfo=tz_vienna)
         rows_5min.append({
             "id":         gen_id(f"5min-{ts}"),
             "date":       str(export_date),
