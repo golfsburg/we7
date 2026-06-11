@@ -449,6 +449,9 @@ function renderOverview() {
 }
 
 // ── TABLE (growatt_5min) ──────────────────────────────────
+let g5Page = 0;
+const G5_PAGE_SIZE = 200;
+
 function renderTable() {
   const from = document.getElementById('pv-tf-from')?.value;
   const to   = document.getElementById('pv-tf-to')?.value;
@@ -463,19 +466,32 @@ function renderTable() {
   else if (sort === 'kwh-desc') data.sort((a,b) => b.etoday_kwh - a.etoday_kwh);
   else data.sort((a,b) => b.pac_w - a.pac_w);
 
+  const total = data.length;
+  const pages = Math.max(1, Math.ceil(total / G5_PAGE_SIZE));
+  if (g5Page >= pages) g5Page = pages - 1;
+  const show  = data.slice(g5Page * G5_PAGE_SIZE, (g5Page + 1) * G5_PAGE_SIZE);
+
   const cnt = document.getElementById('pv-tcount');
-  if (cnt) cnt.textContent = data.length + ' Messpunkte · ' + [...new Set(data.map(r=>r.date))].length + ' Tage';
+  if (cnt) cnt.textContent = total + ' Messpunkte · ' + [...new Set(data.map(r=>r.date))].length + ' Tage';
 
   const tbody = document.getElementById('pv-tbody');
   if (!tbody) return;
+
   if (!data.length) {
     tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--tx3)">Keine Messpunkte</td></tr>';
     return;
   }
 
-  // Paginate: show max 500 rows
-  const PAGE = 500;
-  const show = data.slice(0, PAGE);
+  // Pagination controls
+  const paginationHtml = pages > 1 ? `
+    <tr><td colspan="5" style="padding:8px;text-align:center">
+      <button onclick="PV.g5GoPage(${g5Page-1})"
+        style="background:transparent;border:1px solid var(--b2);color:var(--tx2);border-radius:5px;padding:3px 10px;margin:0 4px;cursor:pointer;font-size:12px${g5Page===0?';opacity:.3;pointer-events:none':''}">‹</button>
+      <span style="font-size:11px;color:var(--tx3)">Seite ${g5Page+1} / ${pages}</span>
+      <button onclick="PV.g5GoPage(${g5Page+1})"
+        style="background:transparent;border:1px solid var(--b2);color:var(--tx2);border-radius:5px;padding:3px 10px;margin:0 4px;cursor:pointer;font-size:12px${g5Page===pages-1?';opacity:.3;pointer-events:none':''}">›</button>
+    </td></tr>` : '';
+
   tbody.innerHTML = show.map(r => {
     const dt = new Date(r.ts);
     const dateStr = `${String(dt.getDate()).padStart(2,'0')}.${String(dt.getMonth()+1).padStart(2,'0')}.${dt.getFullYear()}`;
@@ -488,11 +504,14 @@ function renderTable() {
       <td style="color:var(--ac)">${r.etoday_kwh > 0 ? r.etoday_kwh.toFixed(3)+' kWh' : '—'}</td>
       <td style="color:var(--tx3)">${r.etotal_kwh > 0 ? r.etotal_kwh.toFixed(1)+' kWh' : '—'}</td>
     </tr>`;
-  }).join('');
-  if (data.length > PAGE) {
-    tbody.innerHTML += `<tr><td colspan="5" style="text-align:center;color:var(--tx3);padding:8px;font-size:11px">
-      … ${data.length - PAGE} weitere Einträge (nur erste ${PAGE} angezeigt)</td></tr>`;
-  }
+  }).join('') + paginationHtml;
+}
+
+function g5GoPage(page) {
+  const data = APP.growatt5min;
+  const pages = Math.max(1, Math.ceil(data.length / G5_PAGE_SIZE));
+  g5Page = Math.max(0, Math.min(page, pages-1));
+  renderTable();
 }
 function toggleAll(cb) { document.querySelectorAll('.pv-cb').forEach(c => c.checked = cb.checked); }
 function deleteSelected() {
@@ -898,14 +917,27 @@ function register() {
     html: HTML,
     onEnter: async () => {
       initDefaults();
-      // growatt_5min: immer frisch von Supabase laden (nicht aus localStorage)
+      // growatt_5min: alle Daten in Batches laden (Supabase limit = 1000/Seite)
       if (APP.sbClient) {
         try {
-          const { data, error } = await APP.sbClient.from('growatt_5min')
-            .select('id,date,ts,pac_w,etoday_kwh,etotal_kwh')
-            .order('ts', {ascending:true});
-          if (!error && data && data.length > 0) {
-            APP.setGrowatt5min(data.map(r => ({
+          const BATCH = 1000;
+          let allRows = [], from = 0, done = false;
+          while (!done) {
+            const { data, error } = await APP.sbClient.from('growatt_5min')
+              .select('id,date,ts,pac_w,etoday_kwh,etotal_kwh')
+              .order('ts', {ascending:true})
+              .range(from, from + BATCH - 1);
+            if (error) throw error;
+            if (data && data.length > 0) {
+              allRows = allRows.concat(data);
+              from += BATCH;
+              if (data.length < BATCH) done = true; // letzter Batch
+            } else {
+              done = true;
+            }
+          }
+          if (allRows.length > 0) {
+            APP.setGrowatt5min(allRows.map(r => ({
               id:         r.id,
               date:       String(r.date).substring(0,10),
               ts:         r.ts,
@@ -913,7 +945,7 @@ function register() {
               etoday_kwh: parseFloat(r.etoday_kwh) || 0,
               etotal_kwh: parseFloat(r.etotal_kwh) || 0
             })));
-            console.log('[PV] ' + data.length + ' Messpunkte aus growatt_5min geladen');
+            console.log('[PV] ' + allRows.length + ' Messpunkte aus growatt_5min geladen');
           }
         } catch(e) { console.warn('g5 load:', e.message); }
       }
@@ -930,7 +962,7 @@ function register() {
 }
 
 return { tab, setEntryMode, resetFilter, renderOverview, renderProfile, resetProfile,
-         renderTable, toggleAll, deleteSelected, deleteSingle, copyEntry,
+         renderTable, g5GoPage, toggleAll, deleteSelected, deleteSingle, copyEntry,
          prefillToday, addDay, addWeek, addMonth,
          loadGrowattFile, importGrowatt, toggleManual, importManual,
          exportCsv, deleteRange, clearAll, register };
