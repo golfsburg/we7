@@ -41,7 +41,6 @@ let pages = {};        // registered page modules
 function loadStorage() {
   try { const c = localStorage.getItem('pv_cfg');  if (c) cfg         = {...cfg,...JSON.parse(c)}; } catch(e){}
   try { const e = localStorage.getItem('pv_ent');  if (e) entries     = JSON.parse(e); } catch(e){}
-  try { const g = localStorage.getItem('pv_g5');   if (g) growatt5min = JSON.parse(g); } catch(e){}
   try { const v = localStorage.getItem('pv_cv');
     if (v) {
       const raw = JSON.parse(v);
@@ -70,7 +69,7 @@ function savePv(sync=true) {
   if (sync) scheduleSync();
 }
 function saveG5(sync=false) {
-  try { localStorage.setItem('pv_g5', JSON.stringify(growatt5min)); } catch(e){}
+  // growatt5min intentionally NOT cached in localStorage — too large, always load from Supabase
 }
 function saveCv(sync=true) {
   try { localStorage.setItem('pv_cv', JSON.stringify(consumption)); } catch(e){}

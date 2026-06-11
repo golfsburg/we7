@@ -589,9 +589,14 @@ function prefillNow() {
 function editEntry(id) {
   const r = readings.find(x => x.id === id);
   if (!r) return;
-  // Scroll to form and fill fields
-  const tab = document.getElementById('cv2-tab-records');
-  if (tab) tab.click();
+  // Navigate to records tab → entry subtab
+  const mainTabBtn = [...document.querySelectorAll('#cv2-tabs .mtab')]
+    .find(b => b.getAttribute('onclick')?.includes("'records'"));
+  if (mainTabBtn) mainTabBtn.click();
+  // Then switch to entry subtab
+  const entryTabBtn = [...document.querySelectorAll('.mtab')]
+    .find(b => b.getAttribute('onclick')?.includes("'entry'") && b.closest('#cv2-t-records'));
+  if (entryTabBtn) entryTabBtn.click();
   const d  = new Date(r.reading_date);
   const local = new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,16);
   const g = id => document.getElementById(id);
@@ -624,8 +629,12 @@ function editEntry(id) {
 function copyEntry(id) {
   const r = readings.find(x => x.id === id);
   if (!r) return;
-  const tab = document.getElementById('cv2-tab-records');
-  if (tab) tab.click();
+  const mainTabBtn = [...document.querySelectorAll('#cv2-tabs .mtab')]
+    .find(b => b.getAttribute('onclick')?.includes("'records'"));
+  if (mainTabBtn) mainTabBtn.click();
+  const entryTabBtn = [...document.querySelectorAll('.mtab')]
+    .find(b => b.getAttribute('onclick')?.includes("'entry'") && b.closest('#cv2-t-records'));
+  if (entryTabBtn) entryTabBtn.click();
   const g = id => document.getElementById(id);
   // Prefill form with same values but new date = now
   prefillNow();

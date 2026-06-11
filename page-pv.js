@@ -898,8 +898,8 @@ function register() {
     html: HTML,
     onEnter: async () => {
       initDefaults();
-      // Sicherstellen dass growatt_5min Daten geladen sind
-      if (APP.growatt5min.length === 0 && APP.sbClient) {
+      // growatt_5min: immer frisch von Supabase laden (nicht aus localStorage)
+      if (APP.sbClient) {
         try {
           const { data, error } = await APP.sbClient.from('growatt_5min')
             .select('id,date,ts,pac_w,etoday_kwh,etotal_kwh')
@@ -913,6 +913,7 @@ function register() {
               etoday_kwh: parseFloat(r.etoday_kwh) || 0,
               etotal_kwh: parseFloat(r.etotal_kwh) || 0
             })));
+            console.log('[PV] ' + data.length + ' Messpunkte aus growatt_5min geladen');
           }
         } catch(e) { console.warn('g5 load:', e.message); }
       }
