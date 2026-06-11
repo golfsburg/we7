@@ -395,7 +395,7 @@ function renderOverview() {
   set('pv-peak',  peak || '—');
   set('pv-count', data.length + ' Einträge');
 
-  const granLabel = {15min:'Tageswerte',day:'Tageswerte',month:'Monatswerte',year:'Jahreswerte'}[gran];
+  const granLabel = {'15min':'Tageswerte','day':'Tageswerte','month':'Monatswerte','year':'Jahreswerte'}[gran];
   set('pv-overview-sub', granLabel);
 
   APP.destroyChart('pv-ov');
