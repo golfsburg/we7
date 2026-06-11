@@ -50,6 +50,9 @@ body{background:var(--bg);color:var(--tx);font-family:var(--fm);min-height:100vh
 .nav-btn.active{background:rgba(245,200,66,.12);color:var(--ac);font-weight:500}
 .nav-btn .ni{font-size:16px;width:20px;text-align:center;opacity:.9}
 .nav-divider{height:1px;background:var(--b1);margin:8px 12px}
+.nav-group{margin-bottom:4px}
+.nav-group-label{font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--tx3);
+  font-weight:600;padding:10px 16px 4px;display:block}
 .sb-bottom{margin-top:auto;padding:14px 18px;border-top:1px solid var(--b1)}
 .sb-kpi{margin-bottom:10px}
 .sb-kpi-l{font-size:9px;text-transform:uppercase;letter-spacing:.8px;color:var(--tx3)}
@@ -229,13 +232,25 @@ tr:last-child td{border-bottom:none} tr:hover td{background:rgba(255,255,255,.02
       <div class="logo-sub">Pinggau · 800W · SW 35°</div>
     </div>
     <div class="nav">
-      <button class="nav-btn active" onclick="APP.nav('dashboard')"><span class="ni">◈</span>Dashboard</button>
-      <button class="nav-btn" onclick="APP.nav('pv')"><span class="ni">☀</span>PV Ertrag</button>
-      <button class="nav-btn" onclick="APP.nav('simulation')"><span class="ni">🔬</span>Simulation</button>
-      <button class="nav-btn" onclick="APP.nav('consumption')"><span class="ni">⚡</span>Strombilanz</button>
-      <button class="nav-btn" onclick="APP.nav('consumption2')"><span class="ni">📊</span>Verbrauchsbilanz</button>
+      <!-- PV Bilanz -->
+      <div class="nav-group">
+        <span class="nav-group-label">PV Bilanz</span>
+        <button class="nav-btn active" onclick="APP.nav('dashboard')"><span class="ni">◈</span>Dashboard</button>
+        <button class="nav-btn" onclick="APP.nav('pv')"><span class="ni">☀</span>PV Ertrag</button>
+        <button class="nav-btn" onclick="APP.nav('simulation')"><span class="ni">🔬</span>Simulation</button>
+        <button class="nav-btn" onclick="APP.nav('consumption')"><span class="ni">⚡</span>Stromverbrauch</button>
+      </div>
       <div class="nav-divider"></div>
-      <button class="nav-btn" onclick="APP.nav('settings')"><span class="ni">⚙</span>Einstellungen</button>
+      <!-- Verbrauchsbilanz -->
+      <div class="nav-group">
+        <span class="nav-group-label">Verbrauchsbilanz</span>
+        <button class="nav-btn" onclick="APP.nav('consumption2')"><span class="ni">📊</span>Verbrauchsbilanz</button>
+      </div>
+      <div class="nav-divider"></div>
+      <!-- Einstellungen -->
+      <div class="nav-group">
+        <button class="nav-btn" onclick="APP.nav('settings')"><span class="ni">⚙</span>Einstellungen</button>
+      </div>
     </div>
     <div class="sb-bottom">
       <div class="sb-kpi">
