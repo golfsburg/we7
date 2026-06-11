@@ -12,6 +12,14 @@ const HTML = `
 
 <div id="pv-timeline"></div>
 
+<div class="gran-bar">
+  <label class="gran-lbl">Granularität</label>
+  <label class="gran-opt"><input type="radio" name="pv-gran" value="15min" onchange="PV.renderOverview()"><span>15 Min</span></label>
+  <label class="gran-opt"><input type="radio" name="pv-gran" value="day" onchange="PV.renderOverview()"><span>Tag</span></label>
+  <label class="gran-opt active"><input type="radio" name="pv-gran" value="month" checked onchange="PV.renderOverview()"><span>Monat</span></label>
+  <label class="gran-opt"><input type="radio" name="pv-gran" value="year" onchange="PV.renderOverview()"><span>Jahr</span></label>
+</div>
+
 <div class="mtabs" id="pv-tabs">
   <button class="mtab active"  onclick="PV.tab('overview',this)">Übersicht</button>
   <button class="mtab"         onclick="PV.tab('profile',this)">Ertragsprofil</button>
@@ -346,10 +354,62 @@ function resetFilter() {
   renderOverview();
 }
 function renderOverview() {
-  const gran = 'month'; // default, can be extended later
+  const gran  = document.querySelector('input[name="pv-gran"]:checked')?.value || 'month';
   const range = APP.FilterBar.getRange('pv-timeline');
   const from  = range.from;
   const to    = range.to;
+
+  let data = APP.entries.filter(e => (!from||e.date>=from)&&(!to||e.date<=to));
+
+  let labels=[], kwArr=[], pkArr=[], thArr=[];
+
+  if (gran === '15min' || gran === 'day') {
+    // Day-level (PV has no 15min data, show daily)
+    const days = [...new Set(data.map(e=>e.date))].sort();
+    labels = days.map(d=>{const dt=new Date(d+'T00:00:00');return `${String(dt.getDate()).padStart(2,'0')}.${String(dt.getMonth()+1).padStart(2,'0')}`;});
+    kwArr  = days.map(d=>+data.filter(e=>e.type==='day'&&e.date===d).reduce((s,e)=>s+e.kwh,0).toFixed(2));
+    pkArr  = days.map(d=>data.filter(e=>e.date===d).reduce((mx,e)=>Math.max(mx,e.peak||0),0));
+    thArr  = days.map(d=>+(APP.theory[new Date(d+'T00:00:00').getMonth()]/30).toFixed(2));
+  } else if (gran === 'month') {
+    const months = [...new Set(data.map(e=>e.date.substring(0,7)))].sort();
+    labels = months.map(m=>APP.MONTHS[new Date(m+'-01').getMonth()]+' '+m.substring(2,4));
+    kwArr  = months.map(m=>{
+      const me=APP.entries.find(e=>e.type==='month'&&e.date===m+'-01');
+      if(me) return +me.kwh.toFixed(2);
+      return +data.filter(e=>e.date.startsWith(m)).reduce((s,e)=>s+e.kwh,0).toFixed(2);
+    });
+    pkArr  = months.map(m=>data.filter(e=>e.date.startsWith(m)).reduce((mx,e)=>Math.max(mx,e.peak||0),0));
+    thArr  = months.map(m=>APP.theory[new Date(m+'-01').getMonth()]||0);
+  } else if (gran === 'year') {
+    const years = [...new Set(data.map(e=>e.date.substring(0,4)))].sort();
+    labels = years;
+    kwArr  = years.map(y=>+data.filter(e=>e.date.startsWith(y)).reduce((s,e)=>s+e.kwh,0).toFixed(1));
+    pkArr  = years.map(y=>data.filter(e=>e.date.startsWith(y)).reduce((mx,e)=>Math.max(mx,e.peak||0),0));
+    thArr  = years.map(()=>+APP.theory.reduce((s,v)=>s+v,0).toFixed(0));
+  }
+
+  const total = kwArr.reduce((s,v)=>s+v,0);
+  const peak  = pkArr.reduce((mx,v)=>Math.max(mx,v),0);
+  const set   = (id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+  set('pv-total', total.toFixed(1));
+  set('pv-peak',  peak || '—');
+  set('pv-count', data.length + ' Einträge');
+
+  const granLabel = {15min:'Tageswerte',day:'Tageswerte',month:'Monatswerte',year:'Jahreswerte'}[gran];
+  set('pv-overview-sub', granLabel);
+
+  APP.destroyChart('pv-ov');
+  APP.charts['pv-ov'] = new Chart(document.getElementById('pv-c-overview'), {
+    data:{ labels, datasets:[
+      { type:'bar',  label:'PV Ertrag', data:kwArr, backgroundColor:'rgba(245,200,66,.8)', borderRadius:3, order:2 },
+      { type:'line', label:'Theorie',   data:thArr, borderColor:'rgba(255,180,40,.5)',
+        backgroundColor:'rgba(255,180,40,.07)', fill:true, tension:0.4, pointRadius:2, borderWidth:1.5, order:1 }
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+      scales:{x:{ticks:{color:APP.TC,font:{size:10}},grid:{color:APP.GC}},
+               y:{ticks:{color:APP.TC,font:{size:10}},grid:{color:APP.GC}}} }
+  });
+}
   let filtered = APP.entries.filter(e => (!from || e.date >= from) && (!to || e.date <= to))
     .sort((a,b) => a.date.localeCompare(b.date));
 

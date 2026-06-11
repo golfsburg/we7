@@ -12,6 +12,14 @@ const HTML = `
 <!-- Interaktive Zeitachse + Filter -->
 <div id="db-timeline"></div>
 
+<!-- Granularität -->
+<div class="gran-bar" id="db-gran-bar">
+  <label class="gran-lbl">Granularität</label>
+  <label class="gran-opt"><input type="radio" name="db-gran" value="15min" onchange="DASH.render()"><span>15 Min</span></label>
+  <label class="gran-opt"><input type="radio" name="db-gran" value="day" onchange="DASH.render()"><span>Tag</span></label>
+  <label class="gran-opt active"><input type="radio" name="db-gran" value="month" checked onchange="DASH.render()"><span>Monat</span></label>
+  <label class="gran-opt"><input type="radio" name="db-gran" value="year" onchange="DASH.render()"><span>Jahr</span></label>
+</div>
 <!-- KPI row -->
 <div class="metrics">
   <div class="mc hi"><div class="mc-l">PV Ertrag</div><div><span class="mc-v" id="db-pv">—</span><span class="mc-u">kWh</span></div><div class="mc-d" id="db-pv2"></div></div>
@@ -34,7 +42,7 @@ const HTML = `
 <!-- Overlay chart -->
 <div class="cc full" style="margin-bottom:14px">
   <div class="cc-title">Erzeugung · Verbrauch · Theoretische Einstrahlung</div>
-  <div class="cc-sub">Überlagerte Darstellung — alle Daten im gewählten Zeitraum</div>
+  <div class="cc-sub">Überlagerte Darstellung — <span id="db-overlay-sub">Monatswerte</span></div>
   <div class="leg">
     <div class="li"><span class="ld" style="background:#f5c842"></span>PV Ertrag</div>
     <div class="li"><span class="ld" style="background:rgba(91,156,246,.7)"></span>Netzbezug</div>
@@ -82,6 +90,7 @@ function render() {
 function renderCore(from, to) {
   const entries = APP.entries;
   const consumption = APP.consumption;
+  const gran = document.querySelector('input[name="db-gran"]:checked')?.value || 'month';
 
   const labelEl = document.getElementById('db-range-label');
   if (labelEl) labelEl.style.display = 'none';
@@ -119,7 +128,7 @@ function renderCore(from, to) {
   set('db-pr2', pr>=80?'✓ Gut':pr>=60?'~ Mittel':pr>0?'⚠ Niedrig':'—');
 
   drawFlow(pvTotal, gridTotal, direct, Math.max(0, pvTotal - direct));
-  drawOverlay(from, to);
+  drawOverlay(from, to, gran);
   drawAutarkyLine();
   drawDonut(gridTotal, direct, Math.max(0, pvTotal - direct));
   drawMonthly();
@@ -180,37 +189,87 @@ function drawFlow(pv, grid, direct, feed) {
 }
 
 // ── OVERLAY CHART ────────────────────────────────────────
-function drawOverlay(from, to) {
+function drawOverlay(from, to, gran='month') {
   APP.destroyChart('db-ov');
   const entries = APP.entries, consumption = APP.consumption;
-  const allM = [...new Set([
-    ...entries.map(e=>e.date.substring(0,7)),
-    ...consumption.map(c=>c.date.substring(0,7))
-  ])].sort();
-  if (!allM.length) return;
 
-  const labels = allM.map(m => APP.MONTHS[new Date(m+'-01').getMonth()] + ' ' + m.substring(2,4));
-  const pvArr = allM.map(m => {
-    const me = entries.find(e=>e.type==='month'&&e.date===m+'-01');
-    if (me) return +me.kwh.toFixed(2);
-    return +entries.filter(e=>e.type==='day'&&e.date.startsWith(m)).reduce((s,e)=>s+e.kwh,0).toFixed(2);
-  });
-  const thArr    = allM.map(m => APP.theory[new Date(m+'-01').getMonth()] || 0);
-  const gridArr  = allM.map(m => +consumption.filter(c=>c.date.startsWith(m)&&c.direction==='grid').reduce((s,c)=>s+c.kwh,0).toFixed(2));
-  const directArr= allM.map((_,i) => +APP.calcDirect(pvArr[i], gridArr[i]).toFixed(2));
+  // Filter by date range
+  const pvFiltered = entries.filter(e => (!from||e.date>=from)&&(!to||e.date<=to));
+  const cvFiltered = consumption.filter(c => c.direction==='grid'&&(!from||c.date>=from)&&(!to||c.date<=to));
+
+  let labels=[], pvArr=[], gridArr=[], thArr=[];
+
+  if (gran === '15min') {
+    // 15-minute smart meter values — only CV data
+    const sorted = [...cvFiltered].sort((a,b)=>a.date!==b.date?a.date.localeCompare(b.date):a.hour-b.hour||a.minute-b.minute);
+    labels   = sorted.map(c=>`${c.date} ${String(c.hour).padStart(2,'0')}:${String(c.minute).padStart(2,'0')}`);
+    gridArr  = sorted.map(c=>+c.kwh.toFixed(4));
+    pvArr    = sorted.map(()=>0);
+    thArr    = [];
+  } else if (gran === 'day') {
+    // Daily values
+    const allDays = [...new Set([
+      ...pvFiltered.map(e=>e.date),
+      ...cvFiltered.map(c=>c.date)
+    ])].sort();
+    labels   = allDays.map(d => {
+      const dt = new Date(d+'T00:00:00');
+      return `${String(dt.getDate()).padStart(2,'0')}.${String(dt.getMonth()+1).padStart(2,'0')}`;
+    });
+    pvArr    = allDays.map(d => +pvFiltered.filter(e=>e.date===d).reduce((s,e)=>s+e.kwh,0).toFixed(2));
+    gridArr  = allDays.map(d => +cvFiltered.filter(c=>c.date===d).reduce((s,c)=>s+c.kwh,0).toFixed(2));
+    thArr    = allDays.map(d => +(APP.theory[new Date(d+'T00:00:00').getMonth()] / 30).toFixed(2));
+  } else if (gran === 'month') {
+    // Monthly values (default)
+    const allM = [...new Set([
+      ...pvFiltered.map(e=>e.date.substring(0,7)),
+      ...cvFiltered.map(c=>c.date.substring(0,7))
+    ])].sort();
+    labels   = allM.map(m=>APP.MONTHS[new Date(m+'-01').getMonth()]+' '+m.substring(2,4));
+    pvArr    = allM.map(m=>{
+      const me=entries.find(e=>e.type==='month'&&e.date===m+'-01');
+      if (me) return +me.kwh.toFixed(2);
+      return +pvFiltered.filter(e=>e.date.startsWith(m)).reduce((s,e)=>s+e.kwh,0).toFixed(2);
+    });
+    gridArr  = allM.map(m=>+cvFiltered.filter(c=>c.date.startsWith(m)).reduce((s,c)=>s+c.kwh,0).toFixed(2));
+    thArr    = allM.map(m=>APP.theory[new Date(m+'-01').getMonth()]||0);
+  } else if (gran === 'year') {
+    // Yearly values
+    const allY = [...new Set([
+      ...pvFiltered.map(e=>e.date.substring(0,4)),
+      ...cvFiltered.map(c=>c.date.substring(0,4))
+    ])].sort();
+    labels   = allY;
+    pvArr    = allY.map(y=>+pvFiltered.filter(e=>e.date.startsWith(y)).reduce((s,e)=>s+e.kwh,0).toFixed(1));
+    gridArr  = allY.map(y=>+cvFiltered.filter(c=>c.date.startsWith(y)).reduce((s,c)=>s+c.kwh,0).toFixed(1));
+    thArr    = allY.map(y=>+APP.theory.reduce((s,v)=>s+v,0).toFixed(0));
+  }
+
+  if (!labels.length) return;
+
+  const directArr = pvArr.map((_,i) => +APP.calcDirect(pvArr[i], gridArr[i]).toFixed(2));
+  const datasets = [
+    { type:'bar',  label:'PV Ertrag',  data:pvArr,    backgroundColor:'rgba(245,200,66,.8)',  borderRadius:2, order:2 },
+    { type:'bar',  label:'Netzbezug',  data:gridArr,  backgroundColor:'rgba(91,156,246,.65)', borderRadius:2, order:3 },
+    { type:'bar',  label:'PV direkt',  data:directArr,backgroundColor:'rgba(63,207,142,.65)', borderRadius:2, order:4 }
+  ];
+  if (gran !== '15min' && thArr.length) {
+    datasets.push({ type:'line', label:'Theor.', data:thArr, borderColor:'rgba(255,180,40,.6)',
+      backgroundColor:'rgba(255,180,40,.08)', fill:true, tension:0.4, pointRadius:2, borderWidth:1.5, order:1 });
+  }
+
+  const titleMap = { '15min':'15-Minuten-Werte', day:'Tageswerte', month:'Monatswerte', year:'Jahreswerte' };
+  const subEl = document.getElementById('db-overlay-sub');
+  if (subEl) subEl.textContent = titleMap[gran] || '';
 
   APP.charts['db-ov'] = new Chart(document.getElementById('db-overlay'), {
-    data: { labels, datasets: [
-      { type:'bar',  label:'PV Ertrag',   data:pvArr,    backgroundColor:'rgba(245,200,66,.8)',  borderRadius:3, order:2 },
-      { type:'bar',  label:'Netzbezug',   data:gridArr,  backgroundColor:'rgba(91,156,246,.65)', borderRadius:3, order:3 },
-      { type:'bar',  label:'PV direkt',   data:directArr,backgroundColor:'rgba(63,207,142,.65)', borderRadius:3, order:4 },
-      { type:'line', label:'Theor.',      data:thArr,    borderColor:'rgba(255,180,40,.6)',
-        backgroundColor:'rgba(255,180,40,.08)', fill:true, tension:0.4, pointRadius:2, borderWidth:1.5, order:1 }
-    ]},
+    data: { labels, datasets },
     options:{ responsive:true, maintainAspectRatio:false,
       plugins:{ legend:{ display:false } },
-      scales:{ x:{ticks:{color:APP.TC,font:{size:10}},grid:{color:APP.GC}},
-               y:{ticks:{color:APP.TC,font:{size:10}},grid:{color:APP.GC}} } }
+      scales:{
+        x:{ ticks:{color:APP.TC,font:{size:gran==='15min'?8:10},maxRotation:gran==='15min'?45:0,maxTicksLimit:gran==='15min'?24:undefined}, grid:{color:APP.GC} },
+        y:{ ticks:{color:APP.TC,font:{size:10}}, grid:{color:APP.GC} }
+      } }
   });
 }
 

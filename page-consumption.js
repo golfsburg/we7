@@ -14,6 +14,14 @@ const HTML = `
 
 <div id="cv-timeline"></div>
 
+<div class="gran-bar">
+  <label class="gran-lbl">Granularität</label>
+  <label class="gran-opt"><input type="radio" name="cv-gran" value="15min" onchange="CV.renderOverview()"><span>15 Min</span></label>
+  <label class="gran-opt"><input type="radio" name="cv-gran" value="day" onchange="CV.renderOverview()"><span>Tag</span></label>
+  <label class="gran-opt active"><input type="radio" name="cv-gran" value="month" checked onchange="CV.renderOverview()"><span>Monat</span></label>
+  <label class="gran-opt"><input type="radio" name="cv-gran" value="year" onchange="CV.renderOverview()"><span>Jahr</span></label>
+</div>
+
 <div class="mtabs" id="cv-tabs">
   <button class="mtab active" onclick="CV.tab('overview',this)">Übersicht</button>
   <button class="mtab"        onclick="CV.tab('profile',this)">Lastprofil</button>
@@ -206,7 +214,7 @@ function resetFilter() {
 
 // ── OVERVIEW ─────────────────────────────────────────────
 function renderOverview() {
-  const gran  = 'month';
+  const gran  = document.querySelector('input[name="cv-gran"]:checked')?.value || 'month';
   const range = APP.FilterBar.getRange('cv-timeline');
   const from  = range.from;
   const to    = range.to;
@@ -217,21 +225,32 @@ function renderOverview() {
     (!to   || c.date <= to)
   );
 
-  // Aggregate into buckets
+  // Aggregate into buckets by granularity
   const map = {};
   cv.forEach(c => {
-    const key = gran === 'day' ? c.date : c.date.substring(0, 7);
+    let key;
+    if (gran === '15min')     key = `${c.date} ${String(c.hour).padStart(2,'0')}:${String(c.minute).padStart(2,'0')}`;
+    else if (gran === 'day')  key = c.date;
+    else if (gran === 'year') key = c.date.substring(0, 4);
+    else                      key = c.date.substring(0, 7); // month
     if (!map[key]) map[key] = 0;
     map[key] += c.kwh;
   });
   const bk      = Object.entries(map).sort((a,b) => a[0].localeCompare(b[0]));
-  const labels  = bk.map(([k]) => k);
-  const gridArr = bk.map(([,v]) => +v.toFixed(3));
+  const labels  = bk.map(([k]) => {
+    if (gran === '15min') return k.substring(11); // just HH:MM
+    if (gran === 'day')   { const dt=new Date(k+'T00:00:00'); return `${String(dt.getDate()).padStart(2,'0')}.${String(dt.getMonth()+1).padStart(2,'0')}`; }
+    if (gran === 'year')  return k;
+    return APP.MONTHS[new Date(k+'-01').getMonth()] + ' ' + k.substring(2,4);
+  });
+  const gridArr = bk.map(([,v]) => +v.toFixed(gran==='15min'?4:3));
 
   const gridTotal = gridArr.reduce((a,b) => a+b, 0);
   const avgDay    = bk.length > 0 ? gridTotal / bk.length : 0;
   const cost      = gridTotal * APP.cfg.price;
-  const granLabel = gran === 'day' ? 'Tage' : 'Monate';
+  const granLabelMap = {'15min':'15-Min-Werte','day':'Tageswerte','month':'Monatswerte','year':'Jahreswerte'};
+  const granCountMap = {'15min':'Intervalle','day':'Tage','month':'Monate','year':'Jahre'};
+  const granLabel = granLabelMap[gran] || 'Monatswerte';
 
   set('cv-m-grid',   gridTotal.toFixed(2));
   set('cv-m-grid2',  cv.length + ' Messpunkte');
@@ -239,8 +258,8 @@ function renderOverview() {
   set('cv-m-cost',   cost.toFixed(2));
   set('cv-m-cost2',  `@ ${APP.cfg.price} €/kWh`);
   set('cv-m-pts',    cv.length.toLocaleString('de'));
-  set('cv-chart-title', gran === 'day' ? 'Täglicher Netzbezug' : 'Monatlicher Netzbezug');
-  set('cv-chart-sub', bk.length + ' ' + granLabel);
+  set('cv-chart-title', granLabel + ' — Netzbezug');
+  set('cv-chart-sub', bk.length + ' ' + (granCountMap[gran]||'Einträge'));
 
   // Single bar chart — pure consumption
   APP.destroyChart('cv-m');
