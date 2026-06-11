@@ -4,7 +4,7 @@ Schreibt BEIDE Tabellen:
   - pv_entries:   Tagessummen
   - growatt_5min: 5-Minuten-Werte für jeden Tag
 """
-import growattServer, os, sys, json, hashlib
+import growattServer, os, sys, json, hashlib, calendar, time
 from zoneinfo import ZoneInfo
 from datetime import date, datetime
 from urllib.request import Request, urlopen
