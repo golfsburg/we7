@@ -410,65 +410,6 @@ function renderOverview() {
                y:{ticks:{color:APP.TC,font:{size:10}},grid:{color:APP.GC}}} }
   });
 }
-  let filtered = APP.entries.filter(e => (!from || e.date >= from) && (!to || e.date <= to))
-    .sort((a,b) => a.date.localeCompare(b.date));
-
-  const map = {};
-  filtered.forEach(e => {
-    let key;
-    const d = new Date(e.date);
-    if (gran==='day') key = e.date;
-    else if (gran==='week') { const w = APP.getWeekNum(d); key = d.getFullYear() + '-W' + String(w).padStart(2,'0'); }
-    else key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
-    if (!map[key]) map[key] = { key, kwh:0, theory:0, count:0 };
-    map[key].kwh += e.kwh; map[key].theory += APP.getTheory(e); map[key].count++;
-  });
-  const bk = Object.values(map).sort((a,b) => a.key.localeCompare(b.key));
-  const labels  = bk.map(b => b.key);
-  const actArr  = bk.map(b => +b.kwh.toFixed(2));
-  const thArr   = bk.map(b => +b.theory.toFixed(2));
-  const prArr   = bk.map(b => b.theory > 0 ? Math.round(b.kwh/b.theory*100) : 0);
-  const cumArr  = actArr.reduce((acc,v,i) => [...acc, (acc[i-1]||0)+v], []);
-  const totAct  = actArr.reduce((a,b) => a+b, 0);
-  const totTh   = thArr.reduce((a,b) => a+b, 0);
-  const avgPr   = totTh > 0 ? Math.round(totAct/totTh*100) : 0;
-  const totEur  = filtered.reduce((s,e) => s + APP.calcEuro(e), 0);
-  const dE      = filtered.filter(e => e.type==='day');
-  const avgDay  = dE.length > 0 ? dE.reduce((s,e) => s+e.kwh, 0) / dE.length : 0;
-
-  const set = (id, v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
-  set('pv-m-total', totAct.toFixed(2)); set('pv-m-total2', filtered.length + ' Einträge');
-  set('pv-m-th', totTh.toFixed(2));    set('pv-m-pr', avgPr||'—');
-  set('pv-m-eur', totEur.toFixed(2));  set('pv-m-avg', avgDay>0?avgDay.toFixed(2):'—');
-  set('pv-m-cnt', filtered.length);
-  set('pv-m-pr2', avgPr>=80?'✓ Gut':avgPr>=60?'~ Mittel':avgPr>0?'⚠ Niedrig':'—');
-  set('pv-chart-sub', bk.length + ' ' + {day:'Tage',week:'Wochen',month:'Monate'}[gran]);
-  const el = document.getElementById('pv-m-pr2');
-  if (el) el.className = 'mc-d' + (avgPr>=80?' pos':avgPr>=60?'':' neg');
-
-  ['pv-m','pv-pr','pv-cu'].forEach(id => APP.destroyChart(id));
-  const opts = { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
-    scales:{ x:{ticks:{color:APP.TC,font:{size:10}},grid:{color:APP.GC}},
-             y:{ticks:{color:APP.TC,font:{size:10}},grid:{color:APP.GC}} } };
-
-  APP.charts['pv-m'] = new Chart(document.getElementById('pv-c-main'), {
-    type:'bar', data:{ labels, datasets:[
-      { label:'Tatsächlich', data:actArr, backgroundColor:'rgba(245,200,66,.85)', borderRadius:3 },
-      { label:'Theoretisch', data:thArr,  backgroundColor:'rgba(58,61,69,.8)',    borderRadius:3 }
-    ]}, options: opts });
-
-  APP.charts['pv-pr'] = new Chart(document.getElementById('pv-c-pr'), {
-    type:'line', data:{ labels, datasets:[{ data:prArr, borderColor:'#3fcf8e',
-      backgroundColor:'rgba(63,207,142,.1)', fill:true, tension:0.35, pointRadius:3,
-      borderWidth:1.5, pointBackgroundColor:'#3fcf8e' }] },
-    options:{ ...opts, scales:{ x:{ticks:{color:APP.TC,font:{size:10}},grid:{color:APP.GC}},
-      y:{ticks:{color:APP.TC,font:{size:10},callback:v=>v+'%'},grid:{color:APP.GC}} } } });
-
-  APP.charts['pv-cu'] = new Chart(document.getElementById('pv-c-cum'), {
-    type:'line', data:{ labels, datasets:[{ data:cumArr, borderColor:'#5b9cf6',
-      backgroundColor:'rgba(91,156,246,.08)', fill:true, tension:0.3, pointRadius:2, borderWidth:1.5 }] },
-    options: opts });
-}
 
 // ── TABLE ────────────────────────────────────────────────
 function renderTable() {
