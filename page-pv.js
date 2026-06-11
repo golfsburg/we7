@@ -493,7 +493,13 @@ function renderTable() {
     </td></tr>` : '';
 
   tbody.innerHTML = show.map(r => {
-    const dt = new Date(r.ts);
+    // ts kann als UTC (mit Z/+00:00) oder naive (ohne TZ) gespeichert sein.
+    // Naive Timestamps von Growatt sind lokale Österreich-Zeit → +02:00 hinzufügen
+    let tsStr = r.ts;
+    if (tsStr && !tsStr.includes('+') && !tsStr.endsWith('Z')) {
+      tsStr = tsStr.replace(' ', 'T') + '+02:00'; // naive → MESZ
+    }
+    const dt = new Date(tsStr);
     const dateStr = `${String(dt.getDate()).padStart(2,'0')}.${String(dt.getMonth()+1).padStart(2,'0')}.${dt.getFullYear()}`;
     const timeStr = `${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
     const pacColor = r.pac_w > 600 ? 'var(--gr)' : r.pac_w > 200 ? 'var(--ac)' : 'var(--tx2)';
