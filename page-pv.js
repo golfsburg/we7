@@ -61,45 +61,24 @@ const HTML = `
 <div id="pv-t-overview">
   <div id="pv-overview-timeline"></div>
   <div class="metrics">
-    <div class="mc hi"><div class="mc-l">Ertrag</div><div><span class="mc-v" id="pv-m-total">—</span><span class="mc-u">kWh</span></div><div class="mc-d" id="pv-m-total2"></div></div>
-    <div class="mc"><div class="mc-l">Theoretisch</div><div><span class="mc-v" id="pv-m-th">—</span><span class="mc-u">kWh</span></div></div>
-    <div class="mc"><div class="mc-l">Performance Ratio</div><div><span class="mc-v" id="pv-m-pr">—</span><span class="mc-u">%</span></div><div class="mc-d" id="pv-m-pr2"></div></div>
-    <div class="mc gr"><div class="mc-l">Ertrag €</div><div><span class="mc-v" id="pv-m-eur">—</span><span class="mc-u">€</span></div></div>
-    <div class="mc"><div class="mc-l">Ø pro Tag</div><div><span class="mc-v" id="pv-m-avg">—</span><span class="mc-u">kWh</span></div></div>
-    <div class="mc"><div class="mc-l">Einträge</div><div><span class="mc-v" id="pv-m-cnt">—</span></div></div>
+    <div class="mc hi"><div class="mc-l">Ertrag (5min)</div><div><span class="mc-v" id="pv-total">—</span><span class="mc-u">kWh</span></div><div class="mc-d" id="pv-overview-sub">—</div></div>
+    <div class="mc"><div class="mc-l">Peak Pac</div><div><span class="mc-v" id="pv-peak">—</span></div></div>
+    <div class="mc"><div class="mc-l">Messpunkte</div><div><span class="mc-v" id="pv-count" style="font-size:13px">—</span></div></div>
   </div>
-  <div class="cgrid">
-    <div class="cc full">
-      <div class="cc-title">PV Ertrag vs. Theoretisch</div>
-      <div class="cc-sub" id="pv-chart-sub">kWh</div>
-      <div class="leg">
-        <div class="li"><span class="ld" style="background:#f5c842"></span>Tatsächlich</div>
-        <div class="li"><span class="ld" style="background:#333640"></span>Theoretisch</div>
-      </div>
-      <div class="cw" style="height:230px"><canvas id="pv-c-main"></canvas></div>
+  <div class="cc full" style="margin-bottom:14px">
+    <div class="cc-title">PV Ertrag</div>
+    <div class="cc-sub" id="pv-overview-sub2">Monatswerte aus growatt_5min</div>
+    <div class="leg">
+      <div class="li"><span class="ld" style="background:#f5c842"></span>PV Ertrag</div>
+      <div class="li"><span class="ld" style="background:rgba(255,180,40,.3);border:1px solid rgba(255,180,40,.6)"></span>Theorie</div>
     </div>
-    <div class="cc">
-      <div class="cc-title">Performance Ratio</div>
-      <div class="cc-sub">% Effizienz</div>
-      <div class="cw" style="height:185px"><canvas id="pv-c-pr"></canvas></div>
-    </div>
-    <div class="cc">
-      <div class="cc-title">Kumulierter Ertrag</div>
-      <div class="cc-sub">kWh aufgelaufen</div>
-      <div class="cw" style="height:185px"><canvas id="pv-c-cum"></canvas></div>
-    </div>
+    <div class="cw" style="height:260px"><canvas id="pv-c-overview"></canvas></div>
   </div>
 </div>
 
 <!-- ── DATEN ── -->
 <div id="pv-t-data" style="display:none">
   <div class="fbar">
-    <label>Typ</label>
-    <select id="pv-tf-type" onchange="PV.renderTable()">
-      <option value="all">Alle</option><option value="day">Tag</option>
-      <option value="week">Woche</option><option value="month">Monat</option>
-    </select>
-    <span class="fsep">|</span>
     <label>Von</label><input type="date" id="pv-tf-from" onchange="PV.renderTable()">
     <label>Bis</label><input type="date" id="pv-tf-to"   onchange="PV.renderTable()">
     <label>Sort</label>
@@ -107,19 +86,15 @@ const HTML = `
       <option value="date-desc">Datum ↓</option>
       <option value="date-asc">Datum ↑</option>
       <option value="kwh-desc">kWh ↓</option>
-      <option value="pr-desc">PR% ↓</option>
+      <option value="pac-desc">Pac ↓</option>
     </select>
-    <button class="btn-s btn-d" onclick="PV.deleteSelected()">Auswahl löschen</button>
   </div>
   <div class="tcard">
     <div class="thead"><div class="thead-t" id="pv-tcount">—</div></div>
     <div style="overflow-x:auto">
       <table>
         <thead><tr>
-          <th><input type="checkbox" id="pv-cb-all" onchange="PV.toggleAll(this)"></th>
-          <th>Datum</th><th>Typ</th><th>Ertrag</th><th>Theor.</th><th>PR%</th>
-          <th>Peak W</th><th>Std</th><th>Wetter</th><th>€</th><th>Notiz</th>
-          <th style="text-align:center">Aktionen</th>
+          <th>Datum</th><th>Zeit</th><th>Pac (W)</th><th>Ertrag heute (kWh)</th><th>Gesamt (kWh)</th>
         </tr></thead>
         <tbody id="pv-tbody"></tbody>
       </table>
@@ -473,54 +448,51 @@ function renderOverview() {
   });
 }
 
-// ── TABLE ────────────────────────────────────────────────
+// ── TABLE (growatt_5min) ──────────────────────────────────
 function renderTable() {
-  const type = document.getElementById('pv-tf-type')?.value || 'all';
   const from = document.getElementById('pv-tf-from')?.value;
   const to   = document.getElementById('pv-tf-to')?.value;
   const sort = document.getElementById('pv-tf-sort')?.value || 'date-desc';
-  let data = [...APP.entries];
-  if (type !== 'all') data = data.filter(e => e.type === type);
-  if (from) data = data.filter(e => e.date >= from);
-  if (to)   data = data.filter(e => e.date <= to);
-  if (sort==='date-desc') data.sort((a,b) => b.date.localeCompare(a.date));
-  else if (sort==='date-asc') data.sort((a,b) => a.date.localeCompare(b.date));
-  else if (sort==='kwh-desc') data.sort((a,b) => b.kwh - a.kwh);
-  else data.sort((a,b) => { const pa=APP.getTheory(a)>0?a.kwh/APP.getTheory(a):0; const pb=APP.getTheory(b)>0?b.kwh/APP.getTheory(b):0; return pb-pa; });
 
-  const cnt = document.getElementById('pv-tcount'); if (cnt) cnt.textContent = data.length + ' Einträge';
-  const tbody = document.getElementById('pv-tbody'); if (!tbody) return;
+  let data = [...APP.growatt5min];
+  if (from) data = data.filter(r => r.date >= from);
+  if (to)   data = data.filter(r => r.date <= to);
+
+  if (sort === 'date-desc') data.sort((a,b) => b.ts.localeCompare(a.ts));
+  else if (sort === 'date-asc') data.sort((a,b) => a.ts.localeCompare(b.ts));
+  else if (sort === 'kwh-desc') data.sort((a,b) => b.etoday_kwh - a.etoday_kwh);
+  else data.sort((a,b) => b.pac_w - a.pac_w);
+
+  const cnt = document.getElementById('pv-tcount');
+  if (cnt) cnt.textContent = data.length + ' Messpunkte · ' + [...new Set(data.map(r=>r.date))].length + ' Tage';
+
+  const tbody = document.getElementById('pv-tbody');
+  if (!tbody) return;
   if (!data.length) {
-    tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;padding:2rem;color:var(--tx3)">Keine Einträge</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--tx3)">Keine Messpunkte</td></tr>';
     return;
   }
-  const MONTHS_FULL = APP.MONTHS_FULL;
-  tbody.innerHTML = data.map(e => {
-    const th = APP.getTheory(e), pr = th > 0 ? Math.round(e.kwh/th*100) : 0;
-    const cls = pr>=80?'good':pr>=60?'mid':'low';
-    const lbl = e.type==='day' ? e.date
-      : e.type==='week' ? 'KW'+(e.kw||'?')+' '+e.date.substring(0,4)
-      : MONTHS_FULL[new Date(e.date).getMonth()]+' '+e.date.substring(0,4);
-    const tl = e.type==='day'?'Tag':e.type==='week'?'Woche':'Monat';
+
+  // Paginate: show max 500 rows
+  const PAGE = 500;
+  const show = data.slice(0, PAGE);
+  tbody.innerHTML = show.map(r => {
+    const dt = new Date(r.ts);
+    const dateStr = `${String(dt.getDate()).padStart(2,'0')}.${String(dt.getMonth()+1).padStart(2,'0')}.${dt.getFullYear()}`;
+    const timeStr = `${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+    const pacColor = r.pac_w > 600 ? 'var(--gr)' : r.pac_w > 200 ? 'var(--ac)' : 'var(--tx2)';
     return `<tr>
-      <td><input type="checkbox" class="pv-cb" data-id="${e.id}"></td>
-      <td style="font-weight:500">${lbl}</td>
-      <td><span class="badge ${cls}" style="font-size:9px">${tl}</span></td>
-      <td style="color:var(--ac)">${e.kwh.toFixed(2)} kWh</td>
-      <td style="color:var(--tx3)">${th.toFixed(2)}</td>
-      <td><span class="ebar"><span class="efill" style="width:${Math.min(pr,100)}%;background:${pr>=80?'var(--gr)':pr>=60?'var(--ac)':'var(--rd)'}"></span></span><span class="badge ${cls}">${pr}%</span></td>
-      <td style="color:var(--tx2)">${e.peak||'—'}</td>
-      <td style="color:var(--tx2)">${e.hours||'—'}</td>
-      <td>${e.weather||'—'}</td>
-      <td style="color:var(--gr)">${APP.calcEuro(e)} €</td>
-      <td style="color:var(--tx3);font-size:11px;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.note||''}</td>
-      <td style="text-align:center;white-space:nowrap">
-        <button onclick="APP.openModal('${e.id}')" style="background:transparent;border:1px solid rgba(91,156,246,.4);color:var(--bl);border-radius:5px;padding:3px 8px;font-size:11px;cursor:pointer;margin-right:3px">✏</button>
-        <button onclick="PV.copyEntry('${e.id}')" style="background:transparent;border:1px solid rgba(245,200,66,.4);color:var(--ac);border-radius:5px;padding:3px 8px;font-size:11px;cursor:pointer;margin-right:3px">⧉</button>
-        <button onclick="PV.deleteSingle('${e.id}')" style="background:transparent;border:1px solid rgba(242,92,92,.4);color:var(--rd);border-radius:5px;padding:3px 8px;font-size:11px;cursor:pointer">✕</button>
-      </td>
+      <td style="font-weight:500;white-space:nowrap">${dateStr}</td>
+      <td style="color:var(--tx3)">${timeStr}</td>
+      <td style="color:${pacColor};font-weight:500">${r.pac_w > 0 ? Math.round(r.pac_w)+' W' : '—'}</td>
+      <td style="color:var(--ac)">${r.etoday_kwh > 0 ? r.etoday_kwh.toFixed(3)+' kWh' : '—'}</td>
+      <td style="color:var(--tx3)">${r.etotal_kwh > 0 ? r.etotal_kwh.toFixed(1)+' kWh' : '—'}</td>
     </tr>`;
   }).join('');
+  if (data.length > PAGE) {
+    tbody.innerHTML += `<tr><td colspan="5" style="text-align:center;color:var(--tx3);padding:8px;font-size:11px">
+      … ${data.length - PAGE} weitere Einträge (nur erste ${PAGE} angezeigt)</td></tr>`;
+  }
 }
 function toggleAll(cb) { document.querySelectorAll('.pv-cb').forEach(c => c.checked = cb.checked); }
 function deleteSelected() {
