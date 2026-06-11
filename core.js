@@ -863,6 +863,7 @@ return {
   get theory()      { return theory; },
   get entries()     { return entries; },
   get growatt5min() { return growatt5min; },
+  setGrowatt5min(v) { growatt5min = v; saveG5(); },
   get consumption() { return consumption; },
   get charts()      { return charts; },
   get MONTHS()      { return MONTHS; },

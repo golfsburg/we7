@@ -924,8 +924,26 @@ function initDefaults() {
 function register() {
   APP.registerPage('pv', {
     html: HTML,
-    onEnter: () => {
+    onEnter: async () => {
       initDefaults();
+      // Sicherstellen dass growatt_5min Daten geladen sind
+      if (APP.growatt5min.length === 0 && APP.sbClient) {
+        try {
+          const { data, error } = await APP.sbClient.from('growatt_5min')
+            .select('id,date,ts,pac_w,etoday_kwh,etotal_kwh')
+            .order('ts', {ascending:true});
+          if (!error && data && data.length > 0) {
+            APP.setGrowatt5min(data.map(r => ({
+              id:         r.id,
+              date:       String(r.date).substring(0,10),
+              ts:         r.ts,
+              pac_w:      parseFloat(r.pac_w)      || 0,
+              etoday_kwh: parseFloat(r.etoday_kwh) || 0,
+              etotal_kwh: parseFloat(r.etotal_kwh) || 0
+            })));
+          }
+        } catch(e) { console.warn('g5 load:', e.message); }
+      }
       APP.FilterBar.create('pv-timeline', {
         onRange: (f, t) => {
           const fe=document.getElementById('pv-from'); if(fe) fe.value=f;

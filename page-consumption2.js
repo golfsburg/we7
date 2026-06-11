@@ -545,13 +545,14 @@ function renderTable() {
   const tbody = document.getElementById('cv2-tbody');
   if (!tbody) return;
   if (!sorted.length) {
-    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:2rem;color:var(--tx3)">Noch keine Aufzeichnungen</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:2rem;color:var(--tx3)">Noch keine Aufzeichnungen</td></tr>';
     return;
   }
   tbody.innerHTML = sorted.map(r => {
-    const d = new Date(r.reading_date);
+    const d  = new Date(r.reading_date);
     const dt = `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-    return `<tr>
+    const btnStyle = 'border-radius:5px;padding:3px 7px;font-size:11px;cursor:pointer;background:transparent;';
+    return `<tr id="cv2-row-${r.id}">
       <td><input type="checkbox" class="cv2-cb" data-id="${r.id}"></td>
       <td style="font-weight:500;white-space:nowrap">${dt}</td>
       <td style="color:#f5c842">${r.solar_kwh??'—'}</td>
@@ -560,9 +561,15 @@ function renderTable() {
       <td style="color:#5b9cf6">${r.water_m3??'—'}</td>
       <td style="color:rgba(250,204,21,.9)">${r.strom_kwh??'—'}</td>
       <td>${r.temp_c??'—'}</td>
-      <td style="font-size:11px;color:var(--tx3);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.note||''}</td>
-      <td><button onclick="CV2.deleteSingle('${r.id}')"
-        style="background:transparent;border:1px solid rgba(242,92,92,.4);color:var(--rd);border-radius:5px;padding:3px 8px;font-size:11px;cursor:pointer">✕</button></td>
+      <td style="font-size:11px;color:var(--tx3);max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.note||''}</td>
+      <td style="white-space:nowrap;display:flex;gap:4px">
+        <button onclick="CV2.editEntry('${r.id}')" title="Bearbeiten"
+          style="${btnStyle}border:1px solid var(--b2);color:var(--tx2)">✎</button>
+        <button onclick="CV2.copyEntry('${r.id}')" title="Kopieren / als Basis verwenden"
+          style="${btnStyle}border:1px solid var(--b2);color:var(--tx2)">⧉</button>
+        <button onclick="CV2.deleteSingle('${r.id}')" title="Löschen"
+          style="${btnStyle}border:1px solid rgba(242,92,92,.4);color:var(--rd)">✕</button>
+      </td>
     </tr>`;
   }).join('');
 }
@@ -579,10 +586,105 @@ function prefillNow() {
   }
 }
 
+function editEntry(id) {
+  const r = readings.find(x => x.id === id);
+  if (!r) return;
+  // Scroll to form and fill fields
+  const tab = document.getElementById('cv2-tab-records');
+  if (tab) tab.click();
+  const d  = new Date(r.reading_date);
+  const local = new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,16);
+  const g = id => document.getElementById(id);
+  if (g('cv2-e-date'))     g('cv2-e-date').value     = local;
+  if (g('cv2-e-solar'))    g('cv2-e-solar').value    = r.solar_kwh ?? '';
+  if (g('cv2-e-fw'))       g('cv2-e-fw').value       = r.fw_kwh    ?? '';
+  if (g('cv2-e-fwstatus')) g('cv2-e-fwstatus').value = r.fw_status ?? '';
+  if (g('cv2-e-water'))    g('cv2-e-water').value    = r.water_m3  ?? '';
+  if (g('cv2-e-strom'))    g('cv2-e-strom').value    = r.strom_kwh ?? '';
+  if (g('cv2-e-temp'))     g('cv2-e-temp').value     = r.temp_c    ?? '';
+  if (g('cv2-e-note'))     g('cv2-e-note').value     = r.note      ?? '';
+  // Mark as edit mode: store original ID, remove old entry on save
+  const form = g('cv2-e-date')?.closest('.fcard');
+  if (form) {
+    form.dataset.editId = id;
+    const btn = form.querySelector('button.btn-p');
+    if (btn) btn.textContent = '✎ Speichern';
+    const hint = form.querySelector('#cv2-edit-hint') || (() => {
+      const el = document.createElement('div');
+      el.id = 'cv2-edit-hint';
+      el.style.cssText = 'font-size:11px;color:var(--ac);margin-top:6px';
+      btn?.parentNode.appendChild(el);
+      return el;
+    })();
+    hint.textContent = `Bearbeite Eintrag vom ${local.substring(0,10).split('-').reverse().join('.')}`;
+    form.scrollIntoView({ behavior:'smooth', block:'center' });
+  }
+}
+
+function copyEntry(id) {
+  const r = readings.find(x => x.id === id);
+  if (!r) return;
+  const tab = document.getElementById('cv2-tab-records');
+  if (tab) tab.click();
+  const g = id => document.getElementById(id);
+  // Prefill form with same values but new date = now
+  prefillNow();
+  if (g('cv2-e-solar'))    g('cv2-e-solar').value    = r.solar_kwh ?? '';
+  if (g('cv2-e-fw'))       g('cv2-e-fw').value       = r.fw_kwh    ?? '';
+  if (g('cv2-e-fwstatus')) g('cv2-e-fwstatus').value = r.fw_status ?? '';
+  if (g('cv2-e-water'))    g('cv2-e-water').value    = r.water_m3  ?? '';
+  if (g('cv2-e-strom'))    g('cv2-e-strom').value    = r.strom_kwh ?? '';
+  if (g('cv2-e-temp'))     g('cv2-e-temp').value     = r.temp_c    ?? '';
+  if (g('cv2-e-note'))     g('cv2-e-note').value     = r.note      ?? '';
+  const form = g('cv2-e-date')?.closest('.fcard');
+  if (form) {
+    delete form.dataset.editId;
+    const btn = form.querySelector('button.btn-p');
+    if (btn) btn.textContent = 'Eintrag speichern';
+    const hint = form.querySelector('#cv2-edit-hint');
+    if (hint) hint.textContent = 'Werte aus kopiertem Eintrag übernommen — bitte Datum prüfen';
+    form.scrollIntoView({ behavior:'smooth', block:'center' });
+  }
+  APP.toast('Werte kopiert — bitte Datum anpassen');
+}
+
 function addEntry() {
   const dateStr = document.getElementById('cv2-e-date')?.value;
   if (!dateStr) { APP.toast('Datum ist Pflichtfeld','err'); return; }
   const reading_date = new Date(dateStr).toISOString();
+
+  // Check if editing existing entry
+  const form   = document.getElementById('cv2-e-date')?.closest('.fcard');
+  const editId = form?.dataset.editId;
+  if (editId) {
+    // Replace existing entry
+    const idx = readings.findIndex(x => x.id === editId);
+    if (idx >= 0) {
+      readings[idx] = {
+        ...readings[idx],
+        reading_date,
+        solar_kwh: parseFloat(document.getElementById('cv2-e-solar')?.value)||null,
+        fw_kwh:    parseFloat(document.getElementById('cv2-e-fw')?.value)||null,
+        fw_status: document.getElementById('cv2-e-fwstatus')?.value||null,
+        water_m3:  parseFloat(document.getElementById('cv2-e-water')?.value)||null,
+        strom_kwh: parseFloat(document.getElementById('cv2-e-strom')?.value)||null,
+        temp_c:    parseFloat(document.getElementById('cv2-e-temp')?.value)||null,
+        note:      document.getElementById('cv2-e-note')?.value||null
+      };
+      readings.sort((a,b) => a.reading_date.localeCompare(b.reading_date));
+      saveReadings();
+      // Reset form
+      delete form.dataset.editId;
+      const btn = form.querySelector('button.btn-p');
+      if (btn) btn.textContent = 'Eintrag speichern';
+      const hint = form.querySelector('#cv2-edit-hint');
+      if (hint) hint.textContent = '';
+      renderTable(); renderDashboard();
+      APP.toast('✓ Eintrag aktualisiert');
+      return;
+    }
+  }
+
   const entry = {
     id:           APP.genId(),
     reading_date,
@@ -837,6 +939,6 @@ function register() {
 
 return { tab, recTab, onPreset, onMonthPick, onYearPick, onCustomDate,
          resetFilter, renderDashboard, renderTable,
-         toggleAll, prefillNow, addEntry, importCSV,
+         toggleAll, prefillNow, addEntry, editEntry, copyEntry, importCSV,
          deleteSingle, deleteSelected, deleteRange, clearAll, register };
 })();
