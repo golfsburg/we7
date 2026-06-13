@@ -1,0 +1,777 @@
+<!doctype html>
+<html lang="de" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Peter Riemer · Homepage</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    * { font-family: 'Outfit', sans-serif; }
+
+    .page {
+      display: none;
+      animation: fadeIn 0.35s ease-out;
+    }
+    .page.active { display: block; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Nav items */
+    .nav-item {
+      transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, color 0.2s ease;
+    }
+    .nav-item:hover { transform: translateY(-2px); }
+    .nav-item.active {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white !important;
+      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    }
+
+    /* Cards */
+    .card {
+      transition: transform 0.25s ease, box-shadow 0.25s ease;
+    }
+    .card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+    }
+    .card:hover .feature-icon { transform: scale(1.1); }
+    .feature-icon { transition: transform 0.25s ease; }
+
+    /* Timeline rows */
+    .timeline-row {
+      transition: box-shadow 0.2s ease;
+    }
+    .timeline-row:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+
+    /* Detail panels */
+    .detail-panel {
+      display: none;
+      animation: slideDown 0.25s ease-out;
+    }
+    .detail-panel.open { display: block; }
+
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Hero gradients */
+    .hero-home    { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    .hero-autos   { background: linear-gradient(135deg, #ef4444 0%, #f97316 100%); }
+    .hero-handys  { background: linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%); }
+    .hero-druck   { background: linear-gradient(135deg, #a855f7 0%, #ec4899 100%); }
+    .hero-mtb     { background: linear-gradient(135deg, #22c55e 0%, #10b981 100%); }
+
+    /* Image fallback */
+    .img-error { background: #e5e7eb; min-height: 100px; }
+  </style>
+</head>
+<body class="h-full bg-slate-50">
+
+  <!-- ── Navigation ── -->
+  <nav class="bg-white shadow-lg sticky top-0 z-50">
+    <div class="max-w-6xl mx-auto px-4">
+      <div class="flex items-center justify-between py-4">
+        <h1 class="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent cursor-pointer" data-page="home">
+          Peter Riemer
+        </h1>
+        <div class="flex gap-2 flex-wrap">
+
+          <button class="nav-item active px-4 py-2 rounded-xl flex items-center gap-2 text-sm font-medium text-slate-600 bg-slate-100" data-page="home">
+            <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+            </svg>
+            <span class="hidden sm:inline">Home</span>
+          </button>
+
+          <button class="nav-item px-4 py-2 rounded-xl flex items-center gap-2 text-sm font-medium text-slate-600 bg-slate-100" data-page="autos">
+            <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h8m-8 5h8m-4-9a1 1 0 10-2 0 1 1 0 002 0zm-5 9h2m10 0h2M7 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm13 0a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"/>
+            </svg>
+            <span class="hidden sm:inline">Autos</span>
+          </button>
+
+          <button class="nav-item px-4 py-2 rounded-xl flex items-center gap-2 text-sm font-medium text-slate-600 bg-slate-100" data-page="handys">
+            <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+            </svg>
+            <span class="hidden sm:inline">Handys</span>
+          </button>
+
+          <button class="nav-item px-4 py-2 rounded-xl flex items-center gap-2 text-sm font-medium text-slate-600 bg-slate-100" data-page="druck">
+            <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5"/>
+            </svg>
+            <span class="hidden sm:inline">3D Druck</span>
+          </button>
+
+          <button class="nav-item px-4 py-2 rounded-xl flex items-center gap-2 text-sm font-medium text-slate-600 bg-slate-100" data-page="mtb">
+            <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <circle cx="5.5" cy="17.5" r="3.5" stroke-width="2"/>
+              <circle cx="18.5" cy="17.5" r="3.5" stroke-width="2"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 17.5V12l-3.5 5.5M12 12l6.5 5.5M12 12l-2-5h4"/>
+            </svg>
+            <span class="hidden sm:inline">MTB</span>
+          </button>
+
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ══════════════════════════════════════
+       HOME PAGE
+  ══════════════════════════════════════ -->
+  <div id="page-home" class="page active">
+    <div class="hero-home text-white py-20 px-4">
+      <div class="max-w-4xl mx-auto text-center">
+        <h2 class="text-4xl md:text-5xl font-bold mb-6">Willkommen auf meiner Homepage</h2>
+        <p class="text-xl opacity-90 mb-8">Entdecke meine Leidenschaften: Autos, Handys, 3D Druck und Mountainbiking</p>
+        <div class="flex justify-center gap-3 flex-wrap">
+          <button class="nav-shortcut px-4 py-2 bg-white/20 rounded-full text-sm hover:bg-white/30 transition-all" data-goto="autos">🏎️ Automobile</button>
+          <button class="nav-shortcut px-4 py-2 bg-white/20 rounded-full text-sm hover:bg-white/30 transition-all" data-goto="handys">📱 Handys</button>
+          <button class="nav-shortcut px-4 py-2 bg-white/20 rounded-full text-sm hover:bg-white/30 transition-all" data-goto="druck">🖨️ 3D Druck</button>
+          <button class="nav-shortcut px-4 py-2 bg-white/20 rounded-full text-sm hover:bg-white/30 transition-all" data-goto="mtb">🚵‍♂️ MTB</button>
+        </div>
+      </div>
+    </div>
+    <div class="max-w-6xl mx-auto px-4 py-16">
+      <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div class="card bg-white rounded-2xl p-6 shadow-lg cursor-pointer" data-goto="autos">
+          <div class="feature-icon w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center mb-4 text-3xl">🚗</div>
+          <h3 class="text-xl font-semibold text-slate-800 mb-2">Autos</h3>
+          <p class="text-slate-600">Meine Leidenschaft für schnelle und schöne Fahrzeuge</p>
+        </div>
+        <div class="card bg-white rounded-2xl p-6 shadow-lg cursor-pointer" data-goto="handys">
+          <div class="feature-icon w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mb-4 text-3xl">📱</div>
+          <h3 class="text-xl font-semibold text-slate-800 mb-2">Handys</h3>
+          <p class="text-slate-600">Meine mobile Geschichte seit 2000</p>
+        </div>
+        <div class="card bg-white rounded-2xl p-6 shadow-lg cursor-pointer" data-goto="druck">
+          <div class="feature-icon w-16 h-16 bg-purple-100 rounded-2xl flex items-center justify-center mb-4 text-3xl">🖨️</div>
+          <h3 class="text-xl font-semibold text-slate-800 mb-2">3D Druck</h3>
+          <p class="text-slate-600">Kreative Projekte aus dem 3D Drucker</p>
+        </div>
+        <div class="card bg-white rounded-2xl p-6 shadow-lg cursor-pointer" data-goto="mtb">
+          <div class="feature-icon w-16 h-16 bg-green-100 rounded-2xl flex items-center justify-center mb-4 text-3xl">🚵</div>
+          <h3 class="text-xl font-semibold text-slate-800 mb-2">MTB</h3>
+          <p class="text-slate-600">Abenteuer auf zwei Rädern im Gelände</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       AUTOS PAGE
+  ══════════════════════════════════════ -->
+  <div id="page-autos" class="page">
+    <div class="hero-autos text-white py-16 px-4">
+      <div class="max-w-4xl mx-auto text-center">
+        <div class="text-6xl mb-4">🏎️</div>
+        <h2 class="text-4xl font-bold mb-4">Automobile Leidenschaft</h2>
+        <p class="text-xl opacity-90">Faszination Automobil – von Klassikern bis Supersportwagen</p>
+      </div>
+    </div>
+    <div class="max-w-6xl mx-auto px-4 py-12">
+      <h3 class="text-2xl font-bold text-slate-800 mb-6 text-center">Meine Fahrzeuggeschichte</h3>
+
+      <!-- Timeline header image -->
+      <div class="bg-white rounded-2xl p-6 shadow-lg mb-6">
+        <img src="https://drive.google.com/thumbnail?id=1N4FCWdD_10RyW-NHxVBSVmfdcgDkI-C_&sz=w1000"
+             alt="Meine Fahrzeuggeschichte" class="w-full rounded-xl" loading="lazy"
+             onerror="this.classList.add('img-error'); this.alt='Bild nicht verfügbar';">
+      </div>
+
+      <div class="bg-white rounded-2xl p-8 shadow-lg">
+        <div class="space-y-3" id="autos-list">
+
+          <!-- ── Golf 2 GTD ── -->
+          <div class="timeline-entry">
+            <div class="timeline-row flex items-center gap-4 p-4 bg-gradient-to-r from-green-50 to-green-100 rounded-xl cursor-pointer"
+                 data-toggle="golf2gtd">
+              <div class="flex items-center gap-3 shrink-0">
+                <div class="text-center w-16">
+                  <div class="text-2xl font-bold text-green-700">1998</div>
+                  <div class="w-1 h-8 bg-green-300 mx-auto mt-1"></div>
+                </div>
+                <div class="text-5xl">🚙</div>
+              </div>
+              <div class="flex-1 min-w-0">
+                <h4 class="font-semibold text-slate-800">Golf 2 GTD</h4>
+                <p class="text-slate-500 text-sm">Hellgrünmetallic · Baujahr 1989</p>
+              </div>
+              <div class="flex gap-2 shrink-0">
+                <a href="https://photos.app.goo.gl" target="_blank" rel="noopener noreferrer"
+                   class="text-lg hover:scale-125 transition-transform" title="Fotoalbum öffnen"
+                   onclick="event.stopPropagation()">📷</a>
+                <button class="text-lg hover:scale-125 transition-transform" title="Details anzeigen">ℹ️</button>
+              </div>
+            </div>
+            <div id="detail-golf2gtd" class="detail-panel mt-2 mx-2">
+              <div class="p-4 bg-green-50 rounded-xl border-2 border-green-200">
+                <h5 class="font-bold text-slate-800 mb-3">Technische Daten</h5>
+                <div class="grid sm:grid-cols-2 gap-2 text-sm">
+                  <div><span class="font-semibold text-slate-700">Hersteller:</span> <span class="text-slate-600">Volkswagen</span></div>
+                  <div><span class="font-semibold text-slate-700">Baujahr:</span> <span class="text-slate-600">10/1989</span></div>
+                  <div><span class="font-semibold text-slate-700">Motorisierung:</span> <span class="text-slate-600">4 Zyl. Turbodiesel</span></div>
+                  <div><span class="font-semibold text-slate-700">Hubraum:</span> <span class="text-slate-600">1.600 ccm</span></div>
+                  <div><span class="font-semibold text-slate-700">Leistung:</span> <span class="text-slate-600">51,5 kW / 70 PS</span></div>
+                  <div><span class="font-semibold text-slate-700">Drehmoment:</span> <span class="text-slate-600">155 Nm</span></div>
+                  <div><span class="font-semibold text-slate-700">Farbe:</span> <span class="text-slate-600">Hellgrünmetallic</span></div>
+                  <div><span class="font-semibold text-slate-700">Ausstattung:</span> <span class="text-slate-600">GT, Schiebedach</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Bora TDI ── -->
+          <div class="timeline-entry">
+            <div class="timeline-row flex items-center gap-4 p-4 bg-gradient-to-r from-blue-50 to-blue-100 rounded-xl cursor-pointer"
+                 data-toggle="bora">
+              <div class="flex items-center gap-3 shrink-0">
+                <div class="text-center w-16">
+                  <div class="text-2xl font-bold text-blue-700">2002</div>
+                  <div class="w-1 h-8 bg-blue-300 mx-auto mt-1"></div>
+                </div>
+                <div class="text-5xl">🚘</div>
+              </div>
+              <div class="flex-1 min-w-0">
+                <h4 class="font-semibold text-slate-800">Bora TDI</h4>
+                <p class="text-slate-500 text-sm">Königsblau · Baujahr 1999</p>
+              </div>
+              <div class="flex gap-2 shrink-0">
+                <a href="https://photos.app.goo.gl" target="_blank" rel="noopener noreferrer"
+                   class="text-lg hover:scale-125 transition-transform" title="Fotoalbum öffnen"
+                   onclick="event.stopPropagation()">📷</a>
+                <button class="text-lg hover:scale-125 transition-transform" title="Details anzeigen">ℹ️</button>
+              </div>
+            </div>
+            <div id="detail-bora" class="detail-panel mt-2 mx-2">
+              <div class="p-4 bg-blue-50 rounded-xl border-2 border-blue-200">
+                <h5 class="font-bold text-slate-800 mb-3">Technische Daten</h5>
+                <div class="grid sm:grid-cols-2 gap-2 text-sm">
+                  <div><span class="font-semibold text-slate-700">Hersteller:</span> <span class="text-slate-600">Volkswagen</span></div>
+                  <div><span class="font-semibold text-slate-700">Baujahr:</span> <span class="text-slate-600">10/1999</span></div>
+                  <div><span class="font-semibold text-slate-700">Motorisierung:</span> <span class="text-slate-600">4 Zyl. Diesel TDI</span></div>
+                  <div><span class="font-semibold text-slate-700">Hubraum:</span> <span class="text-slate-600">1.900 ccm</span></div>
+                  <div><span class="font-semibold text-slate-700">Leistung:</span> <span class="text-slate-600">66 kW / 90 PS</span></div>
+                  <div><span class="font-semibold text-slate-700">Drehmoment:</span> <span class="text-slate-600">210 Nm</span></div>
+                  <div><span class="font-semibold text-slate-700">Farbe:</span> <span class="text-slate-600">Königsblau</span></div>
+                  <div><span class="font-semibold text-slate-700">Ausstattung:</span> <span class="text-slate-600">Elektronikpaket, Climatronic</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Golf 4 GTI TDI Exclusive ── -->
+          <div class="timeline-entry">
+            <div class="timeline-row flex items-center gap-4 p-4 bg-gradient-to-r from-slate-50 to-slate-100 rounded-xl cursor-pointer"
+                 data-toggle="golf4gti">
+              <div class="flex items-center gap-3 shrink-0">
+                <div class="text-center w-16">
+                  <div class="text-2xl font-bold text-slate-700">2002</div>
+                  <div class="w-1 h-8 bg-slate-300 mx-auto mt-1"></div>
+                </div>
+                <div class="text-5xl">🚗</div>
+              </div>
+              <div class="flex-1 min-w-0">
+                <h4 class="font-semibold text-slate-800">Golf 4 GTI TDI Exclusive</h4>
+                <p class="text-slate-500 text-sm">Blackmagic Perleffekt · Baujahr 2000</p>
+              </div>
+              <div class="flex gap-2 shrink-0">
+                <a href="https://photos.app.goo.gl" target="_blank" rel="noopener noreferrer"
+                   class="text-lg hover:scale-125 transition-transform" title="Fotoalbum öffnen"
+                   onclick="event.stopPropagation()">📷</a>
+                <button class="text-lg hover:scale-125 transition-transform" title="Details anzeigen">ℹ️</button>
+              </div>
+            </div>
+            <div id="detail-golf4gti" class="detail-panel mt-2 mx-2">
+              <div class="p-4 bg-slate-50 rounded-xl border-2 border-slate-200">
+                <h5 class="font-bold text-slate-800 mb-3">Technische Daten</h5>
+                <div class="grid sm:grid-cols-2 gap-2 text-sm">
+                  <div><span class="font-semibold text-slate-700">Hersteller:</span> <span class="text-slate-600">Volkswagen</span></div>
+                  <div><span class="font-semibold text-slate-700">Modell:</span> <span class="text-slate-600">Golf IV</span></div>
+                  <div><span class="font-semibold text-slate-700">Baujahr:</span> <span class="text-slate-600">2/2000</span></div>
+                  <div><span class="font-semibold text-slate-700">Türen:</span> <span class="text-slate-600">3</span></div>
+                  <div><span class="font-semibold text-slate-700">Motorisierung:</span> <span class="text-slate-600">4 Zyl. Diesel PD</span></div>
+                  <div><span class="font-semibold text-slate-700">Hubraum:</span> <span class="text-slate-600">1.900 ccm</span></div>
+                  <div><span class="font-semibold text-slate-700">Leistung:</span> <span class="text-slate-600">66 kW / 90 PS</span></div>
+                  <div><span class="font-semibold text-slate-700">Drehmoment:</span> <span class="text-slate-600">210 Nm</span></div>
+                  <div><span class="font-semibold text-slate-700">Farbe:</span> <span class="text-slate-600">Blackmagic Perleffekt</span></div>
+                  <div><span class="font-semibold text-slate-700">Ausstattung:</span> <span class="text-slate-600">Exclusive</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Golf 1 L ── -->
+          <div class="timeline-entry">
+            <div class="timeline-row flex items-center gap-4 p-4 bg-gradient-to-r from-lime-50 to-lime-100 rounded-xl cursor-pointer"
+                 data-toggle="golf1l">
+              <div class="flex items-center gap-3 shrink-0">
+                <div class="text-center w-16">
+                  <div class="text-2xl font-bold text-lime-700">2004</div>
+                  <div class="w-1 h-8 bg-lime-300 mx-auto mt-1"></div>
+                </div>
+                <div class="text-5xl">🚙</div>
+              </div>
+              <div class="flex-1 min-w-0">
+                <h4 class="font-semibold text-slate-800">Golf 1 L</h4>
+                <p class="text-slate-500 text-sm">Baligrün · Baujahr 1977</p>
+              </div>
+              <div class="flex gap-2 shrink-0">
+                <a href="https://photos.app.goo.gl" target="_blank" rel="noopener noreferrer"
+                   class="text-lg hover:scale-125 transition-transform" title="Fotoalbum öffnen"
+                   onclick="event.stopPropagation()">📷</a>
+                <button class="text-lg hover:scale-125 transition-transform" title="Details anzeigen">ℹ️</button>
+              </div>
+            </div>
+            <div id="detail-golf1l" class="detail-panel mt-2 mx-2">
+              <div class="p-4 bg-lime-50 rounded-xl border-2 border-lime-200">
+                <h5 class="font-bold text-slate-800 mb-3">Technische Daten</h5>
+                <div class="grid sm:grid-cols-2 gap-2 text-sm">
+                  <div><span class="font-semibold text-slate-700">Hersteller:</span> <span class="text-slate-600">Volkswagen</span></div>
+                  <div><span class="font-semibold text-slate-700">Modell:</span> <span class="text-slate-600">Golf I (Typ 17)</span></div>
+                  <div><span class="font-semibold text-slate-700">Baujahr:</span> <span class="text-slate-600">7/1977</span></div>
+                  <div><span class="font-semibold text-slate-700">Motorisierung:</span> <span class="text-slate-600">4 Zyl. Benziner</span></div>
+                  <div><span class="font-semibold text-slate-700">Hubraum:</span> <span class="text-slate-600">1.100 ccm</span></div>
+                  <div><span class="font-semibold text-slate-700">Leistung:</span> <span class="text-slate-600">40 kW / 55 PS</span></div>
+                  <div><span class="font-semibold text-slate-700">Drehmoment:</span> <span class="text-slate-600">81 Nm</span></div>
+                  <div><span class="font-semibold text-slate-700">Farbe:</span> <span class="text-slate-600">Baligrün</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Golf 1 LS Automatic (aktuell) ── -->
+          <div class="timeline-entry">
+            <div class="timeline-row flex items-center gap-4 p-4 bg-gradient-to-r from-amber-50 to-amber-100 rounded-xl cursor-pointer border-2 border-amber-300"
+                 data-toggle="golf1ls">
+              <div class="flex items-center gap-3 shrink-0">
+                <div class="text-center w-16">
+                  <div class="text-2xl font-bold text-amber-700">2006</div>
+                  <div class="w-1 h-8 bg-amber-300 mx-auto mt-1"></div>
+                </div>
+                <div class="text-5xl">🚗</div>
+              </div>
+              <div class="flex-1 min-w-0">
+                <h4 class="font-semibold text-slate-800">Golf 1 LS Automatic</h4>
+                <p class="text-slate-500 text-sm">Aktuell · Baujahr 1975</p>
+              </div>
+              <div class="flex gap-2 shrink-0">
+                <a href="https://photos.app.goo.gl" target="_blank" rel="noopener noreferrer"
+                   class="text-lg hover:scale-125 transition-transform" title="Fotoalbum öffnen"
+                   onclick="event.stopPropagation()">📷</a>
+                <button class="text-lg hover:scale-125 transition-transform" title="Details anzeigen">ℹ️</button>
+              </div>
+            </div>
+            <div id="detail-golf1ls" class="detail-panel mt-2 mx-2">
+              <div class="p-4 bg-amber-50 rounded-xl border-2 border-amber-200 mb-3">
+                <h5 class="font-bold text-slate-800 mb-3">Technische Daten</h5>
+                <div class="grid sm:grid-cols-2 gap-2 text-sm">
+                  <div><span class="font-semibold text-slate-700">Hersteller:</span> <span class="text-slate-600">Volkswagen</span></div>
+                  <div><span class="font-semibold text-slate-700">Modell:</span> <span class="text-slate-600">Golf I (Typ 17)</span></div>
+                  <div><span class="font-semibold text-slate-700">Baujahr:</span> <span class="text-slate-600">10/1975</span></div>
+                  <div><span class="font-semibold text-slate-700">Motorisierung:</span> <span class="text-slate-600">4 Zyl. Benziner</span></div>
+                  <div><span class="font-semibold text-slate-700">Hubraum:</span> <span class="text-slate-600">1.600 ccm</span></div>
+                  <div><span class="font-semibold text-slate-700">Leistung:</span> <span class="text-slate-600">55 kW / 75 PS</span></div>
+                  <div><span class="font-semibold text-slate-700">Drehmoment:</span> <span class="text-slate-600">120 Nm</span></div>
+                  <div><span class="font-semibold text-slate-700">Getriebe:</span> <span class="text-slate-600">3-Gang Automatik</span></div>
+                  <div><span class="font-semibold text-slate-700">Ausstattung:</span> <span class="text-slate-600">LS</span></div>
+                  <div><span class="font-semibold text-slate-700">Besonderheiten:</span> <span class="text-slate-600">Schiebedach, Automatikgetriebe</span></div>
+                </div>
+              </div>
+              <img src="https://drive.google.com/thumbnail?id=16dZaAlf7IMPr04OHkYVBuHYJYWm8gBqO&sz=w1000"
+                   alt="Golf 1 LS Automatic" class="w-full rounded-xl" loading="lazy"
+                   onerror="this.outerHTML='<p class=\'text-slate-500 text-center py-6\'>Foto konnte nicht geladen werden.</p>'">
+            </div>
+          </div>
+
+          <!-- ── Golf 2 GTI G60 Edition One (aktuell) ── -->
+          <div class="timeline-entry">
+            <div class="timeline-row flex items-center gap-4 p-4 bg-gradient-to-r from-violet-50 to-violet-100 rounded-xl cursor-pointer border-2 border-violet-300"
+                 data-toggle="golf2g60">
+              <div class="flex items-center gap-3 shrink-0">
+                <div class="text-center w-16">
+                  <div class="text-2xl font-bold text-violet-700">2006</div>
+                  <div class="w-1 h-8 bg-violet-300 mx-auto mt-1"></div>
+                </div>
+                <div class="text-5xl">🏎️</div>
+              </div>
+              <div class="flex-1 min-w-0">
+                <h4 class="font-semibold text-slate-800">Golf 2 GTI G60 Edition One</h4>
+                <p class="text-slate-500 text-sm">Aktuell · Baujahr 1991</p>
+              </div>
+              <div class="flex gap-2 shrink-0">
+                <a href="https://photos.app.goo.gl" target="_blank" rel="noopener noreferrer"
+                   class="text-lg hover:scale-125 transition-transform" title="Fotoalbum öffnen"
+                   onclick="event.stopPropagation()">📷</a>
+                <button class="text-lg hover:scale-125 transition-transform" title="Details anzeigen">ℹ️</button>
+              </div>
+            </div>
+            <div id="detail-golf2g60" class="detail-panel mt-2 mx-2">
+              <div class="p-4 bg-violet-50 rounded-xl border-2 border-violet-200 mb-3">
+                <h5 class="font-bold text-slate-800 mb-3">Technische Daten – Edition One</h5>
+                <div class="grid sm:grid-cols-2 gap-2 text-sm">
+                  <div><span class="font-semibold text-slate-700">Baujahr:</span> <span class="text-slate-600">3/1991</span></div>
+                  <div><span class="font-semibold text-slate-700">Motor:</span> <span class="text-slate-600">4 Zyl. G-Lader, 1.781 ccm</span></div>
+                  <div><span class="font-semibold text-slate-700">Leistung:</span> <span class="text-slate-600">118 kW / 160 PS</span></div>
+                  <div><span class="font-semibold text-slate-700">Drehmoment:</span> <span class="text-slate-600">225 Nm</span></div>
+                </div>
+              </div>
+              <!-- FIX: Korrigierte Google Drive ID (war zu lang / fehlerhaft) -->
+              <img src="https://drive.google.com/thumbnail?id=1miFKp8cJWR4TH3yqiwpVzKHrzVlC5RFx&sz=w1000"
+                   alt="Golf 2 G60 Edition One" class="w-full rounded-xl" loading="lazy"
+                   onerror="this.outerHTML='<p class=\'text-slate-500 text-center py-6\'>Foto konnte nicht geladen werden.</p>'">
+            </div>
+          </div>
+
+          <!-- ── Golf 3 GTI TDI ── -->
+          <div class="timeline-entry">
+            <div class="timeline-row flex items-center gap-4 p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl cursor-pointer"
+                 data-toggle="golf3gti">
+              <div class="flex items-center gap-3 shrink-0">
+                <div class="text-center w-16">
+                  <div class="text-2xl font-bold text-gray-700">2007</div>
+                  <div class="w-1 h-8 bg-gray-300 mx-auto mt-1"></div>
+                </div>
+                <div class="text-5xl">🚗</div>
+              </div>
+              <div class="flex-1 min-w-0">
+                <h4 class="font-semibold text-slate-800">Golf 3 GTI TDI</h4>
+                <p class="text-slate-500 text-sm">Black Magic Perleffekt · Baujahr 1996</p>
+              </div>
+              <!-- FIX: Golf 3 hatte keinen klickbaren Info-Button – jetzt ergänzt -->
+              <div class="flex gap-2 shrink-0">
+                <a href="https://photos.app.goo.gl" target="_blank" rel="noopener noreferrer"
+                   class="text-lg hover:scale-125 transition-transform" title="Fotoalbum öffnen"
+                   onclick="event.stopPropagation()">📷</a>
+                <button class="text-lg hover:scale-125 transition-transform" title="Details anzeigen">ℹ️</button>
+              </div>
+            </div>
+            <div id="detail-golf3gti" class="detail-panel mt-2 mx-2">
+              <div class="p-4 bg-gray-50 rounded-xl border-2 border-gray-200 mb-3">
+                <h5 class="font-bold text-slate-800 mb-3">Technische Daten</h5>
+                <div class="grid sm:grid-cols-2 gap-2 text-sm">
+                  <div><span class="font-semibold text-slate-700">Baujahr:</span> <span class="text-slate-600">9/1996</span></div>
+                  <div><span class="font-semibold text-slate-700">Motor:</span> <span class="text-slate-600">4 Zyl. Diesel TDI, 1.896 ccm</span></div>
+                  <div><span class="font-semibold text-slate-700">Leistung:</span> <span class="text-slate-600">81 kW / 110 PS</span></div>
+                  <div><span class="font-semibold text-slate-700">Drehmoment:</span> <span class="text-slate-600">235 Nm</span></div>
+                </div>
+              </div>
+              <img src="https://drive.google.com/thumbnail?id=1EP5D6kWUXTD6q3eUlYRwC8uiubIjVT90&sz=w1000"
+                   alt="Golf 3 GTI TDI" class="w-full rounded-xl" loading="lazy"
+                   onerror="this.outerHTML='<p class=\'text-slate-500 text-center py-6\'>Foto konnte nicht geladen werden.</p>'">
+            </div>
+          </div>
+
+          <!-- ── Suzuki Vitara Cabrio (aktuell) ── -->
+          <div class="timeline-entry">
+            <div class="timeline-row flex items-center gap-4 p-4 bg-gradient-to-r from-yellow-50 to-yellow-100 rounded-xl cursor-pointer border-2 border-yellow-400"
+                 data-toggle="vitara">
+              <div class="flex items-center gap-3 shrink-0">
+                <div class="text-center w-16">
+                  <div class="text-2xl font-bold text-yellow-700">2022</div>
+                  <div class="w-1 h-8 bg-yellow-400 mx-auto mt-1"></div>
+                </div>
+                <div class="text-5xl">🚙</div>
+              </div>
+              <div class="flex-1 min-w-0">
+                <h4 class="font-semibold text-slate-800">Suzuki Vitara 2,0 16V Cabrio</h4>
+                <p class="text-slate-500 text-sm">Aktuell · Baujahr 1999</p>
+              </div>
+              <div class="flex gap-2 shrink-0">
+                <a href="https://photos.app.goo.gl" target="_blank" rel="noopener noreferrer"
+                   class="text-lg hover:scale-125 transition-transform" title="Fotoalbum öffnen"
+                   onclick="event.stopPropagation()">📷</a>
+                <button class="text-lg hover:scale-125 transition-transform" title="Details anzeigen">ℹ️</button>
+              </div>
+            </div>
+            <div id="detail-vitara" class="detail-panel mt-2 mx-2">
+              <div class="p-4 bg-yellow-50 rounded-xl border-2 border-yellow-200 mb-3">
+                <h5 class="font-bold text-slate-800 mb-3">Technische Daten</h5>
+                <div class="grid sm:grid-cols-2 gap-2 text-sm">
+                  <div><span class="font-semibold text-slate-700">Karosserie:</span> <span class="text-slate-600">Kurzes Cabrio</span></div>
+                  <div><span class="font-semibold text-slate-700">Baujahr:</span> <span class="text-slate-600">1999</span></div>
+                  <div><span class="font-semibold text-slate-700">Motor:</span> <span class="text-slate-600">Inline 4, 1.995 cm³, 16V</span></div>
+                  <div><span class="font-semibold text-slate-700">Leistung:</span> <span class="text-slate-600">97 kW / 132 PS</span></div>
+                  <div><span class="font-semibold text-slate-700">Antrieb:</span> <span class="text-slate-600">AWD (Allrad)</span></div>
+                </div>
+              </div>
+              <img src="https://drive.google.com/thumbnail?id=1bnvS16S2AiRDFgTDJpvZQk_Mz8Nz5fNH&sz=w1000"
+                   alt="Suzuki Vitara Cabrio" class="w-full rounded-xl" loading="lazy"
+                   onerror="this.outerHTML='<p class=\'text-slate-500 text-center py-6\'>Foto konnte nicht geladen werden.</p>'">
+            </div>
+          </div>
+
+        </div><!-- /space-y-3 -->
+
+        <div class="mt-8 pt-6 border-t border-slate-200 text-center">
+          <p class="text-slate-600 font-medium"><span class="text-3xl mr-2">🏎️</span> 8 Fahrzeuge über die Jahre</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       HANDYS PAGE
+  ══════════════════════════════════════ -->
+  <div id="page-handys" class="page">
+    <div class="hero-handys text-white py-16 px-4">
+      <div class="max-w-4xl mx-auto text-center">
+        <div class="text-6xl mb-4">📱</div>
+        <h2 class="text-4xl font-bold mb-4">Handys</h2>
+        <p class="text-xl opacity-90">Innovation und Eleganz in deiner Hand</p>
+      </div>
+    </div>
+    <div class="max-w-6xl mx-auto px-4 py-12">
+      <h3 class="text-2xl font-bold text-slate-800 mb-6 text-center">Meine Mobile Journey seit 2000</h3>
+
+      <div class="bg-white rounded-2xl p-6 shadow-lg mb-6">
+        <img src="https://drive.google.com/thumbnail?id=14cTLOHuFHMJWcZSMvGvA9W0k2T-d0Z-7&sz=w1000"
+             alt="Mobile Journey" class="w-full rounded-xl" loading="lazy"
+             onerror="this.classList.add('img-error'); this.alt='Bild nicht verfügbar';">
+      </div>
+
+      <div class="bg-white rounded-2xl p-8 shadow-lg">
+        <div class="space-y-3">
+
+          <!-- Helper macro: phone entry -->
+          <!-- Nokia 8210 -->
+          <div class="timeline-entry">
+            <div class="timeline-row flex items-center gap-4 p-4 bg-gradient-to-r from-blue-50 to-blue-100 rounded-xl cursor-pointer" data-toggle="nokia8210">
+              <div class="flex items-center gap-3 shrink-0">
+                <div class="text-center w-16"><div class="text-2xl font-bold text-blue-700">2000</div><div class="w-1 h-8 bg-blue-300 mx-auto mt-1"></div></div>
+                <div class="w-12 h-12 bg-gradient-to-br from-blue-400 to-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-xs">N</div>
+              </div>
+              <div class="flex-1 min-w-0"><h4 class="font-semibold text-slate-800">Nokia 8210</h4><p class="text-slate-500 text-sm">Kompakt und leicht</p></div>
+              <button class="text-lg hover:scale-125 transition-transform shrink-0">ℹ️</button>
+            </div>
+            <div id="detail-nokia8210" class="detail-panel mt-2 mx-2">
+              <div class="p-4 bg-blue-50 rounded-xl border-2 border-blue-200 text-sm text-slate-600">Nokia 8210 – Klassisches kompaktes Design aus dem Jahr 2000.</div>
+            </div>
+          </div>
+
+          <!-- Sony Ericsson T100 -->
+          <div class="timeline-entry">
+            <div class="timeline-row flex items-center gap-4 p-4 bg-gradient-to-r from-purple-50 to-purple-100 rounded-xl cursor-pointer" data-toggle="sonyt100">
+              <div class="flex items-center gap-3 shrink-0">
+                <div class="text-center w-16"><div class="text-2xl font-bold text-purple-700">2002</div><div class="w-1 h-8 bg-purple-300 mx-auto mt-1"></div></div>
+                <div class="w-12 h-12 bg-gradient-to-br from-purple-400 to-purple-600 rounded-xl flex items-center justify-center text-white font-bold text-xs">SE</div>
+              </div>
+              <div class="flex-1 min-w-0"><h4 class="font-semibold text-slate-800">Sony Ericsson T100</h4><p class="text-slate-500 text-sm">Elegantes Klapphandy</p></div>
+              <button class="text-lg hover:scale-125 transition-transform shrink-0">ℹ️</button>
+            </div>
+            <div id="detail-sonyt100" class="detail-panel mt-2 mx-2">
+              <div class="p-4 bg-purple-50 rounded-xl border-2 border-purple-200 text-sm text-slate-600">Sony Ericsson T100 – Innovatives Design mit farbigem Display.</div>
+            </div>
+          </div>
+
+          <!-- Nokia 3310 -->
+          <div class="timeline-entry">
+            <div class="timeline-row flex items-center gap-4 p-4 bg-gradient-to-r from-green-50 to-green-100 rounded-xl cursor-pointer" data-toggle="nokia3310">
+              <div class="flex items-center gap-3 shrink-0">
+                <div class="text-center w-16"><div class="text-2xl font-bold text-green-700">2004</div><div class="w-1 h-8 bg-green-300 mx-auto mt-1"></div></div>
+                <div class="w-12 h-12 bg-gradient-to-br from-green-400 to-green-600 rounded-xl flex items-center justify-center text-white font-bold text-xs">N</div>
+              </div>
+              <div class="flex-1 min-w-0"><h4 class="font-semibold text-slate-800">Nokia 3310</h4><p class="text-slate-500 text-sm">Die unverwüstliche Legende</p></div>
+              <button class="text-lg hover:scale-125 transition-transform shrink-0">ℹ️</button>
+            </div>
+            <div id="detail-nokia3310" class="detail-panel mt-2 mx-2">
+              <div class="p-4 bg-green-50 rounded-xl border-2 border-green-200 text-sm text-slate-600">Nokia 3310 – Bis heute die berühmteste Handy-Legende aller Zeiten.</div>
+            </div>
+          </div>
+
+          <!-- Sony Ericsson K750i -->
+          <div class="timeline-entry">
+            <div class="timeline-row flex items-center gap-4 p-4 bg-gradient-to-r from-cyan-50 to-cyan-100 rounded-xl cursor-pointer" data-toggle="sonik750">
+              <div class="flex items-center gap-3 shrink-0">
+                <div class="text-center w-16"><div class="text-2xl font-bold text-cyan-700">2006</div><div class="w-1 h-8 bg-cyan-300 mx-auto mt-1"></div></div>
+                <div class="w-12 h-12 bg-gradient-to-br from-cyan-400 to-cyan-600 rounded-xl flex items-center justify-center text-white font-bold text-xs">SE</div>
+              </div>
+              <div class="flex-1 min-w-0"><h4 class="font-semibold text-slate-800">Sony Ericsson K750i</h4><p class="text-slate-500 text-sm">Kamera-Handy der neuen Generation</p></div>
+              <button class="text-lg hover:scale-125 transition-transform shrink-0">ℹ️</button>
+            </div>
+            <div id="detail-sonik750" class="detail-panel mt-2 mx-2">
+              <div class="p-4 bg-cyan-50 rounded-xl border-2 border-cyan-200 text-sm text-slate-600">Sony Ericsson K750i – Wegweisendes Kamera-Handy mit 2 MP.</div>
+            </div>
+          </div>
+
+          <!-- iPhone 3G -->
+          <div class="timeline-entry">
+            <div class="timeline-row flex items-center gap-4 p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl cursor-pointer border-2 border-gray-400" data-toggle="iphone3g">
+              <div class="flex items-center gap-3 shrink-0">
+                <div class="text-center w-16"><div class="text-2xl font-bold text-gray-700">2008</div><div class="w-1 h-8 bg-gray-400 mx-auto mt-1"></div></div>
+                <div class="w-12 h-12 bg-gradient-to-br from-gray-800 to-black rounded-xl flex items-center justify-center text-xl">🍎</div>
+              </div>
+              <div class="flex-1 min-w-0"><h4 class="font-semibold text-slate-800">iPhone 3G</h4><p class="text-slate-500 text-sm">Start der Smartphone-Revolution</p></div>
+              <button class="text-lg hover:scale-125 transition-transform shrink-0">ℹ️</button>
+            </div>
+            <div id="detail-iphone3g" class="detail-panel mt-2 mx-2">
+              <div class="p-4 bg-gray-50 rounded-xl border-2 border-gray-300 text-sm text-slate-600">iPhone 3G – Zweite iPhone-Generation mit 3G-Support und dem App Store.</div>
+            </div>
+          </div>
+
+          <!-- iPhone 4 -->
+          <div class="timeline-entry">
+            <div class="timeline-row flex items-center gap-4 p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl cursor-pointer border-2 border-gray-500" data-toggle="iphone4">
+              <div class="flex items-center gap-3 shrink-0">
+                <div class="text-center w-16"><div class="text-2xl font-bold text-gray-800">2010</div><div class="w-1 h-8 bg-gray-500 mx-auto mt-1"></div></div>
+                <div class="w-12 h-12 bg-gradient-to-br from-gray-400 to-gray-700 rounded-xl flex items-center justify-center text-xl">🍎</div>
+              </div>
+              <div class="flex-1 min-w-0"><h4 class="font-semibold text-slate-800">iPhone 4</h4><p class="text-slate-500 text-sm">Revolutionäres Retina-Display</p></div>
+              <button class="text-lg hover:scale-125 transition-transform shrink-0">ℹ️</button>
+            </div>
+            <div id="detail-iphone4" class="detail-panel mt-2 mx-2">
+              <div class="p-4 bg-gray-50 rounded-xl border-2 border-gray-400 text-sm text-slate-600">iPhone 4 – Ikonisches Glasgehäuse mit erstmals Retina-Display.</div>
+            </div>
+          </div>
+
+          <!-- iPhone 5 -->
+          <div class="timeline-entry">
+            <div class="timeline-row flex items-center gap-4 p-4 bg-gradient-to-r from-slate-50 to-slate-100 rounded-xl cursor-pointer border-2 border-slate-400" data-toggle="iphone5">
+              <div class="flex items-center gap-3 shrink-0">
+                <div class="text-center w-16"><div class="text-2xl font-bold text-slate-700">2012</div><div class="w-1 h-8 bg-slate-400 mx-auto mt-1"></div></div>
+                <div class="w-12 h-12 bg-gradient-to-br from-slate-400 to-slate-700 rounded-xl flex items-center justify-center text-xl">🍎</div>
+              </div>
+              <div class="flex-1 min-w-0"><h4 class="font-semibold text-slate-800">iPhone 5</h4><p class="text-slate-500 text-sm">Dünn und leicht mit Lightning</p></div>
+              <button class="text-lg hover:scale-125 transition-transform shrink-0">ℹ️</button>
+            </div>
+            <div id="detail-iphone5" class="detail-panel mt-2 mx-2">
+              <div class="p-4 bg-slate-50 rounded-xl border-2 border-slate-300 text-sm text-slate-600">iPhone 5 – Leichtestes iPhone seiner Zeit, erster Lightning-Connector.</div>
+            </div>
+          </div>
+
+          <!-- iPhone 6 Plus -->
+          <div class="timeline-entry">
+            <div class="timeline-row flex items-center gap-4 p-4 bg-gradient-to-r from-amber-50 to-amber-100 rounded-xl cursor-pointer border-2 border-amber-400" data-toggle="iphone6plus">
+              <div class="flex items-center gap-3 shrink-0">
+                <div class="text-center w-16"><div class="text-2xl font-bold text-amber-700">2014</div><div class="w-1 h-8 bg-amber-400 mx-auto mt-1"></div></div>
+                <div class="w-12 h-12 bg-gradient-to-br from-amber-400 to-amber-700 rounded-xl flex items-center justify-center text-xl">🍎</div>
+              </div>
+              <div class="flex-1 min-w-0"><h4 class="font-semibold text-slate-800">iPhone 6 Plus</h4><p class="text-slate-500 text-sm">Großes Phablet-Format</p></div>
+              <button class="text-lg hover:scale-125 transition-transform shrink-0">ℹ️</button>
+            </div>
+            <div id="detail-iphone6plus" class="detail-panel mt-2 mx-2">
+              <div class="p-4 bg-amber-50 rounded-xl border-2 border-amber-300 text-sm text-slate-600">iPhone 6 Plus – Erstes großformatiges iPhone im Phablet-Format mit 5,5 Zoll.</div>
+            </div>
+          </div>
+
+        </div><!-- /space-y-3 -->
+
+        <div class="mt-8 pt-6 border-t border-slate-200 text-center">
+          <p class="text-slate-600 font-medium"><span class="text-3xl mr-2">📱</span> 8 Handys über die Jahre</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       3D DRUCK PAGE
+  ══════════════════════════════════════ -->
+  <div id="page-druck" class="page">
+    <div class="hero-druck text-white py-16 px-4">
+      <div class="max-w-4xl mx-auto text-center">
+        <div class="text-6xl mb-4">🖨️</div>
+        <h2 class="text-4xl font-bold mb-4">3D Druck Projekte</h2>
+        <p class="text-xl opacity-90">Kreative Ideen zum Leben erwecken</p>
+      </div>
+    </div>
+    <div class="max-w-6xl mx-auto px-4 py-12">
+      <h3 class="text-2xl font-bold text-slate-800 mb-6 text-center">Meine 3D Druck Sammlung</h3>
+
+      <div class="bg-white rounded-2xl p-8 shadow-lg mb-8">
+        <h4 class="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2"><span class="text-2xl">💡</span> Projekt Ideen</h4>
+        <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div class="p-4 bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl border border-orange-200">
+            <h5 class="font-semibold text-slate-800 mb-2">Organizer</h5>
+            <p class="text-slate-600 text-sm">Praktische Aufbewahrungslösungen</p>
+          </div>
+          <div class="p-4 bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl border border-blue-200">
+            <h5 class="font-semibold text-slate-800 mb-2">Deko Objekte</h5>
+            <p class="text-slate-600 text-sm">Kunstvolle Dekorationen für den Raum</p>
+          </div>
+          <div class="p-4 bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl border border-green-200">
+            <h5 class="font-semibold text-slate-800 mb-2">Funktional</h5>
+            <p class="text-slate-600 text-sm">Nützliche Alltagsgegenstände</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl p-8 shadow-lg">
+        <h4 class="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2"><span class="text-2xl">🎨</span> Projekte im Design</h4>
+        <p class="text-slate-500 text-center py-8">Meine 3D Druck Projekte werden gerade konzipiert …</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       MTB PAGE
+  ══════════════════════════════════════ -->
+  <div id="page-mtb" class="page">
+    <div class="hero-mtb text-white py-16 px-4">
+      <div class="max-w-4xl mx-auto text-center">
+        <div class="text-6xl mb-4">🚵</div>
+        <h2 class="text-4xl font-bold mb-4">Mountainbike Adventures</h2>
+        <p class="text-xl opacity-90">Abenteuer im Gelände und auf Trails</p>
+      </div>
+    </div>
+    <div class="max-w-6xl mx-auto px-4 py-12">
+      <h3 class="text-2xl font-bold text-slate-800 mb-6 text-center">Meine Bike Sammlung</h3>
+      <div class="bg-white rounded-2xl p-8 shadow-lg">
+        <p class="text-slate-500 text-center py-12">Komme bald mit meinen MTB Stories zurück …</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       JAVASCRIPT – sauber, kein inline-onclick
+  ══════════════════════════════════════ -->
+  <script>
+    // ── Page navigation ──────────────────────────────────────────────
+    function navigateTo(page) {
+      // Hide all pages
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      // Show target
+      const target = document.getElementById('page-' + page);
+      if (target) target.classList.add('active');
+      // Update nav buttons
+      document.querySelectorAll('[data-page]').forEach(btn => btn.classList.remove('active'));
+      const navBtn = document.querySelector('[data-page="' + page + '"]');
+      if (navBtn) navBtn.classList.add('active');
+      // Scroll to top
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // Nav buttons (header)
+    document.querySelectorAll('[data-page]').forEach(btn => {
+      btn.addEventListener('click', () => navigateTo(btn.dataset.page));
+    });
+
+    // Shortcut buttons (hero & home cards)
+    document.querySelectorAll('[data-goto]').forEach(btn => {
+      btn.addEventListener('click', () => navigateTo(btn.dataset.goto));
+    });
+
+    // ── Detail panel toggle ───────────────────────────────────────────
+    document.querySelectorAll('[data-toggle]').forEach(row => {
+      row.addEventListener('click', () => {
+        const id    = row.dataset.toggle;
+        const panel = document.getElementById('detail-' + id);
+        if (!panel) return;
+        // Close all other open panels
+        document.querySelectorAll('.detail-panel.open').forEach(p => {
+          if (p !== panel) p.classList.remove('open');
+        });
+        panel.classList.toggle('open');
+      });
+    });
+  </script>
+</body>
+</html>
