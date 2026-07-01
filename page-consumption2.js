@@ -43,9 +43,14 @@ const HTML = `
       <div class="mc-d" id="cv2-m-water2"></div>
     </div>
     <div class="mc" style="border-color:rgba(250,204,21,.3)">
-      <div class="mc-l">⚡ Strom Ø/Monat</div>
+      <div class="mc-l">⚡ Strom Bezug Ø/Monat</div>
       <div><span class="mc-v" id="cv2-m-strom">—</span><span class="mc-u">kWh</span></div>
       <div class="mc-d" id="cv2-m-strom2"></div>
+    </div>
+    <div class="mc" style="border-color:rgba(63,207,142,.3)">
+      <div class="mc-l">⚡ Einspeisung Ø/Monat</div>
+      <div><span class="mc-v" id="cv2-m-feed">—</span><span class="mc-u">kWh</span></div>
+      <div class="mc-d" id="cv2-m-feed2"></div>
     </div>
     <div class="mc gr">
       <div class="mc-l">☀ Solar Ø/Tag</div>
@@ -61,8 +66,12 @@ const HTML = `
       <div class="mc-d">Liter pro Tag</div>
     </div>
     <div class="mc" style="border-color:rgba(250,204,21,.2)">
-      <div class="mc-l">⚡ Strom Ø/Tag</div>
+      <div class="mc-l">⚡ Strom Bezug Ø/Tag</div>
       <div><span class="mc-v" id="cv2-d-strom">—</span><span class="mc-u">kWh</span></div>
+    </div>
+    <div class="mc" style="border-color:rgba(63,207,142,.2)">
+      <div class="mc-l">⚡ Einspeisung Ø/Tag</div>
+      <div><span class="mc-v" id="cv2-d-feed">—</span><span class="mc-u">kWh</span></div>
     </div>
   </div>
 
@@ -120,7 +129,8 @@ const HTML = `
             <th style="color:rgba(251,146,60,.9)">Fernwärme kWh</th>
             <th>FW Status</th>
             <th style="color:#5b9cf6">Wasser m³</th>
-            <th style="color:rgba(250,204,21,.9)">Strom kWh</th>
+            <th style="color:rgba(250,204,21,.9)">Strom Bezug</th>
+            <th style="color:rgba(63,207,142,.9)">Einspeisung</th>
             <th>Temp °C</th>
             <th>Anmerkung</th>
             <th style="text-align:center">Aktion</th>
@@ -147,7 +157,8 @@ const HTML = `
           </select>
         </div>
         <div class="field"><label>Wasser (m³)</label><input type="number" id="cv2-e-water" step="0.001" placeholder="z.B. 524.138"></div>
-        <div class="field"><label>Strom (kWh)</label><input type="number" id="cv2-e-strom" step="0.01" placeholder="z.B. 2473.00"></div>
+        <div class="field"><label>Strom Bezug (kWh)</label><input type="number" id="cv2-e-strom" step="0.01" placeholder="z.B. 2473.00"></div>
+        <div class="field"><label>Strom Einspeisung (kWh)</label><input type="number" id="cv2-e-feed" step="0.01" placeholder="z.B. 0.00"></div>
         <div class="field"><label>Außentemperatur (°C)</label><input type="number" id="cv2-e-temp" step="1" placeholder="z.B. 7"></div>
         <div class="field" style="grid-column:1/-1"><label>Anmerkung</label><input type="text" id="cv2-e-note" placeholder="Optional…"></div>
       </div>
@@ -192,10 +203,13 @@ const HTML = `
   fw_status text,
   water_m3 numeric,
   strom_kwh numeric,
+  feed_kwh numeric,
   temp_c numeric,
   note text,
   created_at timestamptz default now()
 );
+-- Spalte nachrüsten falls Tabelle bereits existiert:
+alter table meter_readings add column if not exists feed_kwh numeric;
 alter table meter_readings enable row level security;
 create policy "allow_all" on meter_readings
   for all using (true) with check (true);</div>
@@ -286,14 +300,16 @@ function calcConsumption(data) {
     const fw    = diff(prev.fw_kwh,     curr.fw_kwh);
     // Wasser: volume CONSUMED — negative diff → 0
     const water = diff(prev.water_m3,   curr.water_m3);
-    // Strom: energy CONSUMED — negative diff → 0
+    // Strom Bezug: energy CONSUMED — negative diff → 0
     const strom = diff(prev.strom_kwh,  curr.strom_kwh);
+    // Strom Einspeisung: energy FED TO GRID — positive diff = gut
+    const feed  = diff(prev.feed_kwh,   curr.feed_kwh);
 
     const entry = {
       from:       prev.reading_date,
       to:         curr.reading_date,
       days,
-      solar, fw, water, strom,
+      solar, fw, water, strom, feed,
       temp:       curr.temp_c,
       fw_status:  curr.fw_status,
       note:       curr.note,
@@ -301,6 +317,7 @@ function calcConsumption(data) {
       fw_day:     fw    != null ? +(fw    / days).toFixed(3) : null,
       water_day:  water != null ? +(water / days).toFixed(3) : null,
       strom_day:  strom != null ? +(strom / days).toFixed(2) : null,
+      feed_day:   feed  != null ? +(feed  / days).toFixed(2) : null,
     };
     result.push(entry);
   }
@@ -429,7 +446,7 @@ function renderDashboard() {
   });
 
   if (!cons.length) {
-    ['cv2-m-solar','cv2-m-fw','cv2-m-water','cv2-m-strom',
+    ['cv2-m-solar','cv2-m-fw','cv2-m-water','cv2-m-strom','cv2-m-feed',
      'cv2-d-solar','cv2-d-fw','cv2-d-water','cv2-d-strom'].forEach(id => set(id,'—'));
     return;
   }
@@ -442,29 +459,33 @@ function renderDashboard() {
   const sumFw    = cons.reduce((s,c) => s+(c.fw??0),    0);
   const sumWater = cons.reduce((s,c) => s+(c.water??0), 0);
   const sumStrom = cons.reduce((s,c) => s+(c.strom??0), 0);
+  const sumFeed  = cons.reduce((s,c) => s+(c.feed??0),  0);
 
-  // Monthly averages (÷ total months in range)
+  // Monthly averages
   set('cv2-m-solar', totalMonths>0 ? (sumSolar/totalMonths).toFixed(1) : '—');
   set('cv2-m-fw',    totalMonths>0 ? (sumFw   /totalMonths).toFixed(1) : '—');
   set('cv2-m-water', totalMonths>0 ? (sumWater/totalMonths).toFixed(2) : '—');
   set('cv2-m-strom', totalMonths>0 ? (sumStrom/totalMonths).toFixed(1) : '—');
+  set('cv2-m-feed',  totalMonths>0 ? (sumFeed /totalMonths).toFixed(1) : '—');
   set('cv2-m-solar2', `${sumSolar.toFixed(1)} kWh gesamt`);
   set('cv2-m-fw2',    `${sumFw.toFixed(1)} kWh gesamt`);
   set('cv2-m-water2', `${sumWater.toFixed(2)} m³ gesamt`);
   set('cv2-m-strom2', `${sumStrom.toFixed(1)} kWh gesamt`);
+  set('cv2-m-feed2',  `${sumFeed.toFixed(1)} kWh gesamt`);
 
-  // Daily averages (÷ total days)
+  // Daily averages
   set('cv2-d-solar', totalDays>0 ? (sumSolar/totalDays).toFixed(2) : '—');
   set('cv2-d-fw',    totalDays>0 ? (sumFw   /totalDays).toFixed(2) : '—');
   set('cv2-d-water', totalDays>0 ? ((sumWater/totalDays)*1000).toFixed(0) : '—');
   set('cv2-d-strom', totalDays>0 ? (sumStrom/totalDays).toFixed(2) : '—');
+  set('cv2-d-feed',  totalDays>0 ? (sumFeed /totalDays).toFixed(2) : '—');
 
   set('cv2-chart-sub', `${cons.length} Perioden · ${Math.round(totalDays)} Tage`);
 
   drawEnergyChart(cons);
   drawWaterChart(cons);
   drawTempChart(cons);
-  drawDonut(sumSolar, sumFw, sumStrom);
+  drawDonut(sumSolar, sumFw, sumStrom, sumFeed);
 }
 
 function periodLabel(c) {
@@ -478,15 +499,33 @@ function drawEnergyChart(cons) {
   APP.charts['cv2-energy'] = new Chart(document.getElementById('cv2-c-energy'), {
     type:'bar',
     data:{ labels, datasets:[
-      { label:'Solar',     data:cons.map(c=>c.solar!=null  ? +c.solar.toFixed(2):null),  backgroundColor:'rgba(245,200,66,.8)',  borderRadius:3 },
-      { label:'Fernwärme', data:cons.map(c=>c.fw!=null     ? +c.fw.toFixed(2):null),     backgroundColor:'rgba(251,146,60,.75)', borderRadius:3 },
-      { label:'Strom',     data:cons.map(c=>c.strom!=null  ? +c.strom.toFixed(2):null),  backgroundColor:'rgba(91,156,246,.75)', borderRadius:3 }
+      { label:'Solar',        data:cons.map(c=>c.solar!=null  ? +c.solar.toFixed(2):null),  backgroundColor:'rgba(245,200,66,.8)',  borderRadius:3 },
+      { label:'Fernwärme',    data:cons.map(c=>c.fw!=null     ? +c.fw.toFixed(2):null),     backgroundColor:'rgba(251,146,60,.75)', borderRadius:3 },
+      { label:'Strom Bezug',  data:cons.map(c=>c.strom!=null  ? +c.strom.toFixed(2):null),  backgroundColor:'rgba(91,156,246,.75)', borderRadius:3 },
+      { label:'Einspeisung',  data:cons.map(c=>c.feed!=null&&c.feed>0 ? +c.feed.toFixed(2):null),
+        backgroundColor:'rgba(63,207,142,.8)', borderRadius:3 }
     ]},
     options:{ responsive:true, maintainAspectRatio:false,
       plugins:{ legend:{ labels:{ color:APP.TC, font:{size:11}, boxWidth:10 } } },
       scales:{ x:{ticks:{color:APP.TC,font:{size:10}},grid:{color:APP.GC}},
                y:{ticks:{color:APP.TC,font:{size:10}},grid:{color:APP.GC},
                   title:{display:true,text:'kWh',color:APP.TC,font:{size:10}}} } }
+  });
+}
+
+function drawDonut(solar, fw, strom, feed=0) {
+  APP.destroyChart('cv2-donut');
+  const total = solar + fw + strom;
+  if (total <= 0) return;
+  const netStrom = Math.max(0, strom - feed); // Netto-Bezug nach Einspeisung
+  APP.charts['cv2-donut'] = new Chart(document.getElementById('cv2-c-donut'), {
+    type:'doughnut',
+    data:{ labels:['Solar','Fernwärme','Strom Bezug','Einspeisung'],
+      datasets:[{ data:[solar, fw, netStrom, feed>0?feed:null],
+        backgroundColor:['rgba(245,200,66,.85)','rgba(251,146,60,.8)','rgba(91,156,246,.8)','rgba(63,207,142,.85)'],
+        borderWidth:0 }]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ position:'bottom', labels:{ color:APP.TC, font:{size:10}, boxWidth:10 } } } }
   });
 }
 
@@ -524,19 +563,6 @@ function drawTempChart(cons) {
   });
 }
 
-function drawDonut(solar, fw, strom) {
-  APP.destroyChart('cv2-donut');
-  APP.charts['cv2-donut'] = new Chart(document.getElementById('cv2-c-donut'), {
-    type:'doughnut',
-    data:{ labels:['Solar','Fernwärme','Strom'],
-      datasets:[{ data:[+solar.toFixed(1),+fw.toFixed(1),+strom.toFixed(1)],
-        backgroundColor:['rgba(245,200,66,.8)','rgba(251,146,60,.75)','rgba(91,156,246,.75)'],
-        borderWidth:0 }] },
-    options:{ responsive:true, maintainAspectRatio:false, cutout:'55%',
-      plugins:{ legend:{ labels:{color:APP.TC,font:{size:12},boxWidth:12} },
-        tooltip:{ callbacks:{ label:ctx=>ctx.parsed.toFixed(1)+' kWh' } } } }
-  });
-}
 
 // ── TABLE ─────────────────────────────────────────────────
 function renderTable() {
@@ -560,6 +586,7 @@ function renderTable() {
       <td style="font-size:11px;color:var(--tx3)">${r.fw_status||'—'}</td>
       <td style="color:#5b9cf6">${r.water_m3??'—'}</td>
       <td style="color:rgba(250,204,21,.9)">${r.strom_kwh??'—'}</td>
+      <td style="color:rgba(63,207,142,.9)">${r.feed_kwh!=null&&r.feed_kwh>0?r.feed_kwh.toFixed(2):'—'}</td>
       <td>${r.temp_c??'—'}</td>
       <td style="font-size:11px;color:var(--tx3);max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.note||''}</td>
       <td style="white-space:nowrap;display:flex;gap:4px">
@@ -606,6 +633,7 @@ function editEntry(id) {
   if (g('cv2-e-fwstatus')) g('cv2-e-fwstatus').value = r.fw_status ?? '';
   if (g('cv2-e-water'))    g('cv2-e-water').value    = r.water_m3  ?? '';
   if (g('cv2-e-strom'))    g('cv2-e-strom').value    = r.strom_kwh ?? '';
+  if (g('cv2-e-feed'))     g('cv2-e-feed').value     = r.feed_kwh  ?? '';
   if (g('cv2-e-temp'))     g('cv2-e-temp').value     = r.temp_c    ?? '';
   if (g('cv2-e-note'))     g('cv2-e-note').value     = r.note      ?? '';
   // Mark as edit mode: store original ID, remove old entry on save
@@ -643,6 +671,7 @@ function copyEntry(id) {
   if (g('cv2-e-fwstatus')) g('cv2-e-fwstatus').value = r.fw_status ?? '';
   if (g('cv2-e-water'))    g('cv2-e-water').value    = r.water_m3  ?? '';
   if (g('cv2-e-strom'))    g('cv2-e-strom').value    = r.strom_kwh ?? '';
+  if (g('cv2-e-feed'))     g('cv2-e-feed').value     = r.feed_kwh  ?? '';
   if (g('cv2-e-temp'))     g('cv2-e-temp').value     = r.temp_c    ?? '';
   if (g('cv2-e-note'))     g('cv2-e-note').value     = r.note      ?? '';
   const form = g('cv2-e-date')?.closest('.fcard');
@@ -677,6 +706,7 @@ function addEntry() {
         fw_status: document.getElementById('cv2-e-fwstatus')?.value||null,
         water_m3:  parseFloat(document.getElementById('cv2-e-water')?.value)||null,
         strom_kwh: parseFloat(document.getElementById('cv2-e-strom')?.value)||null,
+        feed_kwh:  parseFloat(document.getElementById('cv2-e-feed')?.value)||null,
         temp_c:    parseFloat(document.getElementById('cv2-e-temp')?.value)||null,
         note:      document.getElementById('cv2-e-note')?.value||null
       };
@@ -702,6 +732,7 @@ function addEntry() {
     fw_status:    document.getElementById('cv2-e-fwstatus')?.value||null,
     water_m3:     parseFloat(document.getElementById('cv2-e-water')?.value)||null,
     strom_kwh:    parseFloat(document.getElementById('cv2-e-strom')?.value)||null,
+    feed_kwh:     parseFloat(document.getElementById('cv2-e-feed')?.value)||null,
     temp_c:       parseFloat(document.getElementById('cv2-e-temp')?.value)||null,
     note:         document.getElementById('cv2-e-note')?.value||null
   };
@@ -713,7 +744,7 @@ function addEntry() {
   const resEl = document.getElementById('cv2-entry-result');
   if (resEl) resEl.innerHTML = `<span style="color:var(--gr)">✓ Ablesung gespeichert (${dateStr})</span>`;
   APP.toast('✓ Ablesung gespeichert');
-  ['cv2-e-solar','cv2-e-fw','cv2-e-water','cv2-e-strom','cv2-e-temp','cv2-e-note']
+  ['cv2-e-solar','cv2-e-fw','cv2-e-water','cv2-e-strom','cv2-e-feed','cv2-e-temp','cv2-e-note']
     .forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
 }
 
