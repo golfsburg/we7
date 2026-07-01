@@ -921,40 +921,28 @@ function populateDropdowns() {
 }
 
 async function loadReadings() {
-  // Load from localStorage first
+  // Load from localStorage as initial fallback only
   try {
     const v = localStorage.getItem('cv2_readings');
     if (v) readings = JSON.parse(v);
   } catch(e) {}
 
-  // Always sync from Supabase — merge any new entries
+  // Supabase ist immer die Quelle der Wahrheit — vollständig laden und ersetzen
   let tries = 0;
   while (!APP.sbClient && tries < 10) { await new Promise(r => setTimeout(r,500)); tries++; }
   if (APP.sbClient) {
     try {
       const { data, error } = await APP.sbClient.from(CV2_TBL).select('*').order('reading_date');
       if (!error && data && data.length > 0) {
-        // Merge: keep local + add any from Supabase not yet local
-        const localIds = new Set(readings.map(r => r.id));
-        const newFromSb = data.filter(r => !localIds.has(r.id));
-        if (newFromSb.length > 0) {
-          readings = [...readings, ...newFromSb]
-            .sort((a,b) => a.reading_date.localeCompare(b.reading_date));
-          saveReadings(false);
-        }
-        // If local was empty, use Supabase data directly
-        if (readings.length === 0) {
-          readings = data;
-          saveReadings(false);
-        }
+        // Supabase vollständig übernehmen — enthält immer aktuellste Spalten
+        readings = data.sort((a,b) => a.reading_date.localeCompare(b.reading_date));
+        saveReadings(false);
       }
     } catch(e) { console.warn('CV2 load:', e.message); }
   }
 
   // Populate dropdowns and render
   populateDropdowns();
-  const fEl = document.getElementById('cv2-from');
-  if (fEl && !fEl.value) fEl.value = getEarliestDate() || new Date().toISOString().split('T')[0];
   renderDashboard();
   renderTable();
 }
