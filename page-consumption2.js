@@ -287,11 +287,19 @@ function calcConsumption(data) {
     const d2   = new Date(curr.reading_date);
     const days = Math.max(1, (d2-d1) / (1000*60*60*24));
 
-    // Helper: calc diff, clamp negative to 0 (meter reset/exchange)
-    // If prev is null → treat as first reading of this meter (diff = 0, not null)
+    // diff für kumulative Zähler (Strom, Solar, FW, Wasser):
+    // Wenn kein Vorwert → 0 (erster Eintrag, Zählerstand unbekannt)
     const diff = (a, b) => {
-      if (b == null) return null;          // no current value → unknown
-      if (a == null) return 0;             // no previous value → first reading, diff = 0
+      if (b == null) return null;
+      if (a == null) return 0;
+      const d = b - a;
+      return d < 0 ? 0 : +d.toFixed(3);
+    };
+    // diffAbs für Felder wo der Wert selbst der Verbrauch ist (feed_kwh):
+    // Wenn kein Vorwert → aktuellen Wert direkt nehmen
+    const diffAbs = (a, b) => {
+      if (b == null) return null;
+      if (a == null) return +b.toFixed(3);
       const d = b - a;
       return d < 0 ? 0 : +d.toFixed(3);
     };
@@ -305,7 +313,7 @@ function calcConsumption(data) {
     // Strom Bezug: energy CONSUMED — negative diff → 0
     const strom = diff(prev.strom_kwh,  curr.strom_kwh);
     // Strom Einspeisung: energy FED TO GRID — positive diff = gut
-    const feed  = diff(prev.feed_kwh,   curr.feed_kwh);
+    const feed  = diffAbs(prev.feed_kwh,   curr.feed_kwh);
 
     const entry = {
       from:       prev.reading_date,
