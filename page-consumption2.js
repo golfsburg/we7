@@ -439,12 +439,19 @@ function resetFilter() {
 // ── DASHBOARD ─────────────────────────────────────────────
 function renderDashboard() {
   const range = APP.FilterBar.getRange('cv2-timeline');
-  const from  = range.from || document.getElementById('cv2-from')?.value;
-  const to    = range.to   || document.getElementById('cv2-to')?.value;
+  const from  = range.from || document.getElementById('cv2-from')?.value || '';
+  const to    = range.to   || document.getElementById('cv2-to')?.value   || '';
 
-  const cons = calcConsumption(readings).filter(c => {
-    const d = c.from.substring(0,10);
-    return (!from || d >= from) && (!to || d <= to);
+  const allCons = calcConsumption(readings);
+
+  // Filter: Periode gehört zum Bereich wenn c.to (Ende) im Zeitraum liegt
+  // ODER c.from (Start) im Zeitraum liegt
+  const cons = allCons.filter(c => {
+    const df = c.from.substring(0,10);
+    const dt = c.to.substring(0,10);
+    const inFrom = !from || dt >= from;   // Periode endet nach Start
+    const inTo   = !to   || df <= to;     // Periode beginnt vor Ende
+    return inFrom && inTo;
   });
 
   if (!cons.length) {

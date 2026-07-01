@@ -542,10 +542,16 @@ const FilterBar = (() => {
     if (!container) return;
 
     const allDates = getAllDates(opts.extraDates || []);
-    const today    = new Date().toISOString().split('T')[0];
+    // Use local date methods to avoid UTC timezone issues
+    const now       = new Date();
+    const today     = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
 
     const minDate  = allDates.length > 0 ? allDates[0] : today;
-    const maxDate  = today;
+    // maxDate: latest of today OR last date in extraDates (readings can be today)
+    const lastExtra = opts.extraDates?.length > 0
+      ? [...opts.extraDates].sort().pop()
+      : null;
+    const maxDate  = lastExtra && lastExtra > today ? lastExtra : today;
     const minMs    = dateToMs(minDate);
     const maxMs    = dateToMs(maxDate);
     // Allow selTo to go beyond today (e.g. end of current month)
@@ -752,7 +758,7 @@ const FilterBar = (() => {
     if (!inst) return;
     const p     = document.getElementById(`${prefix}-preset`)?.value;
     if (p === 'custom') return;
-    const today = new Date().toISOString().split('T')[0];
+    const _n = new Date(); const today = `${_n.getFullYear()}-${String(_n.getMonth()+1).padStart(2,'0')}-${String(_n.getDate()).padStart(2,'0')}`;
     const yr    = today.substring(0,4), ym = today.substring(0,7);
     let fd, td = today;
     if (p==='thismonth') fd=ym+'-01';
@@ -834,8 +840,8 @@ const FilterBar = (() => {
     if (mEl) mEl.value='';
     if (yEl) yEl.value='';
     const all=getAllDates();
-    const fd=all.length>0?all[0]:new Date().toISOString().split('T')[0];
-    const td=new Date().toISOString().split('T')[0];
+    const fd=all.length>0?all[0]:(()=>{const _d=new Date();return `${_d.getFullYear()}-${String(_d.getMonth()+1).padStart(2,'0')}-${String(_d.getDate()).padStart(2,'0')}`;})();
+    const td=(()=>{const _d=new Date();return `${_d.getFullYear()}-${String(_d.getMonth()+1).padStart(2,'0')}-${String(_d.getDate()).padStart(2,'0')}`;})();
     inst.setRange(fd, td);
     inst.fire();
   }
