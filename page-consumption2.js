@@ -516,17 +516,34 @@ function drawEnergyChart(cons) {
   APP.charts['cv2-energy'] = new Chart(document.getElementById('cv2-c-energy'), {
     type:'bar',
     data:{ labels, datasets:[
-      { label:'Solar',        data:cons.map(c=>c.solar!=null  ? +c.solar.toFixed(2):null),  backgroundColor:'rgba(245,200,66,.8)',  borderRadius:3 },
-      { label:'Fernwärme',    data:cons.map(c=>c.fw!=null     ? +c.fw.toFixed(2):null),     backgroundColor:'rgba(251,146,60,.75)', borderRadius:3 },
-      { label:'Strom Bezug',  data:cons.map(c=>c.strom!=null  ? +c.strom.toFixed(2):null),  backgroundColor:'rgba(91,156,246,.75)', borderRadius:3 },
-      { label:'Einspeisung',  data:cons.map(c=>c.feed!=null&&c.feed>0 ? +c.feed.toFixed(2):null),
-        backgroundColor:'rgba(63,207,142,.8)', borderRadius:3 }
+      { label:'Solar',       yAxisID:'y',  data:cons.map(c=>c.solar!=null  ? +c.solar.toFixed(2):null),  backgroundColor:'rgba(245,200,66,.8)',  borderRadius:3 },
+      { label:'Fernwärme',   yAxisID:'y',  data:cons.map(c=>c.fw!=null     ? +c.fw.toFixed(2):null),     backgroundColor:'rgba(251,146,60,.75)', borderRadius:3 },
+      { label:'Strom Bezug', yAxisID:'y',  data:cons.map(c=>c.strom!=null  ? +c.strom.toFixed(2):null),  backgroundColor:'rgba(91,156,246,.75)', borderRadius:3 },
+      { label:'Einspeisung', yAxisID:'y2', type:'line',
+        data:cons.map(c=>c.feed!=null&&c.feed>0 ? +c.feed.toFixed(2):null),
+        borderColor:'rgba(63,207,142,.9)', backgroundColor:'rgba(63,207,142,.15)',
+        pointBackgroundColor:'rgba(63,207,142,.9)', pointRadius:4, pointHoverRadius:6,
+        borderWidth:2, fill:false, tension:0.3 }
     ]},
     options:{ responsive:true, maintainAspectRatio:false,
       plugins:{ legend:{ labels:{ color:APP.TC, font:{size:11}, boxWidth:10 } } },
-      scales:{ x:{ticks:{color:APP.TC,font:{size:10}},grid:{color:APP.GC}},
-               y:{ticks:{color:APP.TC,font:{size:10}},grid:{color:APP.GC},
-                  title:{display:true,text:'kWh',color:APP.TC,font:{size:10}}} } }
+      scales:{
+        x:{ ticks:{color:APP.TC,font:{size:10}}, grid:{color:APP.GC} },
+        y:{
+          position:'left',
+          ticks:{color:APP.TC,font:{size:10}},
+          grid:{color:APP.GC},
+          title:{display:true,text:'kWh (Solar · FW · Strom)',color:APP.TC,font:{size:10}}
+        },
+        y2:{
+          position:'right',
+          ticks:{color:'rgba(63,207,142,.8)',font:{size:10}},
+          grid:{drawOnChartArea:false},
+          title:{display:true,text:'kWh (Einspeisung)',color:'rgba(63,207,142,.8)',font:{size:10}},
+          beginAtZero:true
+        }
+      }
+    }
   });
 }
 
