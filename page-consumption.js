@@ -1,974 +1,659 @@
 // ═══════════════════════════════════════════════════════════
-// PAGE-CONSUMPTION2.JS  —  Verbrauchsbilanz (Zählerablesen)
-// Zählerstände → Verbrauchsberechnung via Differenz
+// PAGE-CONSUMPTION.JS  —  Stromverbrauch
+// Analog zu page-pv.js — gleiche Struktur, gleiche Patterns
 // ═══════════════════════════════════════════════════════════
-const CV2 = (() => {
+const CV = (() => {
 'use strict';
-
-const CV2_TBL = 'meter_readings';
 
 // ── HTML ─────────────────────────────────────────────────
 const HTML = `
 <div class="ph"><div>
-  <div class="ph-title">📊 Verbrauchsbilanz</div>
-  <div class="ph-sub">Zählerablesen · Solar · Fernwärme · Wasser · Strom</div>
+  <div class="ph-title">⚡ Stromverbrauch</div>
+  <div class="ph-sub">Smart Meter · Viertelstundenwerte · EVN / Netz NÖ</div>
 </div></div>
 
-<div id="cv2-timeline"></div>
+<div id="cv-timeline"></div>
 
-<div class="mtabs" id="cv2-tabs">
-  <button class="mtab active" onclick="CV2.tab('dashboard',this)">Dashboard</button>
-  <button class="mtab"        onclick="CV2.tab('records',this)">Verbrauchsaufzeichnung</button>
+<div class="gran-bar">
+  <label class="gran-lbl">Granularität</label>
+  <label class="gran-opt"><input type="radio" name="cv-gran" value="15min" onchange="CV.renderOverview()"><span>15 Min</span></label>
+  <label class="gran-opt"><input type="radio" name="cv-gran" value="day" onchange="CV.renderOverview()"><span>Tag</span></label>
+  <label class="gran-opt active"><input type="radio" name="cv-gran" value="month" checked onchange="CV.renderOverview()"><span>Monat</span></label>
+  <label class="gran-opt"><input type="radio" name="cv-gran" value="year" onchange="CV.renderOverview()"><span>Jahr</span></label>
 </div>
 
-<!-- ── DASHBOARD ── -->
-<div id="cv2-t-dashboard">
+<div class="mtabs" id="cv-tabs">
+  <button class="mtab active" onclick="CV.tab('overview',this)">Übersicht</button>
+  <button class="mtab"        onclick="CV.tab('profile',this)">Lastprofil</button>
+  <button class="mtab"        onclick="CV.tab('data',this)">Daten</button>
+  <button class="mtab"        onclick="CV.tab('import',this)">Import / Löschen</button>
+</div>
 
-
-  <!-- KPI Cards -->
+<!-- ÜBERSICHT -->
+<div id="cv-t-overview">
+  <div id="cv-timeline-filter"></div>
   <div class="metrics">
-    <div class="mc hi">
-      <div class="mc-l">☀ Solar Ø/Monat</div>
-      <div><span class="mc-v" id="cv2-m-solar">—</span><span class="mc-u">kWh</span></div>
-      <div class="mc-d" id="cv2-m-solar2"></div>
-    </div>
-    <div class="mc" style="border-color:rgba(251,146,60,.3)">
-      <div class="mc-l">🔥 Fernwärme Ø/Monat</div>
-      <div><span class="mc-v" id="cv2-m-fw">—</span><span class="mc-u">kWh</span></div>
-      <div class="mc-d" id="cv2-m-fw2"></div>
-    </div>
-    <div class="mc bl">
-      <div class="mc-l">💧 Wasser Ø/Monat</div>
-      <div><span class="mc-v" id="cv2-m-water">—</span><span class="mc-u">m³</span></div>
-      <div class="mc-d" id="cv2-m-water2"></div>
-    </div>
-    <div class="mc" style="border-color:rgba(250,204,21,.3)">
-      <div class="mc-l">⚡ Strom Bezug Ø/Monat</div>
-      <div><span class="mc-v" id="cv2-m-strom">—</span><span class="mc-u">kWh</span></div>
-      <div class="mc-d" id="cv2-m-strom2"></div>
-    </div>
-    <div class="mc" style="border-color:rgba(63,207,142,.3)">
-      <div class="mc-l">⚡ Einspeisung Ø/Monat</div>
-      <div><span class="mc-v" id="cv2-m-feed">—</span><span class="mc-u">kWh</span></div>
-      <div class="mc-d" id="cv2-m-feed2"></div>
-    </div>
-    <div class="mc gr">
-      <div class="mc-l">☀ Solar Ø/Tag</div>
-      <div><span class="mc-v" id="cv2-d-solar">—</span><span class="mc-u">kWh</span></div>
-    </div>
-    <div class="mc" style="border-color:rgba(251,146,60,.2)">
-      <div class="mc-l">🔥 Fernwärme Ø/Tag</div>
-      <div><span class="mc-v" id="cv2-d-fw">—</span><span class="mc-u">kWh</span></div>
-    </div>
-    <div class="mc bl">
-      <div class="mc-l">💧 Wasser Ø/Tag</div>
-      <div><span class="mc-v" id="cv2-d-water">—</span><span class="mc-u">l</span></div>
-      <div class="mc-d">Liter pro Tag</div>
-    </div>
-    <div class="mc" style="border-color:rgba(250,204,21,.2)">
-      <div class="mc-l">⚡ Strom Bezug Ø/Tag</div>
-      <div><span class="mc-v" id="cv2-d-strom">—</span><span class="mc-u">kWh</span></div>
-    </div>
-    <div class="mc" style="border-color:rgba(63,207,142,.2)">
-      <div class="mc-l">⚡ Einspeisung Ø/Tag</div>
-      <div><span class="mc-v" id="cv2-d-feed">—</span><span class="mc-u">kWh</span></div>
-    </div>
+    <div class="mc bl"><div class="mc-l">Netzbezug</div><div><span class="mc-v" id="cv-m-grid">—</span><span class="mc-u">kWh</span></div><div class="mc-d" id="cv-m-grid2"></div></div>
+    <div class="mc"><div class="mc-l">Ø pro Tag</div><div><span class="mc-v" id="cv-m-avg">—</span><span class="mc-u">kWh</span></div></div>
+    <div class="mc"><div class="mc-l">Kosten (geschätzt)</div><div><span class="mc-v" id="cv-m-cost">—</span><span class="mc-u">€</span></div><div class="mc-d" id="cv-m-cost2"></div></div>
+    <div class="mc"><div class="mc-l">Messpunkte</div><div><span class="mc-v" id="cv-m-pts">—</span></div></div>
   </div>
-
-  <!-- Charts -->
   <div class="cgrid">
     <div class="cc full">
-      <div class="cc-title">Energieverbrauch im Zeitverlauf</div>
-      <div class="cc-sub" id="cv2-chart-sub">kWh pro Periode</div>
-      <div class="leg">
-        <div class="li"><span class="ld" style="background:#f5c842"></span>Solar</div>
-        <div class="li"><span class="ld" style="background:rgba(251,146,60,.85)"></span>Fernwärme</div>
-        <div class="li"><span class="ld" style="background:rgba(91,156,246,.75)"></span>Strom</div>
-      </div>
-      <div class="cw" style="height:260px"><canvas id="cv2-c-energy"></canvas></div>
-    </div>
-    <div class="cc">
-      <div class="cc-title">Wasserverbrauch</div>
-      <div class="cc-sub">m³ pro Periode</div>
-      <div class="cw" style="height:200px"><canvas id="cv2-c-water"></canvas></div>
-    </div>
-    <div class="cc">
-      <div class="cc-title">Außentemperatur</div>
-      <div class="cc-sub">°C bei Ablesung</div>
-      <div class="cw" style="height:200px"><canvas id="cv2-c-temp"></canvas></div>
-    </div>
-    <div class="cc full">
-      <div class="cc-title">Energiemix Verteilung</div>
-      <div class="cc-sub">Gesamtverbrauch im Zeitraum</div>
-      <div class="cw" style="height:200px"><canvas id="cv2-c-donut"></canvas></div>
+      <div class="cc-title" id="cv-chart-title">Netzbezug</div>
+      <div class="cc-sub"   id="cv-chart-sub">kWh</div>
+      <div class="cw" style="height:260px"><canvas id="cv-c-main"></canvas></div>
     </div>
   </div>
 </div>
 
-<!-- ── VERBRAUCHSAUFZEICHNUNG ── -->
-<div id="cv2-t-records" style="display:none">
-  <div class="mtabs" id="cv2-rec-tabs">
-    <button class="mtab active" onclick="CV2.recTab('table',this)">Aufzeichnungen</button>
-    <button class="mtab"        onclick="CV2.recTab('entry',this)">Eingabe</button>
-    <button class="mtab"        onclick="CV2.recTab('import',this)">Import</button>
+<!-- LASTPROFIL -->
+<div id="cv-t-profile" style="display:none">
+<div id="cv-profile-timeline"></div>
+  <div class="metrics">
+    <div class="mc"><div class="mc-l">Ø Tagesverbrauch</div><div><span class="mc-v" id="pr-avg">—</span><span class="mc-u">kWh</span></div></div>
+    <div class="mc"><div class="mc-l">Spitzenstunde</div><div><span class="mc-v" id="pr-peak">—</span><span class="mc-u">Uhr</span></div></div>
+    <div class="mc"><div class="mc-l">Tage mit Daten</div><div><span class="mc-v" id="pr-days">—</span></div></div>
+    <div class="mc"><div class="mc-l">Messpunkte</div><div><span class="mc-v" id="pr-pts">—</span></div></div>
+  </div>
+  <div class="cc full">
+    <div class="cc-title" id="pr-chart-title">Ø Lastprofil</div>
+    <div class="cc-sub" id="pr-chart-sub">Durchschnittlicher Stundenwert — 🔴 Spitze · 🟡 hoch · 🔵 normal</div>
+    <div class="cw" style="height:260px"><canvas id="cv-c-profile"></canvas></div>
+  </div>
+</div>
+
+<!-- DATEN -->
+<div id="cv-t-data" style="display:none">
+  <div class="fbar">
+    <label>Richtung</label>
+    <select id="cv-tf-dir" onchange="CV.renderTable()">
+      <option value="all">Alle</option>
+      <option value="grid">Netzbezug</option>
+      <option value="feed">Einspeisung</option>
+    </select>
+    <label>Sort</label>
+    <select id="cv-tf-sort" onchange="CV.renderTable()">
+      <option value="date-desc">Datum ↓</option>
+      <option value="date-asc">Datum ↑</option>
+      <option value="kwh-desc">kWh ↓</option>
+    </select>
+    <button class="btn-s btn-d" onclick="CV.deleteSelected()">Auswahl löschen</button>
+  </div>
+  <div class="tcard">
+    <div class="thead"><div class="thead-t" id="cv-tcount">—</div></div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr>
+          <th><input type="checkbox" id="cv-cb-all" onchange="CV.toggleAll(this)"></th>
+          <th>Datum</th><th>Stunde</th><th>Minute</th><th>kWh</th><th>Richtung</th>
+        </tr></thead>
+        <tbody id="cv-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- IMPORT / LÖSCHEN -->
+<div id="cv-t-import" style="display:none">
+  <div class="fcard">
+    <div class="fcard-t">📥 Smart Meter Import (EVN / Netz NÖ)</div>
+    <p style="font-size:13px;color:var(--tx2);margin-bottom:8px">
+      Export unter <strong>meinestrom.at</strong> → Verbrauch → Viertelstundenwerte → CSV → hier einfügen.
+    </p>
+    <div class="note" style="margin-bottom:12px">
+      📋 Unterstützte Formate:<br>
+      · <strong>Semikolon-getrennt</strong> (ältere EVN Exporte): Spalte 6 = Energierichtung, Spalte 7 = Von-Zeit, Spalte 15 = kWh<br>
+      · <strong>Tab-getrennt</strong> (neuere Exporte): gleiche Spaltenreihenfolge, Datum DD.MM.YY oder DD.MM.YYYY<br>
+      <strong>Lieferung</strong> = Netzbezug · <strong>Einspeisung</strong> = Einspeisung
+    </div>
+    <!-- File picker -->
+    <div style="margin-bottom:12px">
+      <label style="display:block;font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--tx2);font-weight:500;margin-bottom:6px">CSV Datei auswählen</label>
+      <input type="file" id="cv-file" accept=".csv,.txt"
+        style="font-family:var(--fm);font-size:12px;color:var(--tx2);background:var(--bg3);border:1px solid var(--b2);border-radius:8px;padding:8px 10px;width:100%;cursor:pointer"
+        onchange="CV.loadFile(this)">
+      <div id="cv-file-info" style="font-size:11px;color:var(--tx3);margin-top:4px"></div>
+    </div>
+    <!-- Manual paste fallback -->
+    <div style="margin-bottom:10px">
+      <label style="display:block;font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--tx2);font-weight:500;margin-bottom:6px">Oder CSV-Inhalt einfügen</label>
+      <textarea class="csv-area" id="cv-csv-in" placeholder="CSV-Inhalt hier einfügen..."></textarea>
+    </div>
+    <div class="brow">
+      <button class="btn-p" onclick="CV.importCSV(false)">Importieren (hinzufügen)</button>
+      <button class="btn-s" onclick="CV.importCSV(true)">↺ Neu importieren (überschreiben)</button>
+    </div>
+    <div id="cv-import-result" style="font-size:12px;color:var(--tx2);margin-top:10px"></div>
   </div>
 
-  <!-- TABLE -->
-  <div id="cv2-rt-table">
-    <div class="fbar">
-      <button class="btn-s btn-d" onclick="CV2.deleteSelected()">Auswahl löschen</button>
+  <div class="fcard" style="border-color:rgba(91,156,246,.2)">
+    <div class="fcard-t" style="font-size:13px;color:var(--tx2)">
+      <span>🗄 Supabase Datenbank — Tabelle <code>consumption_15min</code></span>
+      <button class="copy-btn" onclick="APP.copyCode('cv-sql')">Kopieren</button>
     </div>
-    <div class="tcard">
-      <div class="thead"><div class="thead-t" id="cv2-tcount">—</div></div>
-      <div style="overflow-x:auto">
-        <table>
-          <thead><tr>
-            <th><input type="checkbox" id="cv2-cb-all" onchange="CV2.toggleAll(this)"></th>
-            <th>Datum</th>
-            <th style="color:#f5c842">Solar kWh</th>
-            <th style="color:rgba(251,146,60,.9)">Fernwärme kWh</th>
-            <th>FW Status</th>
-            <th style="color:#5b9cf6">Wasser m³</th>
-            <th style="color:rgba(250,204,21,.9)">Strom Bezug kWh</th>
-            <th style="color:rgba(63,207,142,.9)">Einspeisung kWh</th>
-            <th>Temp °C</th>
-            <th>Anmerkung</th>
-            <th style="text-align:center">Aktion</th>
-          </tr></thead>
-          <tbody id="cv2-tbody"></tbody>
-        </table>
-      </div>
+    <div style="font-size:12px;color:var(--tx2);line-height:2;margin-bottom:8px">
+      Verbrauchsdaten werden automatisch mit Supabase synchronisiert.<br>
+      Falls die Tabelle noch nicht existiert, einmalig im <strong>Supabase SQL Editor</strong> ausführen:
     </div>
-  </div>
-
-  <!-- MANUAL ENTRY -->
-  <div id="cv2-rt-entry" style="display:none">
-    <div class="fcard">
-      <div class="fcard-t">✏️ Zählerstand eintragen</div>
-      <div class="fgrid">
-        <div class="field"><label>Datum &amp; Uhrzeit</label><input type="datetime-local" id="cv2-e-date"></div>
-        <div class="field"><label>Solar (kWh)</label><input type="number" id="cv2-e-solar" step="0.001" placeholder="z.B. 37.319"></div>
-        <div class="field"><label>Fernwärme (kWh)</label><input type="number" id="cv2-e-fw" step="0.001" placeholder="z.B. 40.864"></div>
-        <div class="field"><label>FW Status</label>
-          <select id="cv2-e-fwstatus">
-            <option value="Fernwärme EIN">Fernwärme EIN</option>
-            <option value="Fernwärme AUS">Fernwärme AUS</option>
-            <option value="">—</option>
-          </select>
-        </div>
-        <div class="field"><label>Wasser (m³)</label><input type="number" id="cv2-e-water" step="0.001" placeholder="z.B. 524.138"></div>
-        <div class="field"><label>Strom Bezug (kWh)</label><input type="number" id="cv2-e-strom" step="0.01" placeholder="z.B. 2473.00"></div>
-        <div class="field"><label>Strom Einspeisung (kWh)</label><input type="number" id="cv2-e-feed" step="0.01" placeholder="z.B. 0.00"></div>
-        <div class="field"><label>Außentemperatur (°C)</label><input type="number" id="cv2-e-temp" step="1" placeholder="z.B. 7"></div>
-        <div class="field" style="grid-column:1/-1"><label>Anmerkung</label><input type="text" id="cv2-e-note" placeholder="Optional…"></div>
-      </div>
-      <div class="brow">
-        <button class="btn-p" onclick="CV2.addEntry()">Speichern</button>
-        <button class="btn-s" onclick="CV2.prefillNow()">Jetzt vorausfüllen</button>
-      </div>
-      <div id="cv2-entry-result" style="font-size:12px;color:var(--tx2);margin-top:8px"></div>
-    </div>
-    <div class="note">💡 Zählerstände ablesen und eintragen — die App berechnet den Verbrauch automatisch als Differenz zur vorherigen Ablesung.</div>
-  </div>
-
-  <!-- IMPORT -->
-  <div id="cv2-rt-import" style="display:none">
-    <div class="fcard">
-      <div class="fcard-t">📋 CSV / Tab-Import</div>
-      <p style="font-size:13px;color:var(--tx2);margin-bottom:8px">
-        Daten aus Excel oder Tabelle kopieren und hier einfügen.<br>
-        Format: <code>Datum&lt;Tab&gt;Solar&lt;Tab&gt;Fernwärme&lt;Tab&gt;FW-Status&lt;Tab&gt;Wasser&lt;Tab&gt;Strom&lt;Tab&gt;Temp&lt;Tab&gt;Anmerkung</code>
-      </p>
-      <div class="note" style="margin-bottom:12px">
-        📋 Datum: <code>DD.MM.YYYY, HH:MM</code> · Zahlen: Punkt als Tausender, Komma als Dezimal (z.B. <code>2.087,83</code>)
-      </div>
-      <textarea class="csv-area" id="cv2-csv-in" placeholder="Daten hier einfügen…"></textarea>
-      <div class="brow">
-        <button class="btn-p" onclick="CV2.importCSV(false)">Importieren (hinzufügen)</button>
-        <button class="btn-s" onclick="CV2.importCSV(true)">↺ Neu importieren (überschreiben)</button>
-      </div>
-      <div id="cv2-import-result" style="font-size:12px;color:var(--tx2);margin-top:10px"></div>
-    </div>
-
-    <div class="fcard" style="border-color:rgba(91,156,246,.2)">
-      <div class="fcard-t" style="font-size:13px;color:var(--tx2)">
-        <span>🗄 Supabase Tabelle <code>meter_readings</code></span>
-        <button class="copy-btn" onclick="APP.copyCode('cv2-sql')">Kopieren</button>
-      </div>
-      <div class="code-block" id="cv2-sql">create table if not exists meter_readings (
+    <div class="code-block" id="cv-sql">create table if not exists consumption_15min (
   id text primary key,
-  reading_date timestamptz not null,
-  solar_kwh numeric,
-  fw_kwh numeric,
-  fw_status text,
-  water_m3 numeric,
-  strom_kwh numeric,
-  feed_kwh numeric,
-  temp_c numeric,
-  note text,
+  date date not null,
+  hour smallint not null,
+  minute smallint not null,
+  kwh numeric not null,
+  direction text default 'grid',
   created_at timestamptz default now()
 );
--- Spalte nachrüsten falls Tabelle bereits existiert:
-alter table meter_readings add column if not exists feed_kwh numeric;
-alter table meter_readings enable row level security;
-create policy "allow_all" on meter_readings
-  for all using (true) with check (true);</div>
-    </div>
+alter table consumption_15min enable row level security;
+create policy "allow_all" on consumption_15min
+  for all using (true) with check (true);
+create index if not exists idx_cv_date on consumption_15min(date);</div>
+  </div>
 
-    <div class="fcard" style="border-color:rgba(242,92,92,.2)">
-      <div class="fcard-t" style="color:var(--rd)">⚠ Aufzeichnungen löschen</div>
+  <div class="fcard" style="border-color:rgba(242,92,92,.2)">
+    <div class="fcard-t" style="color:var(--rd)">⚠ Daten löschen</div>
+    <div style="margin-bottom:14px">
+      <p style="font-size:12px;color:var(--tx2);margin-bottom:10px">Zeitraum wählen und alle Messpunkte darin löschen:</p>
       <div class="fgrid" style="grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-        <div class="field"><label>Von</label><input type="date" id="cv2-del-from"></div>
-        <div class="field"><label>Bis</label><input type="date" id="cv2-del-to"></div>
+        <div class="field"><label>Von</label><input type="date" id="cv-del-from"></div>
+        <div class="field"><label>Bis</label><input type="date" id="cv-del-to"></div>
       </div>
       <div class="brow">
-        <button class="btn-s btn-d" onclick="CV2.deleteRange()">Zeitraum löschen</button>
-        <button class="btn-s btn-d" onclick="CV2.clearAll()">Alle löschen</button>
+        <button class="btn-s btn-d" onclick="CV.deleteRange()">Zeitraum löschen</button>
+        <button class="btn-s btn-d" onclick="CV.clearAll()">Alle Verbrauchsdaten löschen</button>
       </div>
-      <div id="cv2-del-result" style="font-size:12px;margin-top:8px"></div>
+      <div id="cv-del-result" style="font-size:12px;color:var(--tx2);margin-top:8px"></div>
     </div>
   </div>
 </div>
 `;
 
-// ── STATE ─────────────────────────────────────────────────
-let readings = []; // sorted by date ascending
-
-const set = (id, v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
-
-// ── PARSE NUMBER ──────────────────────────────────────────
-// Handles: "2.087,83" → 2087.83  |  "509,138" → 509.138  |  "37.319" → 37.319
-function parseNum(s) {
-  if (!s || s.trim() === '') return null;
-  let v = s.trim();
-  // If both . and , present: . is thousands separator, , is decimal
-  if (v.includes('.') && v.includes(',')) {
-    v = v.replace(/\./g,'').replace(',','.');
-  } else if (v.includes(',')) {
-    // Only comma: could be decimal (0,5) or thousands (509,138)
-    const parts = v.split(',');
-    if (parts[1] && parts[1].length === 3 && !v.includes('.')) {
-      // e.g. "509,138" — treat as no decimal (integer thousands)
-      v = v.replace(',','');
-    } else {
-      v = v.replace(',','.');
-    }
-  }
-  // Remove remaining . as thousands separators if number looks like it
-  const n = parseFloat(v);
-  return isNaN(n) ? null : n;
+// ── HELPERS ───────────────────────────────────────────────
+// Normalize a raw consumption record — always call this on data from any source
+function norm(c) {
+  return {
+    id:        c.id,
+    date:      String(c.date).substring(0, 10),   // always YYYY-MM-DD
+    hour:      parseInt(c.hour,   10),              // always integer
+    minute:    parseInt(c.minute, 10),              // always integer
+    kwh:       parseFloat(c.kwh),                   // always float
+    direction: c.direction || 'grid'
+  };
 }
 
-// ── PARSE DATE ────────────────────────────────────────────
-function parseDate(s) {
-  if (!s) return null;
-  // "DD.MM.YYYY, HH:MM" or "DD.MM.YYYY HH:MM"
-  const m = s.trim().match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})[,\s]+(\d{1,2}):(\d{2})/);
-  if (m) {
-    const [,d,mo,y,h,min] = m;
-    return new Date(+y, +mo-1, +d, +h, +min).toISOString();
-  }
-  // Try standard ISO
-  const d = new Date(s.trim());
-  return isNaN(d) ? null : d.toISOString();
+// Get normalized consumption array (always use this, never APP.consumption directly)
+function getCv() {
+  return APP.consumption.map(norm);
 }
 
-// ── CONSUMPTION CALCULATION ───────────────────────────────
-// Returns array of consumption periods between consecutive readings
-// Rule: if newer value < older value → diff = 0 (meter reset/exchange)
-// Exception: Solar is ENERGY GAINED, positive diff = production
-function calcConsumption(data) {
-  if (data.length < 2) return [];
-  const sorted = [...data].sort((a,b) => a.reading_date.localeCompare(b.reading_date));
-  const result = [];
-  for (let i=1; i<sorted.length; i++) {
-    const prev = sorted[i-1], curr = sorted[i];
-    const d1   = new Date(prev.reading_date);
-    const d2   = new Date(curr.reading_date);
-    const days = Math.max(1, (d2-d1) / (1000*60*60*24));
+const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
 
-    // Helper: calc diff, clamp negative to 0 (meter reset/exchange)
-    // If prev is null → treat as first reading of this meter (diff = 0, not null)
-    const diff = (a, b) => {
-      if (b == null) return null;          // no current value → unknown
-      if (a == null) return 0;             // no previous value → first reading, diff = 0
-      const d = b - a;
-      return d < 0 ? 0 : +d.toFixed(3);
-    };
-
-    // Solar: energy PRODUCED — positive diff = good
-    const solar = diff(prev.solar_kwh,  curr.solar_kwh);
-    // Fernwärme: energy CONSUMED — negative diff → 0
-    const fw    = diff(prev.fw_kwh,     curr.fw_kwh);
-    // Wasser: volume CONSUMED — negative diff → 0
-    const water = diff(prev.water_m3,   curr.water_m3);
-    // Strom Bezug: energy CONSUMED — negative diff → 0
-    const strom = diff(prev.strom_kwh,  curr.strom_kwh);
-    // Strom Einspeisung: energy FED TO GRID — positive diff = gut
-    const feed  = diff(prev.feed_kwh,   curr.feed_kwh);
-
-    const entry = {
-      from:       prev.reading_date,
-      to:         curr.reading_date,
-      days,
-      solar, fw, water, strom, feed,
-      temp:       curr.temp_c,
-      fw_status:  curr.fw_status,
-      note:       curr.note,
-      solar_day:  solar != null ? +(solar / days).toFixed(3) : null,
-      fw_day:     fw    != null ? +(fw    / days).toFixed(3) : null,
-      water_day:  water != null ? +(water / days).toFixed(3) : null,
-      strom_day:  strom != null ? +(strom / days).toFixed(2) : null,
-      feed_day:   feed  != null ? +(feed  / days).toFixed(2) : null,
-    };
-    result.push(entry);
-  }
-  return result;
-}
-
-// ── TABS ──────────────────────────────────────────────────
+// ── TABS ─────────────────────────────────────────────────
 function tab(name, btn) {
-  ['dashboard','records'].forEach(t => {
-    const el = document.getElementById('cv2-t-'+t);
-    if (el) el.style.display = t===name ? 'block' : 'none';
+  ['overview','profile','data','import'].forEach(t => {
+    const el = document.getElementById('cv-t-' + t);
+    if (el) el.style.display = t === name ? 'block' : 'none';
   });
-  document.querySelectorAll('#cv2-tabs .mtab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('#cv-tabs .mtab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  if (name==='dashboard') renderDashboard();
-  if (name==='records')   renderTable();
-}
-function recTab(name, btn) {
-  ['table','entry','import'].forEach(t => {
-    const el = document.getElementById('cv2-rt-'+t);
-    if (el) el.style.display = t===name ? 'block' : 'none';
-  });
-  document.querySelectorAll('#cv2-rec-tabs .mtab').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  if (name==='table') renderTable();
+  if (name === 'overview') renderOverview();
+  if (name === 'profile')  renderProfile();
+  if (name === 'data')     renderTable();
 }
 
-// ── FILTER ────────────────────────────────────────────────
-function calcPresetRange(p) {
-  const today = new Date().toISOString().split('T')[0];
-  const yr    = new Date().getFullYear();
-  const ym    = today.substring(0,7);
-  if (p==='thismonth') return { from: ym+'-01', to: today };
-  if (p==='last30')  { const d=new Date(); d.setDate(d.getDate()-30); return { from:d.toISOString().split('T')[0], to:today }; }
-  if (p==='last90')  { const d=new Date(); d.setDate(d.getDate()-90); return { from:d.toISOString().split('T')[0], to:today }; }
-  if (p==='thisyear') return { from: yr+'-01-01', to: today };
-  return { from: null, to: null };
-}
-
-function getEarliestDate() {
-  const dates = readings.map(r => r.reading_date.substring(0,10)).filter(Boolean).sort();
-  return dates.length > 0 ? dates[0] : null;
-}
-
-function onPreset() {
-  const p     = document.getElementById('cv2-period')?.value;
-  if (p === 'custom') return;
-  const today = new Date().toISOString().split('T')[0];
-  const { from, to } = calcPresetRange(p);
-  let actualFrom = from;
-  if (p === 'all') actualFrom = getEarliestDate();
-  const fEl = document.getElementById('cv2-from');
-  const tEl = document.getElementById('cv2-to');
-  if (fEl) fEl.value = actualFrom || '';
-  if (tEl) tEl.value = to || today;
-  const mEl = document.getElementById('cv2-month');
-  const yEl = document.getElementById('cv2-year');
-  if (mEl) mEl.value = '';
-  if (yEl) yEl.value = '';
-  renderDashboard();
-}
-
-function onMonthPick() {
-  const val = document.getElementById('cv2-month')?.value;
-  if (!val) return;
-  const [yr, mo] = val.split('-').map(Number);
-  const lastDay  = new Date(yr, mo, 0).getDate();
-  const fEl = document.getElementById('cv2-from');
-  const tEl = document.getElementById('cv2-to');
-  if (fEl) fEl.value = `${val}-01`;
-  if (tEl) tEl.value = `${val}-${String(lastDay).padStart(2,'0')}`;
-  const yEl = document.getElementById('cv2-year');
-  const pEl = document.getElementById('cv2-period');
-  if (yEl) yEl.value = '';
-  if (pEl) pEl.value = 'custom';
-  renderDashboard();
-}
-
-function onYearPick() {
-  const yr = document.getElementById('cv2-year')?.value;
-  if (!yr) return;
-  const fEl = document.getElementById('cv2-from');
-  const tEl = document.getElementById('cv2-to');
-  if (fEl) fEl.value = `${yr}-01-01`;
-  if (tEl) tEl.value = `${yr}-12-31`;
-  const mEl = document.getElementById('cv2-month');
-  const pEl = document.getElementById('cv2-period');
-  if (mEl) mEl.value = '';
-  if (pEl) pEl.value = 'custom';
-  renderDashboard();
-}
-
-function onCustomDate() {
-  const mEl = document.getElementById('cv2-month');
-  const yEl = document.getElementById('cv2-year');
-  const pEl = document.getElementById('cv2-period');
-  if (mEl) mEl.value = '';
-  if (yEl) yEl.value = '';
-  if (pEl) pEl.value = 'custom';
-  renderDashboard();
-}
-
+// ── FILTER RESET ──────────────────────────────────────────
 function resetFilter() {
-  const pEl = document.getElementById('cv2-period');
-  const mEl = document.getElementById('cv2-month');
-  const yEl = document.getElementById('cv2-year');
-  if (pEl) pEl.value = 'all';
-  if (mEl) mEl.value = '';
-  if (yEl) yEl.value = '';
-  const fEl = document.getElementById('cv2-from');
-  const tEl = document.getElementById('cv2-to');
-  if (fEl) fEl.value = getEarliestDate() || '';
-  if (tEl) tEl.value = new Date().toISOString().split('T')[0];
-  renderDashboard();
+  const yr = new Date().getFullYear(), today = new Date().toISOString().split('T')[0];
+  const f = document.getElementById('cv-from'), t = document.getElementById('cv-to');
+  if (f) f.value = yr + '-01-01';
+  if (t) t.value = today;
+  const g = document.getElementById('cv-gran'); if (g) g.value = 'month';
+  renderOverview();
 }
 
-// ── DASHBOARD ─────────────────────────────────────────────
-function renderDashboard() {
-  const range = APP.FilterBar.getRange('cv2-timeline');
-  const from  = range.from || document.getElementById('cv2-from')?.value;
-  const to    = range.to   || document.getElementById('cv2-to')?.value;
+// ── OVERVIEW ─────────────────────────────────────────────
+function renderOverview() {
+  const gran  = document.querySelector('input[name="cv-gran"]:checked')?.value || 'month';
+  const range = APP.FilterBar.getRange('cv-timeline');
+  const from  = range.from;
+  const to    = range.to;
 
-  const cons = calcConsumption(readings).filter(c => {
-    const d = c.from.substring(0,10);
-    return (!from || d >= from) && (!to || d <= to);
+  const cv = getCv().filter(c =>
+    c.direction === 'grid' &&
+    (!from || c.date >= from) &&
+    (!to   || c.date <= to)
+  );
+
+  // Aggregate into buckets by granularity
+  const map = {};
+  cv.forEach(c => {
+    let key;
+    if (gran === '15min')     key = `${c.date} ${String(c.hour).padStart(2,'0')}:${String(c.minute).padStart(2,'0')}`;
+    else if (gran === 'day')  key = c.date;
+    else if (gran === 'year') key = c.date.substring(0, 4);
+    else                      key = c.date.substring(0, 7); // month
+    if (!map[key]) map[key] = 0;
+    map[key] += c.kwh;
+  });
+  const bk      = Object.entries(map).sort((a,b) => a[0].localeCompare(b[0]));
+  const labels  = bk.map(([k]) => {
+    if (gran === '15min') return k.substring(11); // just HH:MM
+    if (gran === 'day')   { const dt=new Date(k+'T00:00:00'); return `${String(dt.getDate()).padStart(2,'0')}.${String(dt.getMonth()+1).padStart(2,'0')}`; }
+    if (gran === 'year')  return k;
+    return APP.MONTHS[new Date(k+'-01').getMonth()] + ' ' + k.substring(2,4);
+  });
+  const gridArr = bk.map(([,v]) => +v.toFixed(gran==='15min'?4:3));
+
+  const gridTotal = gridArr.reduce((a,b) => a+b, 0);
+  const avgDay    = bk.length > 0 ? gridTotal / bk.length : 0;
+  const cost      = gridTotal * APP.cfg.price;
+  const granLabelMap = {'15min':'15-Min-Werte','day':'Tageswerte','month':'Monatswerte','year':'Jahreswerte'};
+  const granCountMap = {'15min':'Intervalle','day':'Tage','month':'Monate','year':'Jahre'};
+  const granLabel = granLabelMap[gran] || 'Monatswerte';
+
+  set('cv-m-grid',   gridTotal.toFixed(2));
+  set('cv-m-grid2',  cv.length + ' Messpunkte');
+  set('cv-m-avg',    avgDay.toFixed(2));
+  set('cv-m-cost',   cost.toFixed(2));
+  set('cv-m-cost2',  `@ ${APP.cfg.price} €/kWh`);
+  set('cv-m-pts',    cv.length.toLocaleString('de'));
+  set('cv-chart-title', granLabel + ' — Netzbezug');
+  set('cv-chart-sub', bk.length + ' ' + (granCountMap[gran]||'Einträge'));
+
+  // Single bar chart — pure consumption
+  APP.destroyChart('cv-m');
+  APP.charts['cv-m'] = new Chart(document.getElementById('cv-c-main'), {
+    type: 'bar',
+    data: { labels, datasets: [{
+      label: 'Netzbezug',
+      data:  gridArr,
+      backgroundColor: 'rgba(91,156,246,.75)',
+      borderRadius: 3
+    }]},
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks:{color:APP.TC,font:{size:10}}, grid:{color:APP.GC} },
+        y: { ticks:{color:APP.TC,font:{size:10}}, grid:{color:APP.GC},
+             title:{display:true,text:'kWh',color:APP.TC,font:{size:10}} }
+      }
+    }
+  });
+}
+
+// ── LASTPROFIL ────────────────────────────────────────────
+function resetProfile() {
+  const dates    = APP.consumption.map(c => String(c.date).substring(0,10)).filter(Boolean).sort();
+  const earliest = dates.length > 0 ? dates[0] : new Date().getFullYear() + '-01-01';
+  const today    = new Date().toISOString().split('T')[0];
+  const f = document.getElementById('pr-from'), t = document.getElementById('pr-to');
+  const g = document.getElementById('pr-gran');
+  if (f) f.value = earliest;
+  if (t) t.value = today;
+  if (g) g.value = 'day';
+  renderProfile();
+}
+
+function renderProfile() {
+  const gran = document.getElementById('pr-gran')?.value || 'day';
+  const from = document.getElementById('pr-from')?.value;
+  const to   = document.getElementById('pr-to')?.value;
+
+  const data = getCv().filter(c =>
+    c.direction === 'grid' &&
+    (!from || c.date >= from) &&
+    (!to   || c.date <= to)
+  );
+
+  // Build per-day hourly sums: dayMap[date][0..23] = total kWh for that hour
+  const dayMap = {};
+  data.forEach(c => {
+    if (!dayMap[c.date]) dayMap[c.date] = Array(24).fill(0);
+    dayMap[c.date][c.hour] += c.kwh;
   });
 
-  if (!cons.length) {
-    ['cv2-m-solar','cv2-m-fw','cv2-m-water','cv2-m-strom','cv2-m-feed',
-     'cv2-d-solar','cv2-d-fw','cv2-d-water','cv2-d-strom','cv2-d-feed'].forEach(id => set(id,'—'));
-    return;
+  const days  = Object.keys(dayMap);
+  const nDays = days.length;
+
+  // Average each hour across all days in range
+  const hourly = Array(24).fill(0);
+  days.forEach(d => {
+    dayMap[d].forEach((v, h) => { hourly[h] += v; });
+  });
+  if (nDays > 0) {
+    hourly.forEach((_, i) => { hourly[i] = +(hourly[i] / nDays).toFixed(4); });
   }
 
-  const totalDays   = cons.reduce((s,c) => s+c.days, 0);
-  const totalMonths = totalDays / 30.44;
+  const dayTotal = +(hourly.reduce((a,b) => a+b, 0)).toFixed(2);
+  const maxV     = nDays > 0 ? Math.max(...hourly) : 0;
+  const peakH    = maxV > 0 ? hourly.indexOf(maxV) : 0;
+  const granLabel = { day:'Tage', week:'Wochen', month:'Monate' }[gran];
+  const rangeLabel = from && to ? `${from} – ${to}` : 'Gesamter Zeitraum';
 
-  // Sum only non-null, non-zero periods (skip meter resets for averages)
-  const sumSolar = cons.reduce((s,c) => s+(c.solar??0), 0);
-  const sumFw    = cons.reduce((s,c) => s+(c.fw??0),    0);
-  const sumWater = cons.reduce((s,c) => s+(c.water??0), 0);
-  const sumStrom = cons.reduce((s,c) => s+(c.strom??0), 0);
-  const sumFeed  = cons.reduce((s,c) => s+(c.feed??0),  0);
+  set('pr-avg',  dayTotal);
+  set('pr-peak', String(peakH).padStart(2,'0') + ':00');
+  set('pr-days', nDays);
+  set('pr-pts',  data.length);
+  set('pr-chart-title', 'Ø Lastprofil');
+  set('pr-chart-sub',   `${nDays} ${granLabel} · ${rangeLabel} — 🔴 Spitze · 🟡 hoch · 🔵 normal`);
 
-  // Monthly averages
-  set('cv2-m-solar', totalMonths>0 ? (sumSolar/totalMonths).toFixed(1) : '—');
-  set('cv2-m-fw',    totalMonths>0 ? (sumFw   /totalMonths).toFixed(1) : '—');
-  set('cv2-m-water', totalMonths>0 ? (sumWater/totalMonths).toFixed(2) : '—');
-  set('cv2-m-strom', totalMonths>0 ? (sumStrom/totalMonths).toFixed(1) : '—');
-  set('cv2-m-feed',  totalMonths>0 ? (sumFeed /totalMonths).toFixed(1) : '—');
-  set('cv2-m-solar2', `${sumSolar.toFixed(1)} kWh gesamt`);
-  set('cv2-m-fw2',    `${sumFw.toFixed(1)} kWh gesamt`);
-  set('cv2-m-water2', `${sumWater.toFixed(2)} m³ gesamt`);
-  set('cv2-m-strom2', `${sumStrom.toFixed(1)} kWh gesamt`);
-  set('cv2-m-feed2',  `${sumFeed.toFixed(1)} kWh gesamt`);
+  const labels = Array.from({length:24}, (_,i) => String(i).padStart(2,'0')+':00');
+  const bg = hourly.map(v =>
+    maxV > 0 && v === maxV    ? 'rgba(242,92,92,.75)'  :
+    maxV > 0 && v > maxV*.70  ? 'rgba(245,200,66,.65)' :
+                                 'rgba(91,156,246,.65)');
 
-  // Daily averages
-  set('cv2-d-solar', totalDays>0 ? (sumSolar/totalDays).toFixed(2) : '—');
-  set('cv2-d-fw',    totalDays>0 ? (sumFw   /totalDays).toFixed(2) : '—');
-  set('cv2-d-water', totalDays>0 ? ((sumWater/totalDays)*1000).toFixed(0) : '—');
-  set('cv2-d-strom', totalDays>0 ? (sumStrom/totalDays).toFixed(2) : '—');
-  set('cv2-d-feed',  totalDays>0 ? (sumFeed /totalDays).toFixed(2) : '—');
-
-  set('cv2-chart-sub', `${cons.length} Perioden · ${Math.round(totalDays)} Tage`);
-
-  drawEnergyChart(cons);
-  drawWaterChart(cons);
-  drawTempChart(cons);
-  drawDonut(sumSolar, sumFw, sumStrom, sumFeed);
-}
-
-function periodLabel(c) {
-  const d = new Date(c.from);
-  return `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`;
-}
-
-function drawEnergyChart(cons) {
-  APP.destroyChart('cv2-energy');
-  const labels = cons.map(periodLabel);
-  APP.charts['cv2-energy'] = new Chart(document.getElementById('cv2-c-energy'), {
-    type:'bar',
-    data:{ labels, datasets:[
-      { label:'Solar',        data:cons.map(c=>c.solar!=null  ? +c.solar.toFixed(2):null),  backgroundColor:'rgba(245,200,66,.8)',  borderRadius:3 },
-      { label:'Fernwärme',    data:cons.map(c=>c.fw!=null     ? +c.fw.toFixed(2):null),     backgroundColor:'rgba(251,146,60,.75)', borderRadius:3 },
-      { label:'Strom Bezug',  data:cons.map(c=>c.strom!=null  ? +c.strom.toFixed(2):null),  backgroundColor:'rgba(91,156,246,.75)', borderRadius:3 },
-      { label:'Einspeisung',  data:cons.map(c=>c.feed!=null&&c.feed>0 ? +c.feed.toFixed(2):null),
-        backgroundColor:'rgba(63,207,142,.8)', borderRadius:3 }
-    ]},
-    options:{ responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{ labels:{ color:APP.TC, font:{size:11}, boxWidth:10 } } },
-      scales:{ x:{ticks:{color:APP.TC,font:{size:10}},grid:{color:APP.GC}},
-               y:{ticks:{color:APP.TC,font:{size:10}},grid:{color:APP.GC},
-                  title:{display:true,text:'kWh',color:APP.TC,font:{size:10}}} } }
+  APP.destroyChart('cv-prof');
+  APP.charts['cv-prof'] = new Chart(document.getElementById('cv-c-profile'), {
+    type: 'bar',
+    data: { labels, datasets:[{ data:hourly, backgroundColor:bg, borderRadius:3 }] },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false},
+        tooltip:{ callbacks:{ label: ctx => ctx.parsed.y.toFixed(4) + ' kWh/h' } } },
+      scales:{
+        x:{ ticks:{color:APP.TC, font:{size:10}}, grid:{color:APP.GC} },
+        y:{ ticks:{color:APP.TC, font:{size:10}}, grid:{color:APP.GC},
+            title:{display:true, text:'kWh/h Ø', color:APP.TC, font:{size:10}} }
+      }
+    }
   });
 }
 
-function drawDonut(solar, fw, strom, feed=0) {
-  APP.destroyChart('cv2-donut');
-  const total = solar + fw + strom;
-  if (total <= 0) return;
-  const netStrom = Math.max(0, strom - feed); // Netto-Bezug nach Einspeisung
-  APP.charts['cv2-donut'] = new Chart(document.getElementById('cv2-c-donut'), {
-    type:'doughnut',
-    data:{ labels:['Solar','Fernwärme','Strom Bezug','Einspeisung'],
-      datasets:[{ data:[solar, fw, netStrom, feed>0?feed:null],
-        backgroundColor:['rgba(245,200,66,.85)','rgba(251,146,60,.8)','rgba(91,156,246,.8)','rgba(63,207,142,.85)'],
-        borderWidth:0 }]},
-    options:{ responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{ position:'bottom', labels:{ color:APP.TC, font:{size:10}, boxWidth:10 } } } }
-  });
-}
+// ── DATEN-TABELLE ─────────────────────────────────────────
+let cvPage = 0;
+const CV_PAGE_SIZE = 200;
 
-function drawWaterChart(cons) {
-  APP.destroyChart('cv2-water');
-  const labels = cons.map(periodLabel);
-  APP.charts['cv2-water'] = new Chart(document.getElementById('cv2-c-water'), {
-    type:'bar',
-    data:{ labels, datasets:[{
-      data: cons.map(c=>c.water!=null ? +c.water.toFixed(3):null),
-      backgroundColor:'rgba(91,156,246,.7)', borderRadius:3
-    }]},
-    options:{ responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{display:false} },
-      scales:{ x:{ticks:{color:APP.TC,font:{size:10}},grid:{color:APP.GC}},
-               y:{ticks:{color:APP.TC,font:{size:10}},grid:{color:APP.GC},
-                  title:{display:true,text:'m³',color:APP.TC,font:{size:10}}} } }
-  });
-}
-
-function drawTempChart(cons) {
-  APP.destroyChart('cv2-temp');
-  const labels = cons.map(periodLabel);
-  APP.charts['cv2-temp'] = new Chart(document.getElementById('cv2-c-temp'), {
-    type:'line',
-    data:{ labels, datasets:[{
-      data: cons.map(c=>c.temp),
-      borderColor:'#a78bfa', backgroundColor:'rgba(167,139,250,.1)',
-      fill:true, tension:0.35, pointRadius:4, borderWidth:2, pointBackgroundColor:'#a78bfa'
-    }]},
-    options:{ responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{display:false} },
-      scales:{ x:{ticks:{color:APP.TC,font:{size:10}},grid:{color:APP.GC}},
-               y:{ticks:{color:APP.TC,font:{size:10},callback:v=>v+'°'},grid:{color:APP.GC}} } }
-  });
-}
-
-
-// ── TABLE ─────────────────────────────────────────────────
 function renderTable() {
-  const sorted = [...readings].sort((a,b) => b.reading_date.localeCompare(a.reading_date));
-  set('cv2-tcount', sorted.length + ' Ablesungen');
-  const tbody = document.getElementById('cv2-tbody');
+  const from = document.getElementById('cv-tf-from')?.value;
+  const to   = document.getElementById('cv-tf-to')?.value;
+  const dir  = document.getElementById('cv-tf-dir')?.value || 'all';
+  const sort = document.getElementById('cv-tf-sort')?.value || 'date-desc';
+
+  let data = getCv();
+  if (from)        data = data.filter(c => c.date >= from);
+  if (to)          data = data.filter(c => c.date <= to);
+  if (dir!=='all') data = data.filter(c => c.direction === dir);
+
+  if (sort==='date-desc') data.sort((a,b) => b.date!==a.date ? b.date.localeCompare(a.date) : b.hour-a.hour || b.minute-a.minute);
+  else if (sort==='date-asc') data.sort((a,b) => a.date!==b.date ? a.date.localeCompare(b.date) : a.hour-b.hour || a.minute-b.minute);
+  else data.sort((a,b) => b.kwh - a.kwh);
+
+  const total   = data.length;
+  const maxPage = Math.max(0, Math.ceil(total / CV_PAGE_SIZE) - 1);
+  if (cvPage > maxPage) cvPage = maxPage;
+  const pageData = data.slice(cvPage * CV_PAGE_SIZE, (cvPage + 1) * CV_PAGE_SIZE);
+
+  set('cv-tcount', `${total.toLocaleString('de')} Messpunkte · Seite ${cvPage+1} / ${maxPage+1}`);
+  const tbody = document.getElementById('cv-tbody');
   if (!tbody) return;
-  if (!sorted.length) {
-    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:2rem;color:var(--tx3)">Noch keine Aufzeichnungen</td></tr>';
-    return;
+
+  if (!data.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--tx3)">Keine Einträge</td></tr>';
+    renderCvPager(0, 0); return;
   }
-  tbody.innerHTML = sorted.map(r => {
-    const d  = new Date(r.reading_date);
-    const dt = `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-    const btnStyle = 'border-radius:5px;padding:3px 7px;font-size:11px;cursor:pointer;background:transparent;';
-    return `<tr id="cv2-row-${r.id}">
-      <td><input type="checkbox" class="cv2-cb" data-id="${r.id}"></td>
-      <td style="font-weight:500;white-space:nowrap">${dt}</td>
-      <td style="color:#f5c842">${r.solar_kwh??'—'}</td>
-      <td style="color:rgba(251,146,60,.9)">${r.fw_kwh??'—'}</td>
-      <td style="font-size:11px;color:var(--tx3)">${r.fw_status||'—'}</td>
-      <td style="color:#5b9cf6">${r.water_m3??'—'}</td>
-      <td style="color:rgba(250,204,21,.9)">${r.strom_kwh??'—'}</td>
-      <td style="color:rgba(63,207,142,.9)">${r.feed_kwh!=null&&r.feed_kwh>0?r.feed_kwh.toFixed(2):'—'}</td>
-      <td>${r.temp_c??'—'}</td>
-      <td style="font-size:11px;color:var(--tx3);max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.note||''}</td>
-      <td style="white-space:nowrap;display:flex;gap:4px">
-        <button onclick="CV2.editEntry('${r.id}')" title="Bearbeiten"
-          style="${btnStyle}border:1px solid var(--b2);color:var(--tx2)">✎</button>
-        <button onclick="CV2.copyEntry('${r.id}')" title="Kopieren / als Basis verwenden"
-          style="${btnStyle}border:1px solid var(--b2);color:var(--tx2)">⧉</button>
-        <button onclick="CV2.deleteSingle('${r.id}')" title="Löschen"
-          style="${btnStyle}border:1px solid rgba(242,92,92,.4);color:var(--rd)">✕</button>
-      </td>
+
+  tbody.innerHTML = pageData.map(c => {
+    const dirLabel = c.direction === 'grid'
+      ? '<span class="badge good">Netzbezug</span>'
+      : '<span class="badge mid">Einspeisung</span>';
+    return `<tr>
+      <td><input type="checkbox" class="cv-cb" data-id="${c.id}"></td>
+      <td style="font-weight:500">${c.date}</td>
+      <td>${String(c.hour).padStart(2,'0')}:00</td>
+      <td>${String(c.minute).padStart(2,'0')}</td>
+      <td style="color:var(--bl)">${c.kwh.toFixed(4)} kWh</td>
+      <td>${dirLabel}</td>
     </tr>`;
   }).join('');
+
+  renderCvPager(cvPage, maxPage);
 }
 
-function toggleAll(cb) { document.querySelectorAll('.cv2-cb').forEach(c => c.checked=cb.checked); }
-
-// ── ENTRY ─────────────────────────────────────────────────
-function prefillNow() {
-  const el = document.getElementById('cv2-e-date');
-  if (el) {
-    const now = new Date();
-    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-    el.value = now.toISOString().slice(0,16);
+function renderCvPager(page, maxPage) {
+  let el = document.getElementById('cv-pager');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'cv-pager';
+    el.style.cssText = 'display:flex;gap:8px;align-items:center;justify-content:center;padding:12px;font-size:12px;color:var(--tx2)';
+    document.getElementById('cv-tbody')?.closest('.tcard')?.after(el);
   }
+  if (maxPage === 0) { el.innerHTML = ''; return; }
+  el.innerHTML = `
+    <button class="btn-s" onclick="CV.cvGoPage(0)" ${page===0?'disabled':''}>«</button>
+    <button class="btn-s" onclick="CV.cvGoPage(${page-1})" ${page===0?'disabled':''}>‹ Zurück</button>
+    <span>Seite ${page+1} von ${maxPage+1} &nbsp;·&nbsp; je ${CV_PAGE_SIZE} Einträge</span>
+    <button class="btn-s" onclick="CV.cvGoPage(${page+1})" ${page===maxPage?'disabled':''}>Weiter ›</button>
+    <button class="btn-s" onclick="CV.cvGoPage(${maxPage})" ${page===maxPage?'disabled':''}>»</button>`;
 }
 
-function editEntry(id) {
-  const r = readings.find(x => x.id === id);
-  if (!r) return;
-  // Navigate to records tab → entry subtab
-  const mainTabBtn = [...document.querySelectorAll('#cv2-tabs .mtab')]
-    .find(b => b.getAttribute('onclick')?.includes("'records'"));
-  if (mainTabBtn) mainTabBtn.click();
-  // Then switch to entry subtab
-  const entryTabBtn = [...document.querySelectorAll('.mtab')]
-    .find(b => b.getAttribute('onclick')?.includes("'entry'") && b.closest('#cv2-t-records'));
-  if (entryTabBtn) entryTabBtn.click();
-  const d  = new Date(r.reading_date);
-  const local = new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,16);
-  const g = id => document.getElementById(id);
-  if (g('cv2-e-date'))     g('cv2-e-date').value     = local;
-  if (g('cv2-e-solar'))    g('cv2-e-solar').value    = r.solar_kwh ?? '';
-  if (g('cv2-e-fw'))       g('cv2-e-fw').value       = r.fw_kwh    ?? '';
-  if (g('cv2-e-fwstatus')) g('cv2-e-fwstatus').value = r.fw_status ?? '';
-  if (g('cv2-e-water'))    g('cv2-e-water').value    = r.water_m3  ?? '';
-  if (g('cv2-e-strom'))    g('cv2-e-strom').value    = r.strom_kwh ?? '';
-  if (g('cv2-e-feed'))     g('cv2-e-feed').value     = r.feed_kwh  ?? '';
-  if (g('cv2-e-temp'))     g('cv2-e-temp').value     = r.temp_c    ?? '';
-  if (g('cv2-e-note'))     g('cv2-e-note').value     = r.note      ?? '';
-  // Mark as edit mode: store original ID, remove old entry on save
-  const form = g('cv2-e-date')?.closest('.fcard');
-  if (form) {
-    form.dataset.editId = id;
-    const btn = form.querySelector('button.btn-p');
-    if (btn) btn.textContent = '✎ Speichern';
-    const hint = form.querySelector('#cv2-edit-hint') || (() => {
-      const el = document.createElement('div');
-      el.id = 'cv2-edit-hint';
-      el.style.cssText = 'font-size:11px;color:var(--ac);margin-top:6px';
-      btn?.parentNode.appendChild(el);
-      return el;
-    })();
-    hint.textContent = `Bearbeite Eintrag vom ${local.substring(0,10).split('-').reverse().join('.')}`;
-    form.scrollIntoView({ behavior:'smooth', block:'center' });
-  }
+function cvGoPage(p) { cvPage = p; renderTable(); }
+
+function toggleAll(cb) { document.querySelectorAll('.cv-cb').forEach(c => c.checked = cb.checked); }
+
+function deleteSelected() {
+  const sel = [...document.querySelectorAll('.cv-cb:checked')].map(c => c.dataset.id);
+  if (!sel.length) { APP.toast('Keine Zeilen ausgewählt','err'); return; }
+  if (!confirm(sel.length + ' Messpunkte löschen?')) return;
+  APP.setConsumption(APP.consumption.filter(c => !sel.includes(c.id)));
+  APP.deleteCvIds(sel);
+  APP.saveCv(false); renderTable(); APP.updateSidebar();
+  APP.toast('✓ ' + sel.length + ' gelöscht');
 }
 
-function copyEntry(id) {
-  const r = readings.find(x => x.id === id);
-  if (!r) return;
-  const mainTabBtn = [...document.querySelectorAll('#cv2-tabs .mtab')]
-    .find(b => b.getAttribute('onclick')?.includes("'records'"));
-  if (mainTabBtn) mainTabBtn.click();
-  const entryTabBtn = [...document.querySelectorAll('.mtab')]
-    .find(b => b.getAttribute('onclick')?.includes("'entry'") && b.closest('#cv2-t-records'));
-  if (entryTabBtn) entryTabBtn.click();
-  const g = id => document.getElementById(id);
-  // Prefill form with same values but new date = now
-  prefillNow();
-  if (g('cv2-e-solar'))    g('cv2-e-solar').value    = r.solar_kwh ?? '';
-  if (g('cv2-e-fw'))       g('cv2-e-fw').value       = r.fw_kwh    ?? '';
-  if (g('cv2-e-fwstatus')) g('cv2-e-fwstatus').value = r.fw_status ?? '';
-  if (g('cv2-e-water'))    g('cv2-e-water').value    = r.water_m3  ?? '';
-  if (g('cv2-e-strom'))    g('cv2-e-strom').value    = r.strom_kwh ?? '';
-  if (g('cv2-e-feed'))     g('cv2-e-feed').value     = r.feed_kwh  ?? '';
-  if (g('cv2-e-temp'))     g('cv2-e-temp').value     = r.temp_c    ?? '';
-  if (g('cv2-e-note'))     g('cv2-e-note').value     = r.note      ?? '';
-  const form = g('cv2-e-date')?.closest('.fcard');
-  if (form) {
-    delete form.dataset.editId;
-    const btn = form.querySelector('button.btn-p');
-    if (btn) btn.textContent = 'Eintrag speichern';
-    const hint = form.querySelector('#cv2-edit-hint');
-    if (hint) hint.textContent = 'Werte aus kopiertem Eintrag übernommen — bitte Datum prüfen';
-    form.scrollIntoView({ behavior:'smooth', block:'center' });
-  }
-  APP.toast('Werte kopiert — bitte Datum anpassen');
-}
-
-function addEntry() {
-  const dateStr = document.getElementById('cv2-e-date')?.value;
-  if (!dateStr) { APP.toast('Datum ist Pflichtfeld','err'); return; }
-  const reading_date = new Date(dateStr).toISOString();
-
-  // Check if editing existing entry
-  const form   = document.getElementById('cv2-e-date')?.closest('.fcard');
-  const editId = form?.dataset.editId;
-  if (editId) {
-    // Replace existing entry
-    const idx = readings.findIndex(x => x.id === editId);
-    if (idx >= 0) {
-      readings[idx] = {
-        ...readings[idx],
-        reading_date,
-        solar_kwh: parseFloat(document.getElementById('cv2-e-solar')?.value)||null,
-        fw_kwh:    parseFloat(document.getElementById('cv2-e-fw')?.value)||null,
-        fw_status: document.getElementById('cv2-e-fwstatus')?.value||null,
-        water_m3:  parseFloat(document.getElementById('cv2-e-water')?.value)||null,
-        strom_kwh: parseFloat(document.getElementById('cv2-e-strom')?.value)||null,
-        feed_kwh:  parseFloat(document.getElementById('cv2-e-feed')?.value)||null,
-        temp_c:    parseFloat(document.getElementById('cv2-e-temp')?.value)||null,
-        note:      document.getElementById('cv2-e-note')?.value||null
-      };
-      readings.sort((a,b) => a.reading_date.localeCompare(b.reading_date));
-      saveReadings();
-      // Reset form
-      delete form.dataset.editId;
-      const btn = form.querySelector('button.btn-p');
-      if (btn) btn.textContent = 'Eintrag speichern';
-      const hint = form.querySelector('#cv2-edit-hint');
-      if (hint) hint.textContent = '';
-      renderTable(); renderDashboard();
-      APP.toast('✓ Eintrag aktualisiert');
-      return;
-    }
-  }
-
-  const entry = {
-    id:           APP.genId(),
-    reading_date,
-    solar_kwh:    parseFloat(document.getElementById('cv2-e-solar')?.value)||null,
-    fw_kwh:       parseFloat(document.getElementById('cv2-e-fw')?.value)||null,
-    fw_status:    document.getElementById('cv2-e-fwstatus')?.value||null,
-    water_m3:     parseFloat(document.getElementById('cv2-e-water')?.value)||null,
-    strom_kwh:    parseFloat(document.getElementById('cv2-e-strom')?.value)||null,
-    feed_kwh:     parseFloat(document.getElementById('cv2-e-feed')?.value)||null,
-    temp_c:       parseFloat(document.getElementById('cv2-e-temp')?.value)||null,
-    note:         document.getElementById('cv2-e-note')?.value||null
+// ── FILE LOAD ─────────────────────────────────────────────
+function loadFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const info = document.getElementById('cv-file-info');
+  if (info) info.textContent = `📄 ${file.name} (${(file.size/1024).toFixed(1)} KB) — wird geladen…`;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const ta = document.getElementById('cv-csv-in');
+    if (ta) ta.value = e.target.result;
+    if (info) info.textContent = `📄 ${file.name} (${(file.size/1024).toFixed(1)} KB) ✓ — bereit zum Importieren`;
   };
-  readings.push(entry);
-  readings.sort((a,b) => a.reading_date.localeCompare(b.reading_date));
-  saveReadings();
-  renderTable();
-  renderDashboard();
-  const resEl = document.getElementById('cv2-entry-result');
-  if (resEl) resEl.innerHTML = `<span style="color:var(--gr)">✓ Ablesung gespeichert (${dateStr})</span>`;
-  APP.toast('✓ Ablesung gespeichert');
-  ['cv2-e-solar','cv2-e-fw','cv2-e-water','cv2-e-strom','cv2-e-feed','cv2-e-temp','cv2-e-note']
-    .forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  reader.readAsText(file);
 }
 
-// ── CSV IMPORT ────────────────────────────────────────────
-function importCSV(overwrite=false) {
-  const raw   = document.getElementById('cv2-csv-in')?.value.trim();
-  const resEl = document.getElementById('cv2-import-result');
-  if (!raw) { APP.toast('Kein Text eingefügt','err'); return; }
+// ── IMPORT ────────────────────────────────────────────────
+function importCSV(overwrite = false) {
+  const raw   = document.getElementById('cv-csv-in')?.value.trim();
+  const resEl = document.getElementById('cv-import-result');
+  if (!raw) { APP.toast('Kein CSV eingefügt','err'); return; }
 
-  const lines = raw.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n')
-    .map(l=>l.trim()).filter(l=>l.length>0);
+  // Strip BOM, normalize line endings
+  const cleaned = raw.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const lines   = cleaned.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
-  const parsed = []; let skipped=0;
-  lines.forEach(line => {
+  const parsed = [];
+  let skipped  = 0;
+
+  lines.forEach((line, idx) => {
     // Skip header line
-    if (line.toLowerCase().startsWith('datum')) return;
-    const cols = line.split('\t');
-    if (cols.length < 2) { skipped++; return; }
-    const reading_date = parseDate(cols[0]);
-    if (!reading_date) { skipped++; return; }
-    parsed.push({
-      id:           APP.genId(),
-      reading_date,
-      solar_kwh:    parseNum(cols[1]),
-      fw_kwh:       parseNum(cols[2]),
-      fw_status:    cols[3]?.trim()||null,
-      water_m3:     parseNum(cols[4]),
-      strom_kwh:    parseNum(cols[5]),
-      temp_c:       parseNum(cols[6]),
-      note:         cols[7]?.trim()||null
-    });
+    if (line.startsWith('Export_Bezeichnung') || line.startsWith('"Export_Bezeichnung')) return;
+
+    // Auto-detect separator per line: tab or semicolon
+    const sep  = line.includes('\t') ? '\t' : ';';
+    const cols = line.split(sep);
+    if (cols.length < 15) { skipped++; return; }
+
+    try {
+      // col[5]  = Energierichtung: "Lieferung" or "Einspeisung"
+      // col[6]  = Von: "DD.MM.YYYY HH:MM:SS"
+      // col[14] = Wert: "0,069000"
+      const direction = cols[5].trim();
+      const vonRaw    = cols[6].trim();
+      const wertRaw   = cols[14].trim().replace(',', '.');
+
+      const kwh = parseFloat(wertRaw);
+      if (isNaN(kwh) || vonRaw.length < 10) { skipped++; return; }
+
+      // Parse "DD.MM.YYYY HH:MM:SS"
+      // Split at space: ["DD.MM.YYYY", "HH:MM:SS"]
+      const parts    = vonRaw.split(' ');
+      const datePart = parts[0];          // "DD.MM.YYYY"
+      const timePart = parts[1] || '00:00:00'; // "HH:MM:SS"
+
+      const dp = datePart.split('.');
+      if (dp.length < 3) { skipped++; return; }
+      const dd   = dp[0].padStart(2, '0');
+      const mm   = dp[1].padStart(2, '0');
+      const yyyy = dp[2].length === 4 ? dp[2] : '20' + dp[2];
+      const date = `${yyyy}-${mm}-${dd}`;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { skipped++; return; }
+
+      const tp     = timePart.split(':');
+      const hour   = parseInt(tp[0] || '0', 10);
+      const minute = parseInt(tp[1] || '0', 10);
+      if (isNaN(hour) || isNaN(minute) || hour < 0 || hour > 23) { skipped++; return; }
+
+      const dir = direction.toLowerCase().includes('einspeisung') ? 'feed' : 'grid';
+
+      parsed.push({
+        id:        APP.genId(),
+        date,                 // "YYYY-MM-DD" string
+        hour,                 // integer 0–23
+        minute,               // integer 0,15,30,45
+        kwh,                  // float
+        direction: dir
+      });
+    } catch(e) { skipped++; }
   });
 
   if (!parsed.length) {
-    if (resEl) resEl.innerHTML = '<span style="color:var(--rd)">Keine gültigen Zeilen. Format prüfen.</span>';
+    if (resEl) resEl.innerHTML = '<span style="color:var(--rd)">Keine gültigen Zeilen gefunden. Bitte Format prüfen.</span>';
+    APP.toast('Import fehlgeschlagen','err');
     return;
   }
 
+  const importDates = new Set(parsed.map(c => c.date));
+
   if (overwrite) {
-    readings = parsed;
+    // Remove all existing entries for dates in this import, then add new
+    const kept = APP.consumption.filter(c => !importDates.has(String(c.date).substring(0,10)));
+    APP.setConsumption(
+      [...kept, ...parsed].sort((a,b) =>
+        a.date !== b.date ? a.date.localeCompare(b.date) :
+        a.hour !== b.hour ? a.hour - b.hour : a.minute - b.minute
+      )
+    );
   } else {
-    const existDates = new Set(readings.map(r => r.reading_date));
-    const fresh = parsed.filter(p => !existDates.has(p.reading_date));
-    readings = [...readings, ...fresh];
+    // Add only new entries (not already present by date+hour+minute+direction)
+    const existKeys = new Set(
+      APP.consumption.map(c =>
+        `${String(c.date).substring(0,10)}|${parseInt(c.hour,10)}|${parseInt(c.minute,10)}|${c.direction}`
+      )
+    );
+    const fresh = parsed.filter(c => !existKeys.has(`${c.date}|${c.hour}|${c.minute}|${c.direction}`));
     if (!fresh.length) {
-      if (resEl) resEl.innerHTML = '<span style="color:var(--ac)">Alle Einträge bereits vorhanden. "↺ Neu importieren" verwenden.</span>';
+      if (resEl) resEl.innerHTML = '<span style="color:var(--ac)">⚠ Alle Einträge bereits vorhanden. Verwende "↺ Neu importieren (überschreiben)".</span>';
       return;
     }
+    APP.setConsumption(
+      [...APP.consumption.map(norm), ...fresh].sort((a,b) =>
+        a.date !== b.date ? a.date.localeCompare(b.date) :
+        a.hour !== b.hour ? a.hour - b.hour : a.minute - b.minute
+      )
+    );
   }
-  readings.sort((a,b) => a.reading_date.localeCompare(b.reading_date));
-  saveReadings();
-  renderTable();
-  renderDashboard();
-  if (resEl) resEl.innerHTML = `<span style="color:var(--gr)">✓ ${parsed.length} Ablesungen importiert.</span>`;
-  APP.toast(`✓ ${parsed.length} Ablesungen importiert`);
+
+  APP.saveCv(); renderOverview(); APP.updateSidebar();
+
+  // Reset file input
+  const fi = document.getElementById('cv-file');
+  if (fi) fi.value = '';
+  const info = document.getElementById('cv-file-info');
+  if (info) info.textContent = '';
+
+  const days = importDates.size;
+  const msg  = overwrite
+    ? `✓ ${parsed.length} Messpunkte für ${days} Tage importiert (überschrieben).`
+    : `✓ ${parsed.length} neue Messpunkte (${days} Tage)${skipped > 0 ? ' · ' + skipped + ' übersprungen' : ''}.`;
+  if (resEl) resEl.innerHTML = `<span style="color:var(--gr)">${msg}</span>`;
+  APP.toast(`✓ ${parsed.length} Messpunkte importiert`);
 }
 
-// ── DELETE ────────────────────────────────────────────────
-function deleteSingle(id) {
-  if (!confirm('Ablesung löschen?')) return;
-  readings = readings.filter(r => r.id !== id);
-  deleteFromSb([id]);
-  saveReadings(false); renderTable(); renderDashboard();
-  APP.toast('✓ gelöscht');
-}
-function deleteSelected() {
-  const sel = [...document.querySelectorAll('.cv2-cb:checked')].map(c=>c.dataset.id);
-  if (!sel.length) { APP.toast('Keine Zeilen ausgewählt','err'); return; }
-  if (!confirm(sel.length+' Ablesungen löschen?')) return;
-  readings = readings.filter(r => !sel.includes(r.id));
-  deleteFromSb(sel);
-  saveReadings(false); renderTable(); renderDashboard();
-  APP.toast('✓ '+sel.length+' gelöscht');
-}
+// ── LÖSCHEN ───────────────────────────────────────────────
 function deleteRange() {
-  const from=document.getElementById('cv2-del-from')?.value;
-  const to  =document.getElementById('cv2-del-to')?.value;
-  const resEl=document.getElementById('cv2-del-result');
-  if (!from||!to) { APP.toast('Von und Bis wählen','err'); return; }
-  const toDelete=readings.filter(r=>r.reading_date.substring(0,10)>=from&&r.reading_date.substring(0,10)<=to);
-  if (!toDelete.length) { if(resEl) resEl.innerHTML='<span style="color:var(--tx2)">Keine Einträge in diesem Zeitraum.</span>'; return; }
-  if (!confirm(toDelete.length+' Ablesungen löschen?')) return;
-  const ids=toDelete.map(r=>r.id);
-  readings=readings.filter(r=>!ids.includes(r.id));
-  deleteFromSb(ids);
-  saveReadings(false); renderTable(); renderDashboard();
-  if(resEl) resEl.innerHTML=`<span style="color:var(--gr)">✓ ${toDelete.length} gelöscht.</span>`;
+  const from  = document.getElementById('cv-del-from')?.value;
+  const to    = document.getElementById('cv-del-to')?.value;
+  const resEl = document.getElementById('cv-del-result');
+  if (!from || !to) { APP.toast('Bitte Von und Bis wählen','err'); return; }
+  if (from > to)    { APP.toast('Von muss vor Bis liegen','err'); return; }
+
+  const toDelete = APP.consumption.filter(c => {
+    const d = String(c.date).substring(0,10);
+    return d >= from && d <= to;
+  });
+  if (!toDelete.length) {
+    if (resEl) resEl.innerHTML = '<span style="color:var(--tx2)">Keine Messpunkte in diesem Zeitraum.</span>';
+    return;
+  }
+  if (!confirm(`${toDelete.length} Messpunkte vom ${from} bis ${to} löschen?`)) return;
+
+  const ids  = toDelete.map(c => c.id);
+  const days = new Set(toDelete.map(c => String(c.date).substring(0,10))).size;
+  APP.setConsumption(APP.consumption.filter(c => {
+    const d = String(c.date).substring(0,10);
+    return !(d >= from && d <= to);
+  }));
+  APP.deleteCvIds(ids);
+  APP.saveCv(false); renderOverview(); APP.updateSidebar();
+  if (resEl) resEl.innerHTML = `<span style="color:var(--gr)">✓ ${toDelete.length} Messpunkte (${days} Tage) gelöscht.</span>`;
+  APP.toast(`✓ ${toDelete.length} Messpunkte gelöscht`);
 }
+
 function clearAll() {
-  if (!confirm('Alle Ablesungen löschen?')) return;
-  const ids=readings.map(r=>r.id);
-  readings=[];
-  deleteFromSb(ids);
-  saveReadings(false); renderTable(); renderDashboard();
-  APP.toast('Alle Ablesungen gelöscht');
+  if (!confirm('Alle Verbrauchsdaten löschen?')) return;
+  const pw = prompt('Passwort bestätigen:');
+  if (pw !== 'We7-Tracker-P!nggau') { APP.toast('Falsches Passwort','err'); return; }
+  const ids = APP.consumption.map(c => c.id);
+  APP.setConsumption([]);
+  APP.deleteCvIds(ids);
+  APP.saveCv(false); renderOverview(); APP.updateSidebar();
+  APP.toast('Verbrauchsdaten gelöscht');
 }
 
-// ── SUPABASE ──────────────────────────────────────────────
-async function deleteFromSb(ids) {
-  if (!APP.sbClient||!ids.length) return;
-  try { await APP.sbClient.from(CV2_TBL).delete().in('id',ids); }
-  catch(e) { console.warn('CV2 delete:',e.message); }
-}
-
-function saveReadings(sync=true) {
-  try { localStorage.setItem('cv2_readings', JSON.stringify(readings)); } catch(e){}
-  if (sync) syncReadings();
-}
-
-async function syncReadings() {
-  let tries=0;
-  while (!APP.sbClient && tries<10) { await new Promise(r=>setTimeout(r,500)); tries++; }
-  if (!APP.sbClient) return;
-  try {
-    if (readings.length > 0) {
-      const seen=new Set();
-      const rows=readings.filter(r=>{if(seen.has(r.id))return false;seen.add(r.id);return true;});
-      for (let i=0;i<rows.length;i+=100) {
-        const {error}=await APP.sbClient.from(CV2_TBL).upsert(rows.slice(i,i+100),{onConflict:'id'});
-        if (error) throw error;
-      }
-    }
-  } catch(e) { console.warn('CV2 sync:',e.message); }
-}
 // ── INIT ──────────────────────────────────────────────────
-function populateDropdowns() {
-  const today    = new Date().toISOString().split('T')[0];
-  const earliest = getEarliestDate();
+function initDefaults() {
+  const today = new Date().toISOString().split('T')[0];
+  const g     = id => document.getElementById(id);
 
-  // Always rebuild month dropdown from current readings
-  const mEl = document.getElementById('cv2-month');
-  if (mEl) {
-    const current = mEl.value;
-    mEl.innerHTML = '<option value="">—</option>';
-    const dates  = readings.map(r => r.reading_date.substring(0,7)).filter(Boolean);
-    const months = [...new Set(dates)].sort().reverse();
-    const MN = ['','Jänner','Februar','März','April','Mai','Juni',
-                'Juli','August','September','Oktober','November','Dezember'];
-    months.forEach(ym => {
-      const [yr, mo] = ym.split('-').map(Number);
-      const opt = document.createElement('option');
-      opt.value = ym; opt.textContent = `${MN[mo]} ${yr}`;
-      if (ym === current) opt.selected = true;
-      mEl.appendChild(opt);
-    });
-  }
+  const dates    = APP.consumption.map(c => String(c.date).substring(0,10)).filter(Boolean).sort();
+  const earliest = dates.length > 0 ? dates[0] : (parseInt(today.substring(0,4))-2) + '-01-01';
 
-  // Always rebuild year dropdown from current readings
-  const yEl = document.getElementById('cv2-year');
-  if (yEl) {
-    const current = yEl.value;
-    yEl.innerHTML = '<option value="">—</option>';
-    const years = [...new Set(readings.map(r => r.reading_date.substring(0,4)))].sort().reverse();
-    years.forEach(yr => {
-      const opt = document.createElement('option');
-      opt.value = yr; opt.textContent = yr;
-      if (yr === current) opt.selected = true;
-      yEl.appendChild(opt);
-    });
-  }
+  if (g('cv-from'))    g('cv-from').value    = earliest;
+  if (g('cv-to'))      g('cv-to').value      = today;
+  if (g('pr-from'))    g('pr-from').value    = earliest;
+  if (g('pr-to'))      g('pr-to').value      = today;
+  if (g('cv-tf-from')) g('cv-tf-from').value = earliest;
+  if (g('cv-tf-to'))   g('cv-tf-to').value   = today;
 
-  // Set Von to earliest, Bis to today
-  const fEl = document.getElementById('cv2-from');
-  const tEl = document.getElementById('cv2-to');
-  if (fEl && !fEl.value) fEl.value = earliest || today;
-  if (tEl && !tEl.value) tEl.value = today;
-
-  prefillNow();
   const d30 = new Date(); d30.setDate(d30.getDate()-30);
-  const df = document.getElementById('cv2-del-from');
-  const dt = document.getElementById('cv2-del-to');
-  if (df && !df.value) df.value = d30.toISOString().split('T')[0];
-  if (dt && !dt.value) dt.value = today;
-}
-
-async function loadReadings() {
-  // Load from localStorage as initial fallback only
-  try {
-    const v = localStorage.getItem('cv2_readings');
-    if (v) readings = JSON.parse(v);
-  } catch(e) {}
-
-  // Supabase ist immer die Quelle der Wahrheit — vollständig laden und ersetzen
-  let tries = 0;
-  while (!APP.sbClient && tries < 10) { await new Promise(r => setTimeout(r,500)); tries++; }
-  if (APP.sbClient) {
-    try {
-      const { data, error } = await APP.sbClient.from(CV2_TBL).select('*').order('reading_date');
-      if (!error && data && data.length > 0) {
-        // Supabase vollständig übernehmen — enthält immer aktuellste Spalten
-        readings = data.sort((a,b) => a.reading_date.localeCompare(b.reading_date));
-        saveReadings(false);
-      }
-    } catch(e) { console.warn('CV2 load:', e.message); }
-  }
-
-  // Populate dropdowns and render
-  populateDropdowns();
-  renderDashboard();
-  renderTable();
+  if (g('cv-del-from')) g('cv-del-from').value = d30.toISOString().split('T')[0];
+  if (g('cv-del-to'))   g('cv-del-to').value   = today;
 }
 
 function register() {
-  APP.registerPage('consumption2', {
-    html: HTML,
-    onEnter: async () => {
-      await loadReadings();
-      APP.FilterBar.create('cv2-timeline', {
-        extraDates: readings.map(r => r.reading_date.substring(0,10)),
+  APP.registerPage('consumption', {
+    html:    HTML,
+    onEnter: () => {
+      initDefaults();
+      APP.FilterBar.create('cv-timeline', {
         onRange: (f, t) => {
-          const fe=document.getElementById('cv2-from'); if(fe) fe.value=f;
-          const te=document.getElementById('cv2-to');   if(te) te.value=t;
-          const pe=document.getElementById('cv2-period'); if(pe) pe.value='custom';
-          renderDashboard();
+          const fe=document.getElementById('cv-from'); if(fe) fe.value=f;
+          const te=document.getElementById('cv-to');   if(te) te.value=t;
+          renderOverview();
         }
       });
+      renderOverview();
     }
   });
 }
 
-return { tab, recTab, onPreset, onMonthPick, onYearPick, onCustomDate,
-         resetFilter, renderDashboard, renderTable,
-         toggleAll, prefillNow, addEntry, editEntry, copyEntry, importCSV,
-         deleteSingle, deleteSelected, deleteRange, clearAll, register };
+return { tab, resetFilter, resetProfile, renderOverview, renderProfile, renderTable,
+         cvGoPage, toggleAll, loadFile, deleteSelected, importCSV, deleteRange, clearAll, register };
 })();
