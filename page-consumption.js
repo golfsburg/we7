@@ -512,14 +512,12 @@ function importCSV(overwrite = false) {
 
       const dir = direction.toLowerCase().includes('einspeisung') ? 'feed' : 'grid';
 
-      parsed.push({
-        id:        APP.genId(),
-        date,                 // "YYYY-MM-DD" string
-        hour,                 // integer 0–23
-        minute,               // integer 0,15,30,45
-        kwh,                  // float
-        direction: dir
-      });
+      // Deterministische ID aus Datum+Zeit+Richtung → verhindert Duplikate bei erneutem Import
+      const idStr = `${date}_${String(hour).padStart(2,'0')}_${String(minute).padStart(2,'0')}_${dir}`;
+      const idHash = idStr.split('').reduce((h,c) => (Math.imul(31,h)+c.charCodeAt(0))|0, 0);
+      const id = `cv_${Math.abs(idHash).toString(36)}_${date.replace(/-/g,'')}_${String(hour).padStart(2,'0')}${String(minute).padStart(2,'0')}`;
+
+      parsed.push({ id, date, hour, minute, kwh, direction: dir });
     } catch(e) { skipped++; }
   });
 
