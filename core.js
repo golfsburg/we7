@@ -283,46 +283,67 @@ async function initialLoad() {
   syncInd('syncing');
   let changed = false;
   try {
-    // PV: merge new entries from Supabase
-    const { data, error } = await sbClient.from(PV_TBL)
-      .select('*').order('date', {ascending:true});
-    if (error) throw error;
-    if (data && data.length > 0) {
+    // PV: Batch-Loading pv_entries
+    let pvAll = [], pvFrom = 0, pvDone = false;
+    while (!pvDone) {
+      const { data, error } = await sbClient.from(PV_TBL)
+        .select('*').order('date', {ascending:true})
+        .range(pvFrom, pvFrom + 999);
+      if (error) throw error;
+      if (data && data.length > 0) {
+        pvAll = pvAll.concat(data);
+        pvFrom += 1000;
+        if (data.length < 1000) pvDone = true;
+      } else { pvDone = true; }
+    }
+    if (pvAll.length > 0) {
       if (entries.length === 0) {
-        entries = data.filter(r => !tombstones.has(r.id)).map(rowToEntry);
+        entries = pvAll.filter(r => !tombstones.has(r.id)).map(rowToEntry);
         savePv(false); changed = true;
       } else {
         const localIds = new Set(entries.map(e => e.id));
-        const fresh = data
+        const fresh = pvAll
           .filter(r => !tombstones.has(r.id) && !localIds.has(r.id))
           .map(rowToEntry);
         if (fresh.length > 0) {
           entries = [...entries, ...fresh].sort((a,b) => a.date.localeCompare(b.date));
           savePv(false); changed = true;
-          console.log('[Sync] +'+fresh.length+' PV entries from Supabase');
+          console.log('[Sync] +'+fresh.length+' PV entries (gesamt: '+entries.length+')');
         }
       }
     }
-    // CV: merge new entries from Supabase
-    const { data: cvData, error: cvErr } = await sbClient.from(CV_TBL).select('*');
-    if (!cvErr && cvData && cvData.length > 0) {
-      const mapCv = r => ({
-        id: r.id, date: String(r.date).substring(0,10),
-        hour: parseInt(r.hour,10), minute: parseInt(r.minute,10),
-        kwh: parseFloat(r.kwh), direction: r.direction||'grid'
-      });
+    // CV: Batch-Loading (Supabase limit = 1000/Seite)
+    const mapCv = r => ({
+      id: r.id, date: String(r.date).substring(0,10),
+      hour: parseInt(r.hour,10), minute: parseInt(r.minute,10),
+      kwh: parseFloat(r.kwh), direction: r.direction||'grid'
+    });
+    let cvAll = [], cvFrom = 0, cvDone = false;
+    while (!cvDone) {
+      const { data: cvData, error: cvErr } = await sbClient.from(CV_TBL)
+        .select('*').order('date').order('hour').order('minute')
+        .range(cvFrom, cvFrom + 999);
+      if (cvErr) break;
+      if (cvData && cvData.length > 0) {
+        cvAll = cvAll.concat(cvData);
+        cvFrom += 1000;
+        if (cvData.length < 1000) cvDone = true;
+      } else { cvDone = true; }
+    }
+    if (cvAll.length > 0) {
       if (consumption.length === 0) {
-        consumption = cvData.filter(r=>!cvTombstones.has(r.id)).map(mapCv)
+        consumption = cvAll.filter(r=>!cvTombstones.has(r.id)).map(mapCv)
           .sort((a,b)=>a.date!==b.date?a.date.localeCompare(b.date):a.hour-b.hour);
         saveCv(false); changed = true;
+        console.log('[Sync] CV: '+consumption.length+' Einträge geladen ('+cvAll.length+' von Supabase)');
       } else {
         const localIds = new Set(consumption.map(c=>c.id));
-        const fresh = cvData.filter(r=>!cvTombstones.has(r.id)&&!localIds.has(r.id)).map(mapCv);
+        const fresh = cvAll.filter(r=>!cvTombstones.has(r.id)&&!localIds.has(r.id)).map(mapCv);
         if (fresh.length > 0) {
           consumption = [...consumption,...fresh]
             .sort((a,b)=>a.date!==b.date?a.date.localeCompare(b.date):a.hour-b.hour);
           saveCv(false); changed = true;
-          console.log('[Sync] +'+fresh.length+' CV entries from Supabase');
+          console.log('[Sync] +'+fresh.length+' neue CV-Einträge (gesamt: '+consumption.length+')');
         }
       }
     }
