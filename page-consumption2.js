@@ -233,6 +233,11 @@ create policy "allow_all" on meter_readings
 
 // ── STATE ─────────────────────────────────────────────────
 let readings = []; // sorted by date ascending
+let cv2Tombstones = new Set(); // locally-deleted reading IDs — must never resurrect from Supabase
+try { const t = localStorage.getItem('cv2_tombstones'); if (t) cv2Tombstones = new Set(JSON.parse(t)); } catch(e){}
+function saveCv2Tombstones() {
+  try { localStorage.setItem('cv2_tombstones', JSON.stringify([...cv2Tombstones])); } catch(e){}
+}
 
 const set = (id, v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
 
@@ -245,16 +250,10 @@ function parseNum(s) {
   if (v.includes('.') && v.includes(',')) {
     v = v.replace(/\./g,'').replace(',','.');
   } else if (v.includes(',')) {
-    // Only comma: could be decimal (0,5) or thousands (509,138)
-    const parts = v.split(',');
-    if (parts[1] && parts[1].length === 3 && !v.includes('.')) {
-      // e.g. "509,138" — treat as no decimal (integer thousands)
-      v = v.replace(',','');
-    } else {
-      v = v.replace(',','.');
-    }
+    // Only comma present → always the decimal separator (matches the
+    // documented CSV convention: "Punkt als Tausender, Komma als Dezimal")
+    v = v.replace(',','.');
   }
-  // Remove remaining . as thousands separators if number looks like it
   const n = parseFloat(v);
   return isNaN(n) ? null : n;
 }
@@ -840,6 +839,7 @@ function importCSV(overwrite=false) {
 function deleteSingle(id) {
   if (!confirm('Ablesung löschen?')) return;
   readings = readings.filter(r => r.id !== id);
+  cv2Tombstones.add(id); saveCv2Tombstones();
   deleteFromSb([id]);
   saveReadings(false); renderTable(); renderDashboard();
   APP.toast('✓ gelöscht');
@@ -849,6 +849,7 @@ function deleteSelected() {
   if (!sel.length) { APP.toast('Keine Zeilen ausgewählt','err'); return; }
   if (!confirm(sel.length+' Ablesungen löschen?')) return;
   readings = readings.filter(r => !sel.includes(r.id));
+  sel.forEach(id => cv2Tombstones.add(id)); saveCv2Tombstones();
   deleteFromSb(sel);
   saveReadings(false); renderTable(); renderDashboard();
   APP.toast('✓ '+sel.length+' gelöscht');
@@ -863,6 +864,7 @@ function deleteRange() {
   if (!confirm(toDelete.length+' Ablesungen löschen?')) return;
   const ids=toDelete.map(r=>r.id);
   readings=readings.filter(r=>!ids.includes(r.id));
+  ids.forEach(id => cv2Tombstones.add(id)); saveCv2Tombstones();
   deleteFromSb(ids);
   saveReadings(false); renderTable(); renderDashboard();
   if(resEl) resEl.innerHTML=`<span style="color:var(--gr)">✓ ${toDelete.length} gelöscht.</span>`;
@@ -871,6 +873,7 @@ function clearAll() {
   if (!confirm('Alle Ablesungen löschen?')) return;
   const ids=readings.map(r=>r.id);
   readings=[];
+  ids.forEach(id => cv2Tombstones.add(id)); saveCv2Tombstones();
   deleteFromSb(ids);
   saveReadings(false); renderTable(); renderDashboard();
   APP.toast('Alle Ablesungen gelöscht');
@@ -968,8 +971,10 @@ async function loadReadings() {
     try {
       const { data, error } = await APP.sbClient.from(CV2_TBL).select('*').order('reading_date');
       if (!error && data && data.length > 0) {
-        // Supabase vollständig übernehmen — enthält immer aktuellste Spalten
-        readings = data.sort((a,b) => a.reading_date.localeCompare(b.reading_date));
+        // Supabase vollständig übernehmen — enthält immer aktuellste Spalten,
+        // aber lokal gelöschte IDs dürfen nie zurückkommen (Tombstones)
+        readings = data.filter(r => !cv2Tombstones.has(r.id))
+          .sort((a,b) => a.reading_date.localeCompare(b.reading_date));
         saveReadings(false);
       }
     } catch(e) { console.warn('CV2 load:', e.message); }
