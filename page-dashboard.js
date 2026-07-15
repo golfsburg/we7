@@ -96,6 +96,11 @@ function renderCore(from, to) {
   if (labelEl) labelEl.style.display = 'none';
 
   let pvD = entries.filter(e => (!from || e.date >= from) && (!to || e.date <= to));
+  // Vermeide Doppelzählung: wenn für einen Monat sowohl Tages- als auch ein
+  // Monats-Sammeleintrag existiert, zählt nur der Monatseintrag — gleiche
+  // Priorität wie APP.getMonthPv() und drawMonthly()/drawOverlay() weiter unten.
+  const monthsWithAggregate = new Set(pvD.filter(e => e.type === 'month').map(e => e.date.substring(0,7)));
+  pvD = pvD.filter(e => !(e.type === 'day' && monthsWithAggregate.has(e.date.substring(0,7))));
   let cvD = consumption.filter(c => c.direction==='grid' && (!from||c.date>=from) && (!to||c.date<=to));
 
   const pvTotal  = pvD.reduce((s,e) => s+e.kwh, 0);

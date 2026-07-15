@@ -109,10 +109,14 @@ function calcEuro(e) {
   const f = e.feed  != null ? e.feed  : Math.max(0, e.kwh - s);
   return parseFloat(((s * cfg.price) + (f * cfg.feedRate)).toFixed(2));
 }
-// Direct PV use: portion of PV consumed on-site
+// Direct PV use: portion of PV consumed on-site.
+// This is a pure percentage estimate (cfg.selfPct of PV yield) — there is no
+// independent measurement of actual self-consumption to validate it against,
+// so it is NOT capped/derived from gridKwh (a previous Math.min(assumed,
+// gridKwh+assumed) here was always a no-op, since gridKwh is never negative).
 function calcDirect(pvKwh, gridKwh) {
   const assumed = pvKwh * (cfg.selfPct / 100);
-  return parseFloat(Math.min(assumed, gridKwh + assumed).toFixed(2));
+  return parseFloat(assumed.toFixed(2));
 }
 function getDayGrid(date) {
   return consumption
@@ -135,6 +139,14 @@ function getMonthPv(ym) {
 }
 
 // ── UTILS ────────────────────────────────────────────────
+// HTML-escapen für Freitext (Notizen etc.), der in innerHTML/Attribute
+// eingesetzt wird — verhindert, dass z.B. ein "-Zeichen in einer Notiz aus
+// einem value="..."-Attribut ausbricht oder <script>/Event-Handler injiziert.
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+  }[c]));
+}
 let _idCounter = 0;
 function genId() {
   _idCounter++;
@@ -422,6 +434,11 @@ function registerPages() {
 }
 
 // ── PW ───────────────────────────────────────────────────
+// Zentrale Prüfung fürs "Alles löschen"-Passwort in den page-*.js Modulen —
+// vermeidet, dass APP_PW dort separat hartkodiert wird und aus dem Tritt gerät.
+function isCorrectPw(pw) {
+  return pw === APP_PW;
+}
 function checkPw() {
   const v = document.getElementById('pw-in').value;
   if (v === APP_PW) {
@@ -469,13 +486,13 @@ function openModal(id) {
     <div class="field"><label>Einspeisung</label><input type="number" id="em-feed" value="${e.feed||''}"></div>
     <div class="field"><label>Wetter</label><select id="em-weather">${wO}</select></div>
     <div class="field"><label>Temp °C</label><input type="number" id="em-temp" value="${e.temp||''}"></div>
-    <div class="field" style="grid-column:1/-1"><label>Notiz</label><input type="text" id="em-note" value="${e.note||''}"></div>`;
+    <div class="field" style="grid-column:1/-1"><label>Notiz</label><input type="text" id="em-note" value="${esc(e.note||'')}"></div>`;
   } else if (e.type === 'week') {
     f = `<div class="field"><label>Datum</label><input type="date" id="em-date" value="${e.date}"></div>
     <div class="field"><label>KW</label><input type="number" id="em-kw" value="${e.kw||''}"></div>
     <div class="field"><label>Ertrag (kWh)</label><input type="number" id="em-kwh" value="${e.kwh}"></div>
     <div class="field"><label>Wetter</label><select id="em-weather">${wO}</select></div>
-    <div class="field" style="grid-column:1/-1"><label>Notiz</label><input type="text" id="em-note" value="${e.note||''}"></div>`;
+    <div class="field" style="grid-column:1/-1"><label>Notiz</label><input type="text" id="em-note" value="${esc(e.note||'')}"></div>`;
   } else {
     const mO = MONTHS_FULL.map((m,i)=>`<option value="${i}"${new Date(e.date).getMonth()===i?' selected':''}>${m}</option>`).join('');
     const yr = new Date(e.date).getFullYear();
@@ -485,7 +502,7 @@ function openModal(id) {
     <div class="field"><label>Eigenstrom</label><input type="number" id="em-self" value="${e.self||''}"></div>
     <div class="field"><label>Einspeisung</label><input type="number" id="em-feed" value="${e.feed||''}"></div>
     <div class="field"><label>Wetter</label><select id="em-weather">${wO}</select></div>
-    <div class="field" style="grid-column:1/-1"><label>Notiz</label><input type="text" id="em-note" value="${e.note||''}"></div>`;
+    <div class="field" style="grid-column:1/-1"><label>Notiz</label><input type="text" id="em-note" value="${esc(e.note||'')}"></div>`;
   }
   document.getElementById('em-fields').innerHTML = f;
   document.getElementById('edit-modal-bg').style.display = 'flex';
@@ -907,13 +924,13 @@ return {
   FilterBar,
   Timeline: FilterBar, // backwards compat alias
   // utils
-  genId, getWeekNum, getTheory, calcEuro, calcDirect,
+  esc, genId, getWeekNum, getTheory, calcEuro, calcDirect,
   getDayGrid, getMonthGrid, getDayPv, getMonthPv,
   computeTheory, dailyTheory, weeklyTheory,
   destroyChart, toast, copyCode, updateSidebar,
   savePv, saveCv, syncConsumption, scheduleSync,
   // app control
-  boot, checkPw, nav, registerPage, registerPages, refreshCurrentPage,
+  boot, checkPw, isCorrectPw, nav, registerPage, registerPages, refreshCurrentPage,
   openModal, saveModal, closeModal,
   // sync
   syncInd,

@@ -322,14 +322,6 @@ function setEntryMode(mode, btn) {
 }
 
 // ── OVERVIEW ─────────────────────────────────────────────
-function resetFilter() {
-  const yr = new Date().getFullYear(), today = new Date().toISOString().split('T')[0];
-  const f = document.getElementById('pv-from'), t = document.getElementById('pv-to');
-  if (f) f.value = yr + '-01-01';
-  if (t) t.value = today;
-  const g = document.getElementById('pv-gran'); if (g) g.value = 'month';
-  renderOverview();
-}
 function renderOverview() {
   const gran  = document.querySelector('input[name="pv-gran"]:checked')?.value || 'month';
   const range = APP.FilterBar.getRange('pv-timeline');
@@ -454,6 +446,24 @@ function renderOverview() {
 let g5Page = 0;
 const G5_PAGE_SIZE = 200;
 
+// Naive (ohne TZ gespeicherte) Growatt-Timestamps sind lokale Wiener Zeit.
+// EU-Sommerzeit gilt vom letzten Sonntag im März bis zum letzten Sonntag im
+// Oktober (CEST +02:00), sonst CET +01:00 — vorher war hier immer +02:00
+// hartkodiert, was Winterwerte um 1h verschoben anzeigte.
+function viennaOffset(dateStr) {
+  const y = parseInt(dateStr.substring(0,4), 10);
+  const m = parseInt(dateStr.substring(5,7), 10); // 1-12
+  const d = parseInt(dateStr.substring(8,10), 10);
+  const lastSundayOfMonth = (year, month) => { // month: 1-12
+    const last = new Date(Date.UTC(year, month, 0));
+    return last.getUTCDate() - last.getUTCDay();
+  };
+  if (m < 3 || m > 10) return '+01:00';
+  if (m > 3 && m < 10) return '+02:00';
+  if (m === 3)  return d >= lastSundayOfMonth(y, 3)  ? '+02:00' : '+01:00';
+  return              d <  lastSundayOfMonth(y, 10) ? '+02:00' : '+01:00'; // m === 10
+}
+
 function renderTable() {
   const from = document.getElementById('pv-tf-from')?.value;
   const to   = document.getElementById('pv-tf-to')?.value;
@@ -496,10 +506,11 @@ function renderTable() {
 
   tbody.innerHTML = show.map(r => {
     // ts kann als UTC (mit Z/+00:00) oder naive (ohne TZ) gespeichert sein.
-    // Naive Timestamps von Growatt sind lokale Österreich-Zeit → +02:00 hinzufügen
+    // Naive Timestamps von Growatt sind lokale Österreich-Zeit → korrekten
+    // CET/CEST-Offset für das jeweilige Datum hinzufügen.
     let tsStr = r.ts;
     if (tsStr && !tsStr.includes('+') && !tsStr.endsWith('Z')) {
-      tsStr = tsStr.replace(' ', 'T') + '+02:00'; // naive → MESZ
+      tsStr = tsStr.replace(' ', 'T') + viennaOffset(tsStr);
     }
     const dt = new Date(tsStr);
     const dateStr = `${String(dt.getDate()).padStart(2,'0')}.${String(dt.getMonth()+1).padStart(2,'0')}.${dt.getFullYear()}`;
@@ -744,7 +755,7 @@ function exportCsv() {
 function clearAll() {
   if (!confirm('Alle PV-Daten löschen?')) return;
   const pw = prompt('Passwort bestätigen:');
-  if (pw !== 'We7-Tracker-P!nggau') { APP.toast('Falsches Passwort','err'); return; }
+  if (!APP.isCorrectPw(pw)) { APP.toast('Falsches Passwort','err'); return; }
   const ids = APP.entries.map(e => e.id);
   APP.setEntries([]);
   APP.deletePvIds(ids);
@@ -753,15 +764,6 @@ function clearAll() {
 }
 
 // ── ERTRAGSPROFIL ─────────────────────────────────────────
-function resetProfile() {
-  const yr = new Date().getFullYear(), today = new Date().toISOString().split('T')[0];
-  const f = document.getElementById('pp-from'), t = document.getElementById('pp-to');
-  if (f) f.value = yr + '-01-01';
-  if (t) t.value = today;
-  const g = document.getElementById('pp-gran'); if (g) g.value = 'day';
-  renderProfile();
-}
-
 function renderProfile() {
   const gran = 'month';
   const range = APP.FilterBar.getRange('pv-timeline');
@@ -791,8 +793,9 @@ function renderProfile() {
   const prArr   = bk.map(b => b.theory > 0 ? Math.round(b.kwh/b.theory*100) : 0);
   const total   = actArr.reduce((a,v) => a+v, 0);
   const avg     = actArr.length > 0 ? total / actArr.length : 0;
-  const maxVal  = actArr.length > 0 ? Math.max(...actArr) : 0;
-  const minVal  = actArr.length > 0 ? Math.min(...actArr.filter(v=>v>0)) : 0;
+  const maxVal    = actArr.length > 0 ? Math.max(...actArr) : 0;
+  const positive  = actArr.filter(v => v > 0);
+  const minVal    = positive.length > 0 ? Math.min(...positive) : 0; // Math.min() ohne Werte wäre Infinity
   const maxIdx  = actArr.indexOf(maxVal);
   const minIdx  = actArr.indexOf(minVal);
 
@@ -891,20 +894,6 @@ function deleteRange() {
 
 function initDefaults() {
   const today = new Date().toISOString().split('T')[0];
-  const ym    = today.substring(0,7);
-
-  // Set Von to earliest available PV entry, fallback to 2 years ago
-  const dates    = APP.entries.map(e => e.date).filter(Boolean).sort();
-  const earliest = dates.length > 0 ? dates[0] : (parseInt(today.substring(0,4))-2) + '-01-01';
-
-  const f  = document.getElementById('pv-from');
-  const t  = document.getElementById('pv-to');
-  const pf = document.getElementById('pp-from');
-  const pt = document.getElementById('pp-to');
-  if (f)  f.value  = earliest;
-  if (t)  t.value  = today;
-  if (pf) pf.value = earliest;
-  if (pt) pt.value = today;
 
   const ed = document.getElementById('e-date'); if (ed) ed.value = today;
   const now = new Date(), day = now.getDay()||7; now.setDate(now.getDate()-day+1);
@@ -958,10 +947,10 @@ function register() {
         } catch(e) { console.warn('g5 load:', e.message); }
       }
       APP.FilterBar.create('pv-timeline', {
-        onRange: (f, t) => {
-          const fe=document.getElementById('pv-from'); if(fe) fe.value=f;
-          const te=document.getElementById('pv-to');   if(te) te.value=t;
+        onRange: () => {
           renderOverview();
+          // Ertragsprofil teilt sich dieselbe Zeitleiste — bei aktivem Tab mitziehen
+          if (document.getElementById('pv-t-profile')?.style.display !== 'none') renderProfile();
         }
       });
       renderOverview(); renderTable();
@@ -969,7 +958,7 @@ function register() {
   });
 }
 
-return { tab, setEntryMode, resetFilter, renderOverview, renderProfile, resetProfile,
+return { tab, setEntryMode, renderOverview, renderProfile,
          renderTable, g5GoPage, toggleAll, deleteSelected, deleteSingle, copyEntry,
          prefillToday, addDay, addWeek, addMonth,
          loadGrowattFile, importGrowatt, toggleManual, importManual,
