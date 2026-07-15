@@ -202,16 +202,6 @@ function tab(name, btn) {
   if (name === 'data')     renderTable();
 }
 
-// ── FILTER RESET ──────────────────────────────────────────
-function resetFilter() {
-  const yr = new Date().getFullYear(), today = new Date().toISOString().split('T')[0];
-  const f = document.getElementById('cv-from'), t = document.getElementById('cv-to');
-  if (f) f.value = yr + '-01-01';
-  if (t) t.value = today;
-  const g = document.getElementById('cv-gran'); if (g) g.value = 'month';
-  renderOverview();
-}
-
 // ── OVERVIEW ─────────────────────────────────────────────
 function renderOverview() {
   const gran  = document.querySelector('input[name="cv-gran"]:checked')?.value || 'month';
@@ -284,22 +274,11 @@ function renderOverview() {
 }
 
 // ── LASTPROFIL ────────────────────────────────────────────
-function resetProfile() {
-  const dates    = APP.consumption.map(c => String(c.date).substring(0,10)).filter(Boolean).sort();
-  const earliest = dates.length > 0 ? dates[0] : new Date().getFullYear() + '-01-01';
-  const today    = new Date().toISOString().split('T')[0];
-  const f = document.getElementById('pr-from'), t = document.getElementById('pr-to');
-  const g = document.getElementById('pr-gran');
-  if (f) f.value = earliest;
-  if (t) t.value = today;
-  if (g) g.value = 'day';
-  renderProfile();
-}
-
 function renderProfile() {
-  const gran = document.getElementById('pr-gran')?.value || 'day';
-  const from = document.getElementById('pr-from')?.value;
-  const to   = document.getElementById('pr-to')?.value;
+  const gran = 'day';
+  const range = APP.FilterBar.getRange('cv-timeline');
+  const from  = range.from;
+  const to    = range.to;
 
   const data = getCv().filter(c =>
     c.direction === 'grid' &&
@@ -367,14 +346,10 @@ let cvPage = 0;
 const CV_PAGE_SIZE = 200;
 
 function renderTable() {
-  const from = document.getElementById('cv-tf-from')?.value;
-  const to   = document.getElementById('cv-tf-to')?.value;
   const dir  = document.getElementById('cv-tf-dir')?.value || 'all';
   const sort = document.getElementById('cv-tf-sort')?.value || 'date-desc';
 
   let data = getCv();
-  if (from)        data = data.filter(c => c.date >= from);
-  if (to)          data = data.filter(c => c.date <= to);
   if (dir!=='all') data = data.filter(c => c.direction === dir);
 
   if (sort==='date-desc') data.sort((a,b) => b.date!==a.date ? b.date.localeCompare(a.date) : b.hour-a.hour || b.minute-a.minute);
@@ -607,7 +582,7 @@ function deleteRange() {
 function clearAll() {
   if (!confirm('Alle Verbrauchsdaten löschen?')) return;
   const pw = prompt('Passwort bestätigen:');
-  if (pw !== 'We7-Tracker-P!nggau') { APP.toast('Falsches Passwort','err'); return; }
+  if (!APP.isCorrectPw(pw)) { APP.toast('Falsches Passwort','err'); return; }
   const ids = APP.consumption.map(c => c.id);
   APP.setConsumption([]);
   APP.deleteCvIds(ids);
@@ -620,16 +595,6 @@ function initDefaults() {
   const today = new Date().toISOString().split('T')[0];
   const g     = id => document.getElementById(id);
 
-  const dates    = APP.consumption.map(c => String(c.date).substring(0,10)).filter(Boolean).sort();
-  const earliest = dates.length > 0 ? dates[0] : (parseInt(today.substring(0,4))-2) + '-01-01';
-
-  if (g('cv-from'))    g('cv-from').value    = earliest;
-  if (g('cv-to'))      g('cv-to').value      = today;
-  if (g('pr-from'))    g('pr-from').value    = earliest;
-  if (g('pr-to'))      g('pr-to').value      = today;
-  if (g('cv-tf-from')) g('cv-tf-from').value = earliest;
-  if (g('cv-tf-to'))   g('cv-tf-to').value   = today;
-
   const d30 = new Date(); d30.setDate(d30.getDate()-30);
   if (g('cv-del-from')) g('cv-del-from').value = d30.toISOString().split('T')[0];
   if (g('cv-del-to'))   g('cv-del-to').value   = today;
@@ -641,10 +606,10 @@ function register() {
     onEnter: () => {
       initDefaults();
       APP.FilterBar.create('cv-timeline', {
-        onRange: (f, t) => {
-          const fe=document.getElementById('cv-from'); if(fe) fe.value=f;
-          const te=document.getElementById('cv-to');   if(te) te.value=t;
+        onRange: () => {
           renderOverview();
+          // Lastprofil teilt sich dieselbe Zeitleiste — bei aktivem Tab mitziehen
+          if (document.getElementById('cv-t-profile')?.style.display !== 'none') renderProfile();
         }
       });
       renderOverview();
@@ -652,6 +617,6 @@ function register() {
   });
 }
 
-return { tab, resetFilter, resetProfile, renderOverview, renderProfile, renderTable,
+return { tab, renderOverview, renderProfile, renderTable,
          cvGoPage, toggleAll, loadFile, deleteSelected, importCSV, deleteRange, clearAll, register };
 })();

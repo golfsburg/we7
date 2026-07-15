@@ -355,99 +355,16 @@ function recTab(name, btn) {
 }
 
 // ── FILTER ────────────────────────────────────────────────
-function calcPresetRange(p) {
-  const today = new Date().toISOString().split('T')[0];
-  const yr    = new Date().getFullYear();
-  const ym    = today.substring(0,7);
-  if (p==='thismonth') return { from: ym+'-01', to: today };
-  if (p==='last30')  { const d=new Date(); d.setDate(d.getDate()-30); return { from:d.toISOString().split('T')[0], to:today }; }
-  if (p==='last90')  { const d=new Date(); d.setDate(d.getDate()-90); return { from:d.toISOString().split('T')[0], to:today }; }
-  if (p==='thisyear') return { from: yr+'-01-01', to: today };
-  return { from: null, to: null };
-}
-
 function getEarliestDate() {
   const dates = readings.map(r => r.reading_date.substring(0,10)).filter(Boolean).sort();
   return dates.length > 0 ? dates[0] : null;
 }
 
-function onPreset() {
-  const p     = document.getElementById('cv2-period')?.value;
-  if (p === 'custom') return;
-  const today = new Date().toISOString().split('T')[0];
-  const { from, to } = calcPresetRange(p);
-  let actualFrom = from;
-  if (p === 'all') actualFrom = getEarliestDate();
-  const fEl = document.getElementById('cv2-from');
-  const tEl = document.getElementById('cv2-to');
-  if (fEl) fEl.value = actualFrom || '';
-  if (tEl) tEl.value = to || today;
-  const mEl = document.getElementById('cv2-month');
-  const yEl = document.getElementById('cv2-year');
-  if (mEl) mEl.value = '';
-  if (yEl) yEl.value = '';
-  renderDashboard();
-}
-
-function onMonthPick() {
-  const val = document.getElementById('cv2-month')?.value;
-  if (!val) return;
-  const [yr, mo] = val.split('-').map(Number);
-  const lastDay  = new Date(yr, mo, 0).getDate();
-  const fEl = document.getElementById('cv2-from');
-  const tEl = document.getElementById('cv2-to');
-  if (fEl) fEl.value = `${val}-01`;
-  if (tEl) tEl.value = `${val}-${String(lastDay).padStart(2,'0')}`;
-  const yEl = document.getElementById('cv2-year');
-  const pEl = document.getElementById('cv2-period');
-  if (yEl) yEl.value = '';
-  if (pEl) pEl.value = 'custom';
-  renderDashboard();
-}
-
-function onYearPick() {
-  const yr = document.getElementById('cv2-year')?.value;
-  if (!yr) return;
-  const fEl = document.getElementById('cv2-from');
-  const tEl = document.getElementById('cv2-to');
-  if (fEl) fEl.value = `${yr}-01-01`;
-  if (tEl) tEl.value = `${yr}-12-31`;
-  const mEl = document.getElementById('cv2-month');
-  const pEl = document.getElementById('cv2-period');
-  if (mEl) mEl.value = '';
-  if (pEl) pEl.value = 'custom';
-  renderDashboard();
-}
-
-function onCustomDate() {
-  const mEl = document.getElementById('cv2-month');
-  const yEl = document.getElementById('cv2-year');
-  const pEl = document.getElementById('cv2-period');
-  if (mEl) mEl.value = '';
-  if (yEl) yEl.value = '';
-  if (pEl) pEl.value = 'custom';
-  renderDashboard();
-}
-
-function resetFilter() {
-  const pEl = document.getElementById('cv2-period');
-  const mEl = document.getElementById('cv2-month');
-  const yEl = document.getElementById('cv2-year');
-  if (pEl) pEl.value = 'all';
-  if (mEl) mEl.value = '';
-  if (yEl) yEl.value = '';
-  const fEl = document.getElementById('cv2-from');
-  const tEl = document.getElementById('cv2-to');
-  if (fEl) fEl.value = getEarliestDate() || '';
-  if (tEl) tEl.value = new Date().toISOString().split('T')[0];
-  renderDashboard();
-}
-
 // ── DASHBOARD ─────────────────────────────────────────────
 function renderDashboard() {
   const range = APP.FilterBar.getRange('cv2-timeline');
-  const from  = range.from || document.getElementById('cv2-from')?.value || '';
-  const to    = range.to   || document.getElementById('cv2-to')?.value   || '';
+  const from  = range.from || '';
+  const to    = range.to   || '';
 
   const allCons = calcConsumption(readings);
 
@@ -616,12 +533,12 @@ function renderTable() {
       <td style="font-weight:500;white-space:nowrap">${dt}</td>
       <td style="color:#f5c842">${r.solar_kwh??'—'}</td>
       <td style="color:rgba(251,146,60,.9)">${r.fw_kwh??'—'}</td>
-      <td style="font-size:11px;color:var(--tx3)">${r.fw_status||'—'}</td>
+      <td style="font-size:11px;color:var(--tx3)">${APP.esc(r.fw_status||'—')}</td>
       <td style="color:#5b9cf6">${r.water_m3??'—'}</td>
       <td style="color:rgba(250,204,21,.9)">${r.strom_kwh??'—'}</td>
       <td style="color:rgba(63,207,142,.9)">${r.feed_kwh!=null&&r.feed_kwh>0?r.feed_kwh.toFixed(2):'—'}</td>
       <td>${r.temp_c??'—'}</td>
-      <td style="font-size:11px;color:var(--tx3);max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.note||''}</td>
+      <td style="font-size:11px;color:var(--tx3);max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${APP.esc(r.note||'')}</td>
       <td style="white-space:nowrap;display:flex;gap:4px">
         <button onclick="CV2.editEntry('${r.id}')" title="Bearbeiten"
           style="${btnStyle}border:1px solid var(--b2);color:var(--tx2)">✎</button>
@@ -907,47 +824,8 @@ async function syncReadings() {
   } catch(e) { console.warn('CV2 sync:',e.message); }
 }
 // ── INIT ──────────────────────────────────────────────────
-function populateDropdowns() {
-  const today    = new Date().toISOString().split('T')[0];
-  const earliest = getEarliestDate();
-
-  // Always rebuild month dropdown from current readings
-  const mEl = document.getElementById('cv2-month');
-  if (mEl) {
-    const current = mEl.value;
-    mEl.innerHTML = '<option value="">—</option>';
-    const dates  = readings.map(r => r.reading_date.substring(0,7)).filter(Boolean);
-    const months = [...new Set(dates)].sort().reverse();
-    const MN = ['','Jänner','Februar','März','April','Mai','Juni',
-                'Juli','August','September','Oktober','November','Dezember'];
-    months.forEach(ym => {
-      const [yr, mo] = ym.split('-').map(Number);
-      const opt = document.createElement('option');
-      opt.value = ym; opt.textContent = `${MN[mo]} ${yr}`;
-      if (ym === current) opt.selected = true;
-      mEl.appendChild(opt);
-    });
-  }
-
-  // Always rebuild year dropdown from current readings
-  const yEl = document.getElementById('cv2-year');
-  if (yEl) {
-    const current = yEl.value;
-    yEl.innerHTML = '<option value="">—</option>';
-    const years = [...new Set(readings.map(r => r.reading_date.substring(0,4)))].sort().reverse();
-    years.forEach(yr => {
-      const opt = document.createElement('option');
-      opt.value = yr; opt.textContent = yr;
-      if (yr === current) opt.selected = true;
-      yEl.appendChild(opt);
-    });
-  }
-
-  // Set Von to earliest, Bis to today
-  const fEl = document.getElementById('cv2-from');
-  const tEl = document.getElementById('cv2-to');
-  if (fEl && !fEl.value) fEl.value = earliest || today;
-  if (tEl && !tEl.value) tEl.value = today;
+function initDefaults() {
+  const today = new Date().toISOString().split('T')[0];
 
   prefillNow();
   const d30 = new Date(); d30.setDate(d30.getDate()-30);
@@ -980,8 +858,7 @@ async function loadReadings() {
     } catch(e) { console.warn('CV2 load:', e.message); }
   }
 
-  // Populate dropdowns and render
-  populateDropdowns();
+  initDefaults();
   renderDashboard();
   renderTable();
 }
@@ -993,19 +870,17 @@ function register() {
       await loadReadings();
       APP.FilterBar.create('cv2-timeline', {
         extraDates: readings.map(r => r.reading_date.substring(0,10)),
-        onRange: (f, t) => {
-          const fe=document.getElementById('cv2-from'); if(fe) fe.value=f;
-          const te=document.getElementById('cv2-to');   if(te) te.value=t;
-          const pe=document.getElementById('cv2-period'); if(pe) pe.value='custom';
-          renderDashboard();
-        }
+        onRange: () => renderDashboard()
       });
+      // FilterBar wurde erst NACH dem loadReadings()-Render erzeugt — mit der
+      // jetzt existierenden Instanz einmal neu rendern, damit KPIs/Charts den
+      // tatsächlich angezeigten Zeitraum widerspiegeln.
+      renderDashboard();
     }
   });
 }
 
-return { tab, recTab, onPreset, onMonthPick, onYearPick, onCustomDate,
-         resetFilter, renderDashboard, renderTable,
+return { tab, recTab, renderDashboard, renderTable,
          toggleAll, prefillNow, addEntry, editEntry, copyEntry, importCSV,
          deleteSingle, deleteSelected, deleteRange, clearAll, register };
 })();
