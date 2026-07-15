@@ -198,14 +198,14 @@ function syncInd(state) {
 function entryToRow(e) {
   return { id:e.id, type:e.type, date:e.date, kwh:e.kwh, peak:e.peak||null,
     hours:e.hours||null, self_kwh:e.self||null, feed_kwh:e.feed||null,
-    weather:e.weather||null, temp:e.temp||null, note:e.note||null,
+    weather:e.weather||null, temp:e.temp||null, note:e.note||null, kw:e.kw||null,
     source:e.source||'manual', updated_at:new Date().toISOString() };
 }
 function rowToEntry(r) {
   return { id:r.id, type:r.type, date:r.date, kwh:+r.kwh,
     peak:r.peak?+r.peak:null, hours:r.hours?+r.hours:null,
     self:r.self_kwh?+r.self_kwh:null, feed:r.feed_kwh?+r.feed_kwh:null,
-    weather:r.weather||'', temp:r.temp?+r.temp:null,
+    weather:r.weather||'', temp:r.temp?+r.temp:null, kw:r.kw?+r.kw:null,
     note:r.note||'', source:r.source||'manual' };
 }
 function scheduleSync() {

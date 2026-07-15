@@ -236,10 +236,12 @@ const HTML = `
   kwh numeric not null,
   peak numeric, hours numeric,
   self_kwh numeric, feed_kwh numeric,
-  weather text, temp numeric, note text,
+  weather text, temp numeric, note text, kw smallint,
   source text default 'manual',
   updated_at timestamptz default now()
 );
+-- Spalte nachrüsten falls Tabelle bereits existiert:
+alter table pv_entries add column if not exists kw smallint;
 alter table pv_entries enable row level security;
 create policy "allow_all" on pv_entries
   for all using (true) with check (true);
