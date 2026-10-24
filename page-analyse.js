@@ -295,8 +295,11 @@ const HTML = `
       <input type="number" id="am-price" step="0.01" onchange="AMOR.calc()"></div>
     <div class="field"><label>Einspeisevergütung (€/kWh)</label>
       <input type="number" id="am-feed" step="0.001" onchange="AMOR.calc()"></div>
-    <div class="field"><label>Eigenverbrauchsanteil (%) <span style="font-size:10px;color:var(--tx3)" id="am-selfpct-hint">— aus Messung</span></label>
-      <input type="number" id="am-selfpct" step="1" min="0" max="100" onchange="AMOR.calc()" title="Wird automatisch aus Zählerablesungen berechnet, falls vorhanden"></div>
+    <div class="field"><label>Eigenverbrauchsanteil (%)</label>
+      <div style="padding:6px 10px;background:var(--bg3);border-radius:6px;font-size:13px;color:var(--tx2);display:flex;align-items:center;gap:8px">
+        <span id="am-selfpct" style="font-weight:600;font-size:16px;color:var(--tx)">—</span>
+        <span id="am-selfpct-hint" style="font-size:11px;color:var(--tx3)">— aus Zählermessung</span>
+      </div></div>
     <div class="field"><label>Preissteigerung p.a. (%)</label>
       <input type="number" id="am-inflation" value="3" step="0.5" onchange="AMOR.calc()"></div>
     <div class="field"><label>Degradation p.a. (%)</label>
@@ -348,7 +351,8 @@ function saveParams() {
   const get = id => document.getElementById(id)?.value;
   const data = {
     cost: get('am-cost'), price: get('am-price'), feed: get('am-feed'),
-    selfpct: get('am-selfpct'), inflation: get('am-inflation'), degradation: get('am-degradation')
+    // selfpct wird aus Zählerdaten berechnet, nicht gespeichert
+    inflation: get('am-inflation'), degradation: get('am-degradation')
   };
   try { localStorage.setItem(LS_KEY, JSON.stringify(data)); } catch(e) {}
   APP.toast('Parameter gespeichert ✓');
@@ -362,7 +366,7 @@ function onEnter() {
   set('am-cost',        saved.cost        ?? 1200);
   set('am-price',       saved.price       ?? cfg.price);
   set('am-feed',        saved.feed        ?? cfg.feedRate);
-  set('am-selfpct',     saved.selfpct     ?? cfg.selfPct);
+  // am-selfpct: kein Eingabefeld — wird in calc() aus Zählerdaten berechnet
   set('am-inflation',   saved.inflation   ?? 3);
   set('am-degradation', saved.degradation ?? 0.5);
   calc();
@@ -377,43 +381,35 @@ function calc() {
   const inflation   = parseFloat(document.getElementById('am-inflation')?.value)   || 3;
   const degradation = parseFloat(document.getElementById('am-degradation')?.value) || 0.5;
 
-  // ── Zählerdaten aus Verbrauchsbilanz (CV2) ──
+  // ── Eigenverbrauch IMMER aus Zählermessung — niemals schätzen ──
   const periods = (typeof CV2 !== 'undefined') ? CV2.getMeterPeriods() : [];
   const hasMeter = periods.length > 0;
 
-  // Eigenverbrauch pro Periode = solar − feed
-  // Für Amortisationsrechnung: monatsweise aufsummieren
-  const meterByMonth = {}; // ym → { solar, feed, self, strom }
+  // Monatsweise aggregieren: self = solar − feed (exakt gemessen)
+  const meterByMonth = {};
   periods.forEach(p => {
     const ym = p.from.substring(0,7);
     if (!meterByMonth[ym]) meterByMonth[ym] = { solar:0, feed:0, self:0, strom:0 };
     meterByMonth[ym].solar += p.solar||0;
     meterByMonth[ym].feed  += p.feed||0;
-    meterByMonth[ym].self  += Math.max(0,(p.solar||0)-(p.feed||0));
+    meterByMonth[ym].self  += Math.max(0,(p.solar||0)-(p.feed||0)); // Eigenverbr. = PV − Einspeisung
     meterByMonth[ym].strom += p.strom||0;
   });
 
-  // Ø Eigenverbrauchsanteil aus Zählerdaten berechnen
-  let measuredSelfPct = null;
-  if (hasMeter) {
-    const totSolar = Object.values(meterByMonth).reduce((s,v)=>s+(v.solar||0),0);
-    const totSelf  = Object.values(meterByMonth).reduce((s,v)=>s+(v.self||0),0);
-    if (totSolar > 0) measuredSelfPct = Math.min(100, (totSelf/totSolar)*100);
-  }
+  // selfPct aus Zähler berechnen — KEINE andere Quelle
+  const totSolar = Object.values(meterByMonth).reduce((s,v)=>s+(v.solar||0),0);
+  const totSelf  = Object.values(meterByMonth).reduce((s,v)=>s+(v.self||0),0);
+  const selfPct  = (hasMeter && totSolar > 0)
+    ? Math.min(100, (totSelf / totSolar) * 100)
+    : 0; // 0 = keine Daten, Hochrechnung ergibt 0
 
-  // selfPct: gemessen (bevorzugt) oder aus Eingabefeld
-  let selfPct = parseFloat(document.getElementById('am-selfpct')?.value) || cfg.selfPct;
-  if (measuredSelfPct !== null) {
-    selfPct = measuredSelfPct;
-    // Eingabefeld aktualisieren + Hinweis
-    const spEl = document.getElementById('am-selfpct');
-    if (spEl) spEl.value = selfPct.toFixed(1);
-    const hint = document.getElementById('am-selfpct-hint');
-    if (hint) hint.textContent = `— aus ${periods.length} Zählerablesungen berechnet`;
-  } else {
-    const hint = document.getElementById('am-selfpct-hint');
-    if (hint) hint.textContent = '— Schätzung (keine Zählerdaten)';
-  }
+  // Anzeige Eigenverbrauchsanteil-Feld (read-only)
+  const spEl = document.getElementById('am-selfpct');
+  const hint = document.getElementById('am-selfpct-hint');
+  if (spEl) spEl.textContent = selfPct > 0 ? selfPct.toFixed(1)+'%' : '—';
+  if (hint) hint.textContent = selfPct > 0
+    ? `aus ${periods.length} Zählerablesungen (${totSolar.toFixed(0)} kWh PV, ${totSelf.toFixed(0)} kWh Eigenverbr.)`
+    : 'keine Zählerablesungen — bitte in der Verbrauchsbilanz erfassen';
 
   // Startdatum der Anlage — fix 1.6.2026 (Installationsdatum)
   const startDate = new Date('2026-06-01');
