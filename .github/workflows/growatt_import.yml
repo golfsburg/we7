@@ -13,6 +13,8 @@ on:
 jobs:
   import:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Repository auschecken
         uses: actions/checkout@v4
