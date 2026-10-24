@@ -12,13 +12,16 @@ const HTML = `
 </div>
 <div id="au-timeline"></div>
 
+<!-- Datenquelle-Hinweis -->
+<div id="au-datasource" style="margin:0 0 10px;padding:8px 14px;background:var(--bg3);border-radius:8px;font-size:12px;color:var(--tx2)"></div>
+
 <!-- KPI row -->
 <div class="metrics" id="au-kpi">
-  <div class="mc gr"><div class="mc-l">Autarkiegrad</div><div><span class="mc-v" id="au-v-autarky">—</span><span class="mc-u">%</span></div><div class="mc-d" id="au-v-autarky2">PV direkt / Gesamtverbrauch</div></div>
+  <div class="mc gr"><div class="mc-l">Autarkiegrad</div><div><span class="mc-v" id="au-v-autarky">—</span><span class="mc-u">%</span></div><div class="mc-d" id="au-v-autarky2">Eigenverbrauch / Gesamtverbrauch</div></div>
   <div class="mc hi"><div class="mc-l">PV Ertrag</div><div><span class="mc-v" id="au-v-pv">—</span><span class="mc-u">kWh</span></div><div class="mc-d" id="au-v-pv2"></div></div>
   <div class="mc bl"><div class="mc-l">Netzbezug</div><div><span class="mc-v" id="au-v-grid">—</span><span class="mc-u">kWh</span></div><div class="mc-d" id="au-v-grid2"></div></div>
-  <div class="mc"><div class="mc-l">Gesamtverbrauch</div><div><span class="mc-v" id="au-v-total">—</span><span class="mc-u">kWh</span></div><div class="mc-d">Netz + PV direkt</div></div>
-  <div class="mc gr"><div class="mc-l">Eigenverbrauch</div><div><span class="mc-v" id="au-v-selfuse">—</span><span class="mc-u">%</span></div><div class="mc-d">PV-Anteil der PV genutzt</div></div>
+  <div class="mc"><div class="mc-l">Eigenverbrauch</div><div><span class="mc-v" id="au-v-total">—</span><span class="mc-u">kWh</span></div><div class="mc-d">PV Ertrag − Einspeisung</div></div>
+  <div class="mc gr"><div class="mc-l">Eigenverbrauchsgrad</div><div><span class="mc-v" id="au-v-selfuse">—</span><span class="mc-u">%</span></div><div class="mc-d">Eigenverbr. / PV Ertrag</div></div>
   <div class="mc pu"><div class="mc-l">Einspeisung</div><div><span class="mc-v" id="au-v-feed">—</span><span class="mc-u">kWh</span></div><div class="mc-d" id="au-v-feed2"></div></div>
 </div>
 
@@ -64,68 +67,99 @@ function onEnter() {
 }
 
 function render() {
-  const entries     = APP.entries;
-  const consumption = APP.consumption;
-  const cfg         = APP.cfg;
+  const cfg = APP.cfg;
 
   // Datumsfilter — Anlage installiert 1.6.2026
   const INSTALL = '2026-06-01';
   const fromD = _from || INSTALL;
   const toD   = _to   || new Date().toLocaleDateString('sv');
 
-  // Alle Tage im Zeitraum mit PV-Daten
-  const dayPv = {};
-  entries.filter(e => e.type==='day' && e.date >= fromD && e.date <= toD)
-    .forEach(e => { dayPv[e.date] = e.kwh; });
+  // ── Primär: Zählerstandsdifferenzen aus Verbrauchsbilanz ──
+  // Jede Periode = [from, to] mit solar, feed, strom (kWh)
+  // Eigenverbrauch = solar − feed (exakt gemessen)
+  const periods = (typeof CV2 !== 'undefined') ? CV2.getMeterPeriods() : [];
 
-  // Grid-Bezug pro Tag aus consumption_15min
-  const dayGrid = {};
-  consumption
-    .filter(c => c.direction==='grid' && c.date >= fromD && c.date <= toD)
-    .forEach(c => { dayGrid[c.date] = (dayGrid[c.date]||0) + parseFloat(c.kwh); });
+  // Perioden auf den Zeitraum filtern (Periode überschneidet [fromD, toD])
+  const filtPeriods = periods.filter(p => p.solar > 0 && p.to >= fromD && p.from <= toD);
 
-  // Alle Tage vereinigen
-  const allDays = [...new Set([...Object.keys(dayPv), ...Object.keys(dayGrid)])].sort();
+  // Monatsweise Aggregation aus Perioden (für Balken- und Monatschart)
+  // Da Perioden nicht immer Monatsgrenzen treffen: wir verwenden Perioden als Einheit
+  const hasMeter = filtPeriods.length > 0;
 
-  // Berechnung pro Tag
-  const days = allDays.map(date => {
-    const pv    = dayPv[date]   || 0;
-    const grid  = dayGrid[date] || 0;
-    const self  = pv * (cfg.selfPct / 100);   // Eigenverbrauch (PV direkt)
-    const feed  = Math.max(0, pv - self);      // Einspeisung
-    const total = grid + self;                  // Gesamtverbrauch
-    const autarky = total > 0 ? Math.min(100, (self / total) * 100) : 0;
-    const selfUsePct = pv > 0 ? Math.min(100, (self / pv) * 100) : 0;
-    return { date, pv, grid, self, feed, total, autarky, selfUsePct };
-  });
+  // Quellenhinweis
+  const dsEl = document.getElementById('au-datasource');
+  if (dsEl) {
+    if (hasMeter) {
+      dsEl.innerHTML = `📊 <strong>Zählermessung</strong> — Eigenverbrauch aus Zählerstandsdifferenzen (${filtPeriods.length} Ablesungen), exakter Wert ohne Schätzung.`;
+    } else {
+      dsEl.innerHTML = `⚠️ <strong>Schätzung</strong> — Keine Zählerdaten vorhanden. Eigenverbrauch geschätzt (${cfg.selfPct}% des PV-Ertrags). Bitte Ablesungen in der Verbrauchsbilanz eintragen.`;
+    }
+  }
 
-  // Summen
-  const totPv    = days.reduce((s,d) => s + d.pv, 0);
-  const totGrid  = days.reduce((s,d) => s + d.grid, 0);
-  const totSelf  = days.reduce((s,d) => s + d.self, 0);
-  const totFeed  = days.reduce((s,d) => s + d.feed, 0);
-  const totTotal = days.reduce((s,d) => s + d.total, 0);
-  const avgAutarky  = totTotal > 0 ? Math.min(100, (totSelf / totTotal) * 100) : 0;
-  const avgSelfUse  = totPv    > 0 ? Math.min(100, (totSelf / totPv)   * 100) : 0;
+  // Summen berechnen
+  let totPv=0, totGrid=0, totSelf=0, totFeed=0;
+
+  if (hasMeter) {
+    // Aus Zählerperioden: solar=PV Ertrag, strom=Bezug, feed=Einspeisung
+    filtPeriods.forEach(p => {
+      totPv   += p.solar || 0;
+      totGrid += p.strom || 0;
+      totFeed += p.feed  || 0;
+    });
+    totSelf = Math.max(0, totPv - totFeed); // Eigenverbrauch = PV − Einspeisung
+  } else {
+    // Fallback: Tageswerte aus pv_entries + consumption_15min
+    const entries = APP.entries;
+    const consumption = APP.consumption;
+    const dayPv = {};
+    entries.filter(e => e.type==='day' && e.date >= fromD && e.date <= toD)
+      .forEach(e => { dayPv[e.date] = e.kwh; });
+    const dayGrid = {};
+    consumption.filter(c => c.direction==='grid' && c.date >= fromD && c.date <= toD)
+      .forEach(c => { dayGrid[c.date] = (dayGrid[c.date]||0) + parseFloat(c.kwh); });
+    const allDays = [...new Set([...Object.keys(dayPv), ...Object.keys(dayGrid)])].sort();
+    allDays.forEach(date => {
+      const pv   = dayPv[date]   || 0;
+      const grid = dayGrid[date] || 0;
+      const self = pv * (cfg.selfPct/100);
+      totPv   += pv;
+      totGrid += grid;
+      totSelf += self;
+      totFeed += Math.max(0, pv - self);
+    });
+  }
+
+  const totTotal   = totSelf + totGrid; // Gesamtverbrauch = Eigenverbr. + Netzbezug
+  const avgAutarky = totTotal > 0 ? Math.min(100, (totSelf / totTotal) * 100) : 0;
+  const avgSelfUse = totPv    > 0 ? Math.min(100, (totSelf / totPv)   * 100) : 0;
 
   // KPIs
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
   set('au-v-autarky',  avgAutarky.toFixed(1));
-  set('au-v-autarky2', `${days.length} Tage · Ø ${avgAutarky.toFixed(1)}%`);
+  set('au-v-autarky2', hasMeter
+    ? `${filtPeriods.length} Ablesungsperioden · Ø ${avgAutarky.toFixed(1)}%`
+    : `Schätzung (${cfg.selfPct}% Eigenverbr.)`);
   set('au-v-pv',   totPv.toFixed(1));
-  set('au-v-pv2',  `${days.filter(d=>d.pv>0).length} Tage mit Ertrag`);
+  set('au-v-pv2',  hasMeter ? `${filtPeriods.length} Zählerablesungsperioden` : 'PV-Ertragsdaten');
   set('au-v-grid', totGrid.toFixed(1));
-  set('au-v-grid2',`Ø ${days.length > 0 ? (totGrid/days.length).toFixed(1) : '—'} kWh/Tag`);
-  set('au-v-total',totTotal.toFixed(1));
+  set('au-v-grid2',`Ø ${totPv > 0 ? (totGrid/(hasMeter ? filtPeriods.length : 1)).toFixed(1) : '—'} kWh/Periode`);
+  set('au-v-total',totSelf.toFixed(1));
   set('au-v-selfuse', avgSelfUse.toFixed(1));
   set('au-v-feed',  totFeed.toFixed(1));
   set('au-v-feed2', `@ ${cfg.feedRate} €/kWh = ${(totFeed*cfg.feedRate).toFixed(2)} €`);
 
-  const labels  = days.map(d => d.date.substring(5)); // MM-DD
-  const autPct  = days.map(d => +d.autarky.toFixed(1));
-  const pvArr   = days.map(d => +d.pv.toFixed(2));
-  const gridArr = days.map(d => +d.grid.toFixed(2));
-  const selfArr = days.map(d => +d.self.toFixed(2));
+  // ── Chartserie: Pro Periode / Monat ──
+  // Für Verlaufsgrafik: Perioden als Datenpunkte
+  const periods4chart = hasMeter ? filtPeriods : [];
+  const labels  = periods4chart.map(p => p.from.substring(5)+' – '+p.to.substring(5));
+  const pvArr   = periods4chart.map(p => +(p.solar||0).toFixed(1));
+  const gridArr = periods4chart.map(p => +(p.strom||0).toFixed(1));
+  const selfArr = periods4chart.map(p => +Math.max(0,(p.solar||0)-(p.feed||0)).toFixed(1));
+  const autPct  = periods4chart.map(p => {
+    const self = Math.max(0,(p.solar||0)-(p.feed||0));
+    const tot  = self + (p.strom||0);
+    return tot > 0 ? +((self/tot)*100).toFixed(1) : 0;
+  });
 
   // Chart 1: Autarkie-Verlauf
   APP.destroyChart('au-daily');
@@ -174,21 +208,24 @@ function render() {
     });
   }
 
-  // Chart 3: Autarkie nach Monat
+  // Chart 3: Autarkie nach Monat (Perioden auf Monate aufteilen)
   const byMonth = {};
-  days.forEach(d => {
-    const ym = d.date.substring(0,7);
-    if (!byMonth[ym]) byMonth[ym] = { pv:0, grid:0, self:0, total:0, n:0 };
-    byMonth[ym].pv    += d.pv;
-    byMonth[ym].grid  += d.grid;
-    byMonth[ym].self  += d.self;
-    byMonth[ym].total += d.total;
-    byMonth[ym].n++;
-  });
+  if (hasMeter) {
+    filtPeriods.forEach(p => {
+      // Periode dem Startmonat zuordnen
+      const ym = p.from.substring(0,7);
+      if (!byMonth[ym]) byMonth[ym] = { pv:0, grid:0, self:0, n:0 };
+      byMonth[ym].pv   += p.solar||0;
+      byMonth[ym].grid += p.strom||0;
+      byMonth[ym].self += Math.max(0,(p.solar||0)-(p.feed||0));
+      byMonth[ym].n++;
+    });
+  }
   const mLabels = Object.keys(byMonth).sort();
   const mAutarky = mLabels.map(ym => {
     const m = byMonth[ym];
-    return m.total > 0 ? +((m.self/m.total)*100).toFixed(1) : 0;
+    const tot = m.self + m.grid;
+    return tot > 0 ? +((m.self/tot)*100).toFixed(1) : 0;
   });
   APP.destroyChart('au-month');
   const ctx3 = document.getElementById('au-month-chart')?.getContext('2d');
@@ -221,7 +258,7 @@ function render() {
     APP.charts['au-donut'] = new Chart(ctx4, {
       type: 'doughnut',
       data: {
-        labels: ['Eigenverbrauch (PV)', 'Netzbezug', 'Einspeisung'],
+        labels: ['Eigenverbrauch (PV→direkt)', 'Netzbezug', 'Einspeisung ins Netz'],
         datasets: [{ data: [+totSelf.toFixed(1), +totGrid.toFixed(1), +totFeed.toFixed(1)],
           backgroundColor: ['rgba(63,207,142,.85)','rgba(91,156,246,.7)','rgba(167,139,250,.75)'],
           borderWidth: 0 }]
@@ -258,8 +295,8 @@ const HTML = `
       <input type="number" id="am-price" step="0.01" onchange="AMOR.calc()"></div>
     <div class="field"><label>Einspeisevergütung (€/kWh)</label>
       <input type="number" id="am-feed" step="0.001" onchange="AMOR.calc()"></div>
-    <div class="field"><label>Eigenverbrauchsanteil (%)</label>
-      <input type="number" id="am-selfpct" step="1" min="0" max="100" onchange="AMOR.calc()"></div>
+    <div class="field"><label>Eigenverbrauchsanteil (%) <span style="font-size:10px;color:var(--tx3)" id="am-selfpct-hint">— aus Messung</span></label>
+      <input type="number" id="am-selfpct" step="1" min="0" max="100" onchange="AMOR.calc()" title="Wird automatisch aus Zählerablesungen berechnet, falls vorhanden"></div>
     <div class="field"><label>Preissteigerung p.a. (%)</label>
       <input type="number" id="am-inflation" value="3" step="0.5" onchange="AMOR.calc()"></div>
     <div class="field"><label>Degradation p.a. (%)</label>
@@ -332,43 +369,83 @@ function onEnter() {
 }
 
 function calc() {
-  const entries = APP.entries;
-  const cfg     = APP.cfg;
+  const cfg = APP.cfg;
 
-  const cost       = parseFloat(document.getElementById('am-cost')?.value)       || 1200;
-  const price      = parseFloat(document.getElementById('am-price')?.value)      || cfg.price;
-  const feedRate   = parseFloat(document.getElementById('am-feed')?.value)       || cfg.feedRate;
-  const selfPct    = parseFloat(document.getElementById('am-selfpct')?.value)    || cfg.selfPct;
-  const inflation  = parseFloat(document.getElementById('am-inflation')?.value)  || 3;
-  const degradation= parseFloat(document.getElementById('am-degradation')?.value)|| 0.5;
+  const cost        = parseFloat(document.getElementById('am-cost')?.value)        || 1200;
+  const price       = parseFloat(document.getElementById('am-price')?.value)       || cfg.price;
+  const feedRate    = parseFloat(document.getElementById('am-feed')?.value)        || cfg.feedRate;
+  const inflation   = parseFloat(document.getElementById('am-inflation')?.value)   || 3;
+  const degradation = parseFloat(document.getElementById('am-degradation')?.value) || 0.5;
 
-  // Reale Monatsdaten aus pv_entries
-  const byMonth = {};
-  entries.filter(e => e.type==='day' || e.type==='month').forEach(e => {
-    const ym = e.date.substring(0,7);
-    byMonth[ym] = (byMonth[ym]||0) + e.kwh;
+  // ── Zählerdaten aus Verbrauchsbilanz (CV2) ──
+  const periods = (typeof CV2 !== 'undefined') ? CV2.getMeterPeriods() : [];
+  const hasMeter = periods.length > 0;
+
+  // Eigenverbrauch pro Periode = solar − feed
+  // Für Amortisationsrechnung: monatsweise aufsummieren
+  const meterByMonth = {}; // ym → { solar, feed, self, strom }
+  periods.forEach(p => {
+    const ym = p.from.substring(0,7);
+    if (!meterByMonth[ym]) meterByMonth[ym] = { solar:0, feed:0, self:0, strom:0 };
+    meterByMonth[ym].solar += p.solar||0;
+    meterByMonth[ym].feed  += p.feed||0;
+    meterByMonth[ym].self  += Math.max(0,(p.solar||0)-(p.feed||0));
+    meterByMonth[ym].strom += p.strom||0;
   });
+
+  // Ø Eigenverbrauchsanteil aus Zählerdaten berechnen
+  let measuredSelfPct = null;
+  if (hasMeter) {
+    const totSolar = Object.values(meterByMonth).reduce((s,v)=>s+(v.solar||0),0);
+    const totSelf  = Object.values(meterByMonth).reduce((s,v)=>s+(v.self||0),0);
+    if (totSolar > 0) measuredSelfPct = Math.min(100, (totSelf/totSolar)*100);
+  }
+
+  // selfPct: gemessen (bevorzugt) oder aus Eingabefeld
+  let selfPct = parseFloat(document.getElementById('am-selfpct')?.value) || cfg.selfPct;
+  if (measuredSelfPct !== null) {
+    selfPct = measuredSelfPct;
+    // Eingabefeld aktualisieren + Hinweis
+    const spEl = document.getElementById('am-selfpct');
+    if (spEl) spEl.value = selfPct.toFixed(1);
+    const hint = document.getElementById('am-selfpct-hint');
+    if (hint) hint.textContent = `— aus ${periods.length} Zählerablesungen berechnet`;
+  } else {
+    const hint = document.getElementById('am-selfpct-hint');
+    if (hint) hint.textContent = '— Schätzung (keine Zählerdaten)';
+  }
 
   // Startdatum der Anlage — fix 1.6.2026 (Installationsdatum)
   const startDate = new Date('2026-06-01');
   const startYear = startDate.getFullYear();
 
-  // Ø Jahresertrag aus realen Daten
-  const realMonths  = Object.keys(byMonth).sort();
-  const realTotal   = Object.values(byMonth).reduce((s,v)=>s+v,0);
-  const monthCount  = realMonths.length || 1;
-  const annualKwh   = realTotal / monthCount * 12;
+  // Ø Jahresertrag aus pv_entries (Tageswerte) — für Hochrechnung
+  const entries = APP.entries;
+  const byMonthPv = {};
+  entries.filter(e => e.type==='day').forEach(e => {
+    const ym = e.date.substring(0,7);
+    byMonthPv[ym] = (byMonthPv[ym]||0) + e.kwh;
+  });
+  // Monatliche PV-Werte aus pv_entries (type=month) falls vorhanden
+  entries.filter(e => e.type==='month').forEach(e => {
+    const ym = e.date.substring(0,7);
+    if (!byMonthPv[ym]) byMonthPv[ym] = e.kwh;
+  });
 
-  // Monatliche Ersparnis berechnen (real + Hochrechnung)
+  const pvMonths   = Object.keys(byMonthPv).sort();
+  const pvTotal    = Object.values(byMonthPv).reduce((s,v)=>s+v,0);
+  const monthCount = pvMonths.length || 1;
+  const annualKwh  = pvTotal / monthCount * 12;
+
+  // Monatliche Ersparnis: real aus Zählerdaten, dann Hochrechnung
   const now       = new Date();
   const nowYM     = now.toISOString().substring(0,7);
-  const CHART_END = '2030-12'; // Diagramm nur bis Ende 2030
-  const projMonths= 15 * 12;  // 15 Jahre für Tabelle + Break-even-Berechnung
+  const CHART_END = '2030-12';
+  const projMonths= 15 * 12;
 
-  const labels   = [];
-  const real     = [];   // tatsächliche kumulierte Ersparnis
-  const proj     = [];   // hochgerechnete kumulierte Ersparnis
-  const invest   = [];   // Investitionslinie
+  const real    = [];
+  const proj    = [];
+  const invest  = [];
 
   let cumReal = 0, cumProj = 0;
   let breakEvenMonth = null;
@@ -380,30 +457,39 @@ function calc() {
     const ym = d.toISOString().substring(0,7);
     const yr = m / 12;
 
-    const priceM   = price    * Math.pow(1 + inflation/100, yr);
-    const degFactor= Math.pow(1 - degradation/100, yr);
-    const monthKwh = (annualKwh / 12) * degFactor;
-    const selfKwh  = monthKwh * (selfPct/100);
-    const feedKwh  = Math.max(0, monthKwh - selfKwh);
-    const savingM  = selfKwh * priceM + feedKwh * feedRate;
+    const priceM    = price * Math.pow(1 + inflation/100, yr);
+    const degFactor = Math.pow(1 - degradation/100, yr);
+    const monthKwh  = (annualKwh / 12) * degFactor;
+    const selfKwh   = monthKwh * (selfPct/100);
+    const feedKwh   = Math.max(0, monthKwh - selfKwh);
+    const savingM   = selfKwh * priceM + feedKwh * feedRate;
 
-    // Real: aus Messdaten
-    const hasReal = ym <= nowYM && byMonth[ym] != null;
-    if (hasReal) {
-      const realKwh  = byMonth[ym];
-      const realSelf = realKwh * (selfPct/100);
-      const realFeed = Math.max(0, realKwh - realSelf);
-      const realSave = realSelf * price + realFeed * feedRate;
+    // Real: bevorzugt aus Zählerdaten, sonst aus pv_entries
+    const hasMeterM = hasMeter && meterByMonth[ym] != null;
+    const hasPvM    = !hasMeterM && byMonthPv[ym] != null;
+    const isReal    = ym <= nowYM && (hasMeterM || hasPvM);
+
+    if (isReal) {
+      let realSave = 0;
+      if (hasMeterM) {
+        // Exakt: Eigenverbrauch * Bezugspreis + Einspeisung * Einspeisevergütung
+        const mb = meterByMonth[ym];
+        realSave = mb.self * price + mb.feed * feedRate;
+      } else if (hasPvM) {
+        const realKwh  = byMonthPv[ym];
+        const realSelf = realKwh * (selfPct/100);
+        const realFeed = Math.max(0, realKwh - realSelf);
+        realSave = realSelf * price + realFeed * feedRate;
+      }
       cumReal += realSave;
       actualSaved = cumReal;
     }
 
     cumProj += savingM;
-
     if (!breakEvenMonth && cumProj >= cost) breakEvenMonth = yr;
 
-    if (m % 3 === 0 && ym <= CHART_END) { // Vierteljahres-Labels, nur bis 2030
-      real.push(hasReal || ym <= nowYM ? +cumReal.toFixed(2) : null);
+    if (m % 3 === 0 && ym <= CHART_END) {
+      real.push(isReal ? +cumReal.toFixed(2) : null);
       proj.push(+cumProj.toFixed(2));
       invest.push(cost);
     }
@@ -423,17 +509,18 @@ function calc() {
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
   const beYears  = breakEvenMonth ? breakEvenMonth.toFixed(1) : '>15';
   const remaining= Math.max(0, cost - actualSaved);
-  const roi10    = annualKwh > 0 ? (((annualKwh * (selfPct/100) * price + annualKwh * (1-selfPct/100) * feedRate) * 10 - cost) / cost * 100) : 0;
-  const annSave  = annualKwh > 0 ? annualKwh * (selfPct/100) * price + annualKwh * (1-selfPct/100) * feedRate : 0;
+  const annSave  = annualKwh * (selfPct/100) * price + annualKwh * (1-selfPct/100) * feedRate;
+  const roi10    = annualKwh > 0 ? ((annSave * 10 - cost) / cost * 100) : 0;
+  const dataSource = hasMeter ? `${periods.length} Zählerablesungen` : `${monthCount} Monat${monthCount!==1?'e':''} Ertragsdaten (Schätzung)`;
 
   set('am-breakeven',  beYears);
   set('am-breakeven2', breakEvenMonth ? `ca. ${startYear + Math.floor(breakEvenMonth)} erreicht` : 'Noch nicht erreicht');
   set('am-saved',      actualSaved.toFixed(2));
-  set('am-saved2',     `von ${cost} € Investition`);
+  set('am-saved2',     `von ${cost} € Investition · ${hasMeter ? 'exakt gemessen' : 'geschätzt'}`);
   set('am-annual',     annualKwh.toFixed(0));
-  set('am-annual2',    `Basis: ${monthCount} Monat${monthCount!==1?'e':''} Messdaten`);
+  set('am-annual2',    `Basis: ${dataSource}`);
   set('am-annsave',    annSave.toFixed(2));
-  set('am-annsave2',   `${(selfPct).toFixed(0)}% Eigenverbr. · ${(100-selfPct).toFixed(0)}% Einspeisung`);
+  set('am-annsave2',   `${selfPct.toFixed(0)}% Eigenverbr. · ${(100-selfPct).toFixed(0)}% Einspeisung`);
   set('am-roi',        roi10.toFixed(1));
   set('am-remaining',  remaining.toFixed(2));
   set('am-remaining2', remaining > 0 ? `noch ${(remaining/Math.max(annSave,0.01)).toFixed(1)} Jahre` : 'Break-even erreicht! ✓');

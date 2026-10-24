@@ -880,7 +880,11 @@ function register() {
   });
 }
 
+// Öffentlicher Getter für readings + calcConsumption — für page-analyse.js
+function getMeterPeriods() { return calcConsumption(readings); }
+
 return { tab, recTab, renderDashboard, renderTable,
          toggleAll, prefillNow, addEntry, editEntry, copyEntry, importCSV,
-         deleteSingle, deleteSelected, deleteRange, clearAll, register };
+         deleteSingle, deleteSelected, deleteRange, clearAll, register,
+         getMeterPeriods };
 })();
