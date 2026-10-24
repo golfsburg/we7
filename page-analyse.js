@@ -80,7 +80,8 @@ function render() {
   const periods = (typeof CV2 !== 'undefined') ? CV2.getMeterPeriods() : [];
 
   // Perioden auf den Zeitraum filtern (Periode überschneidet [fromD, toD])
-  const filtPeriods = periods.filter(p => p.solar > 0 && p.to >= fromD && p.from <= toD);
+  // p.solar = pvKwh (Growatt) nach getMeterPeriods()-Umbau; Filter auf Existenz der Periode
+  const filtPeriods = periods.filter(p => p.to >= fromD && p.from <= toD);
 
   // Monatsweise Aggregation aus Perioden (für Balken- und Monatschart)
   // Da Perioden nicht immer Monatsgrenzen treffen: wir verwenden Perioden als Einheit
@@ -108,25 +109,14 @@ function render() {
     });
     totSelf = Math.max(0, totPv - totFeed); // Eigenverbrauch = PV − Einspeisung
   } else {
-    // Fallback: Tageswerte aus pv_entries + consumption_15min
+    // Kein selfPct-Schätzwert — ohne Zählerdaten nur PV-Ertrag und Netzbezug anzeigen
     const entries = APP.entries;
     const consumption = APP.consumption;
-    const dayPv = {};
     entries.filter(e => e.type==='day' && e.date >= fromD && e.date <= toD)
-      .forEach(e => { dayPv[e.date] = e.kwh; });
-    const dayGrid = {};
+      .forEach(e => { totPv += e.kwh; });
     consumption.filter(c => c.direction==='grid' && c.date >= fromD && c.date <= toD)
-      .forEach(c => { dayGrid[c.date] = (dayGrid[c.date]||0) + parseFloat(c.kwh); });
-    const allDays = [...new Set([...Object.keys(dayPv), ...Object.keys(dayGrid)])].sort();
-    allDays.forEach(date => {
-      const pv   = dayPv[date]   || 0;
-      const grid = dayGrid[date] || 0;
-      const self = pv * (cfg.selfPct/100);
-      totPv   += pv;
-      totGrid += grid;
-      totSelf += self;
-      totFeed += Math.max(0, pv - self);
-    });
+      .forEach(c => { totGrid += parseFloat(c.kwh); });
+    // totSelf und totFeed bleiben 0 — keine Schätzung
   }
 
   const totTotal   = totSelf + totGrid; // Gesamtverbrauch = Eigenverbr. + Netzbezug
@@ -472,10 +462,10 @@ function calc() {
         const mb = meterByMonth[ym];
         realSave = mb.self * price + mb.feed * feedRate;
       } else if (hasPvM) {
+        // Kein selfPct-Schätzwert — ohne Zählerdaten kein Eigenverbrauch berechenbar
+        // Nur Einspeisevergütung auf Basis PV-Ertrag (konservativ)
         const realKwh  = byMonthPv[ym];
-        const realSelf = realKwh * (selfPct/100);
-        const realFeed = Math.max(0, realKwh - realSelf);
-        realSave = realSelf * price + realFeed * feedRate;
+        realSave = realKwh * feedRate; // nur Einspeisevergütung, kein Eigenverbr.
       }
       cumReal += realSave;
       actualSaved = cumReal;
@@ -505,18 +495,22 @@ function calc() {
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
   const beYears  = breakEvenMonth ? breakEvenMonth.toFixed(1) : '>15';
   const remaining= Math.max(0, cost - actualSaved);
-  const annSave  = annualKwh * (selfPct/100) * price + annualKwh * (1-selfPct/100) * feedRate;
+  const annSave  = hasMeter
+    ? annualKwh * (selfPct/100) * price + annualKwh * (1-selfPct/100) * feedRate
+    : annualKwh * feedRate; // ohne Zählerdaten nur Einspeisevergütung
   const roi10    = annualKwh > 0 ? ((annSave * 10 - cost) / cost * 100) : 0;
-  const dataSource = hasMeter ? `${periods.length} Zählerablesungen` : `${monthCount} Monat${monthCount!==1?'e':''} Ertragsdaten (Schätzung)`;
+  const dataSource = hasMeter ? `${periods.length} Zählerablesungen` : `${monthCount} Monat${monthCount!==1?'e':''} Ertragsdaten`;
 
   set('am-breakeven',  beYears);
   set('am-breakeven2', breakEvenMonth ? `ca. ${startYear + Math.floor(breakEvenMonth)} erreicht` : 'Noch nicht erreicht');
   set('am-saved',      actualSaved.toFixed(2));
-  set('am-saved2',     `von ${cost} € Investition · ${hasMeter ? 'exakt gemessen' : 'geschätzt'}`);
+  set('am-saved2',     `von ${cost} € Investition · ${hasMeter ? 'exakt gemessen' : 'ohne Zählerdaten'}` );
   set('am-annual',     annualKwh.toFixed(0));
   set('am-annual2',    `Basis: ${dataSource}`);
   set('am-annsave',    annSave.toFixed(2));
-  set('am-annsave2',   `${selfPct.toFixed(0)}% Eigenverbr. · ${(100-selfPct).toFixed(0)}% Einspeisung`);
+  set('am-annsave2',   hasMeter
+    ? `${selfPct.toFixed(0)}% Eigenverbr. · ${(100-selfPct).toFixed(0)}% Einspeisung`
+    : 'ohne Zählerdaten — nur Einspeisevergütung');
   set('am-roi',        roi10.toFixed(1));
   set('am-remaining',  remaining.toFixed(2));
   set('am-remaining2', remaining > 0 ? `noch ${(remaining/Math.max(annSave,0.01)).toFixed(1)} Jahre` : 'Break-even erreicht! ✓');
@@ -560,8 +554,8 @@ function calc() {
       const degF   = Math.pow(1 - degradation/100, y);
       const priceY = price * Math.pow(1 + inflation/100, y);
       const kwh    = annualKwh * degF;
-      const selfKwh= kwh * (selfPct/100);
-      const feedKwh= Math.max(0, kwh - selfKwh);
+      const selfKwh= hasMeter ? kwh * (selfPct/100) : 0;
+      const feedKwh= hasMeter ? Math.max(0, kwh - selfKwh) : kwh;
       const saving = selfKwh * priceY + feedKwh * feedRate;
       cumY += saving;
       const done   = cumY >= cost;
@@ -570,7 +564,7 @@ function calc() {
       rows += `<tr>
         <td>${yearKey}</td>
         <td>${kwh.toFixed(0)} kWh</td>
-        <td>${(selfPct).toFixed(0)}% = ${selfKwh.toFixed(0)} kWh</td>
+        <td>${hasMeter ? `${selfPct.toFixed(0)}% = ${selfKwh.toFixed(0)} kWh` : '— (keine Zählerdat.)'}</td>
         <td>${saving.toFixed(2)} €</td>
         <td style="font-weight:500">${cumY.toFixed(2)} €</td>
         <td><span class="badge ${cls}">${lbl}</span></td>
