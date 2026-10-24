@@ -407,6 +407,8 @@ function nav(id) {
   document.querySelectorAll('.nav-btn').forEach(b => {
     if (b.getAttribute('onclick')?.includes("'" + id + "'")) b.classList.add('active');
   });
+  // URL-Hash aktualisieren (ohne Seiten-Reload)
+  if (location.hash !== '#' + id) history.replaceState(null, '', '#' + id);
   if (pages[id]?.onEnter) pages[id].onEnter();
 }
 function refreshCurrentPage() {

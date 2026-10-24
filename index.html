@@ -320,7 +320,9 @@ tr:last-child td{border-bottom:none} tr:hover td{background:rgba(255,255,255,.02
   window.addEventListener('load', () => {
     APP.registerPages();  // injects all page HTML into DOM first
     APP.boot();           // loads storage, connects supabase
-    APP.nav('dashboard'); // navigate AFTER pages exist in DOM
+    // Beim Start: Hash aus URL lesen, sonst Dashboard
+    const startPage = (location.hash || '').replace('#', '') || 'dashboard';
+    APP.nav(startPage);   // navigate AFTER pages exist in DOM
   });
 </script>
 
