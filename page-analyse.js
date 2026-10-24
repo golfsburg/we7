@@ -68,8 +68,9 @@ function render() {
   const consumption = APP.consumption;
   const cfg         = APP.cfg;
 
-  // Datumsfilter
-  const fromD = _from || (entries.length ? entries.map(e=>e.date).sort()[0] : '2026-01-01');
+  // Datumsfilter — Anlage installiert 1.6.2026
+  const INSTALL = '2026-06-01';
+  const fromD = _from || INSTALL;
   const toD   = _to   || new Date().toLocaleDateString('sv');
 
   // Alle Tage im Zeitraum mit PV-Daten
@@ -249,7 +250,7 @@ const HTML = `
 
 <!-- Konfiguration -->
 <div class="fcard">
-  <div class="fcard-t">Anlagenkosten &amp; Parameter</div>
+  <div class="fcard-t">Anlagenkosten &amp; Parameter <button class="btn-s" style="font-size:11px;padding:4px 12px" onclick="AMOR.saveParams()">💾 Speichern</button></div>
   <div class="fgrid">
     <div class="field"><label>Anschaffungskosten (€)</label>
       <input type="number" id="am-cost" value="1200" step="50" onchange="AMOR.calc()"></div>
@@ -301,13 +302,32 @@ const HTML = `
 </div>
 `;
 
+const LS_KEY = 'pv_amor_cfg';
+
+function loadSaved() {
+  try { return JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch(e) { return {}; }
+}
+function saveParams() {
+  const get = id => document.getElementById(id)?.value;
+  const data = {
+    cost: get('am-cost'), price: get('am-price'), feed: get('am-feed'),
+    selfpct: get('am-selfpct'), inflation: get('am-inflation'), degradation: get('am-degradation')
+  };
+  try { localStorage.setItem(LS_KEY, JSON.stringify(data)); } catch(e) {}
+  APP.toast('Parameter gespeichert ✓');
+}
+
 function onEnter() {
-  // Werte aus APP.cfg vorbelegen
-  const cfg = APP.cfg;
+  const cfg    = APP.cfg;
+  const saved  = loadSaved();
   const set = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
-  set('am-price',   cfg.price);
-  set('am-feed',    cfg.feedRate);
-  set('am-selfpct', cfg.selfPct);
+  // Gespeicherte Werte haben Vorrang, sonst APP.cfg
+  set('am-cost',        saved.cost        ?? 1200);
+  set('am-price',       saved.price       ?? cfg.price);
+  set('am-feed',        saved.feed        ?? cfg.feedRate);
+  set('am-selfpct',     saved.selfpct     ?? cfg.selfPct);
+  set('am-inflation',   saved.inflation   ?? 3);
+  set('am-degradation', saved.degradation ?? 0.5);
   calc();
 }
 
@@ -329,9 +349,8 @@ function calc() {
     byMonth[ym] = (byMonth[ym]||0) + e.kwh;
   });
 
-  // Startdatum der Anlage
-  const allDates = [...entries.map(e=>e.date)].sort();
-  const startDate = allDates[0] ? new Date(allDates[0]) : new Date('2026-01-01');
+  // Startdatum der Anlage — fix 1.6.2026 (Installationsdatum)
+  const startDate = new Date('2026-06-01');
   const startYear = startDate.getFullYear();
 
   // Ø Jahresertrag aus realen Daten
@@ -343,7 +362,8 @@ function calc() {
   // Monatliche Ersparnis berechnen (real + Hochrechnung)
   const now       = new Date();
   const nowYM     = now.toISOString().substring(0,7);
-  const projMonths= 15 * 12; // 15 Jahre Projektion
+  const CHART_END = '2030-12'; // Diagramm nur bis Ende 2030
+  const projMonths= 15 * 12;  // 15 Jahre für Tabelle + Break-even-Berechnung
 
   const labels   = [];
   const real     = [];   // tatsächliche kumulierte Ersparnis
@@ -382,19 +402,20 @@ function calc() {
 
     if (!breakEvenMonth && cumProj >= cost) breakEvenMonth = yr;
 
-    if (m % 3 === 0) { // Vierteljahres-Labels
-      labels.push(ym.substring(0,4) + (m % 12 < 3 ? '' : '')); // Nur Jahreszahl alle 12M
+    if (m % 3 === 0 && ym <= CHART_END) { // Vierteljahres-Labels, nur bis 2030
       real.push(hasReal || ym <= nowYM ? +cumReal.toFixed(2) : null);
       proj.push(+cumProj.toFixed(2));
       invest.push(cost);
     }
   }
 
-  // Quartalslabels überschreiben mit sauberen Jahreslabels
+  // Quartalslabels bis 2030
   const quarterLabels = [];
   for (let m = 0; m < projMonths; m += 3) {
     const d = new Date(startDate);
     d.setMonth(d.getMonth() + m);
+    const ym2 = d.toISOString().substring(0,7);
+    if (ym2 > CHART_END) break;
     quarterLabels.push(m % 12 === 0 ? String(d.getFullYear()) : '');
   }
 
@@ -477,7 +498,7 @@ function calc() {
 }
 
 function register() { APP.registerPage('amortisation', { html: HTML, onEnter }); }
-return { register, calc };
+return { register, calc, saveParams };
 })();
 
 // ── TAGESPROFILE ────────────────────────────────────────────
