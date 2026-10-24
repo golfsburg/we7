@@ -106,7 +106,29 @@ function renderCore(from, to) {
   const pvTotal  = pvD.reduce((s,e) => s+e.kwh, 0);
   const thTotal  = pvD.reduce((s,e) => s+APP.getTheory(e), 0);
   const gridTotal= cvD.reduce((s,c) => s+c.kwh, 0);
-  const direct   = APP.calcDirect(pvTotal, gridTotal);
+
+  // Eigenverbrauch aus Zählermessungen (CV2): pvKwh − Einspeisung
+  // Nur Perioden die den gewählten Zeitraum überlappen
+  let direct = 0;
+  if (typeof CV2 !== 'undefined') {
+    const meterPeriods = CV2.getMeterPeriods();
+    meterPeriods.forEach(p => {
+      const pFrom = p.from ? p.from.substring(0,7) : null;
+      const pTo   = p.to   ? p.to.substring(0,7)   : null;
+      const rangeFrom = from ? from.substring(0,7) : null;
+      const rangeTo   = to   ? to.substring(0,7)   : null;
+      // Periode überschneidet Auswahl?
+      const overlaps = (!rangeFrom || !pTo   || pTo   >= rangeFrom) &&
+                       (!rangeTo   || !pFrom || pFrom <= rangeTo);
+      if (overlaps) {
+        const pvKwh = p.pvKwh || 0;
+        const feed  = p.feed  || 0;
+        direct += Math.max(0, pvKwh - feed);
+      }
+    });
+    direct = parseFloat(direct.toFixed(2));
+  }
+
   const totalC   = gridTotal + direct;
   const autarky  = totalC > 0 ? Math.round(direct/totalC*100) : 0;
   const selfUse  = pvTotal > 0 ? Math.round(direct/pvTotal*100) : 0;
@@ -252,7 +274,26 @@ function drawOverlay(from, to, gran='month') {
 
   if (!labels.length) return;
 
-  const directArr = pvArr.map((_,i) => +APP.calcDirect(pvArr[i], gridArr[i]).toFixed(2));
+  // Eigenverbrauch pro Label aus Zählermessungen (CV2): pvKwh − Einspeisung
+  let directArr = pvArr.map(() => 0);
+  if (typeof CV2 !== 'undefined') {
+    const meterPeriods = CV2.getMeterPeriods();
+    directArr = labels.map(lbl => {
+      // lbl ist je nach gran: 'YYYY-MM-DD HH:MM', 'YYYY-MM-DD', 'YYYY-MM', 'YYYY'
+      const lblM = lbl.substring(0, 7); // 'YYYY-MM'
+      const lblY = lbl.substring(0, 4); // 'YYYY'
+      let pvKwh = 0, feed = 0;
+      meterPeriods.forEach(p => {
+        const pFromM = p.from ? p.from.substring(0,7) : null;
+        const pToM   = p.to   ? p.to.substring(0,7)   : null;
+        let match = false;
+        if (gran === 'year')  match = (!pFromM || pFromM.startsWith(lblY)) || (!pToM || pToM.startsWith(lblY));
+        else                  match = (!pFromM || pFromM <= lblM) && (!pToM || pToM >= lblM);
+        if (match) { pvKwh += p.pvKwh||0; feed += p.feed||0; }
+      });
+      return +Math.max(0, pvKwh - feed).toFixed(2);
+    });
+  }
   const datasets = [
     { type:'bar',  label:'PV Ertrag',  data:pvArr,    backgroundColor:'rgba(245,200,66,.8)',  borderRadius:2, order:2 },
     { type:'bar',  label:'Netzbezug',  data:gridArr,  backgroundColor:'rgba(91,156,246,.65)', borderRadius:2, order:3 },
