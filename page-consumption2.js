@@ -28,9 +28,9 @@ const HTML = `
   <!-- KPI Cards -->
   <div class="metrics">
     <div class="mc hi">
-      <div class="mc-l">☀ Solar Ø/Monat</div>
+      <div class="mc-l">☀ PV Ertrag Ø/Monat</div>
       <div><span class="mc-v" id="cv2-m-solar">—</span><span class="mc-u">kWh</span></div>
-      <div class="mc-d" id="cv2-m-solar2"></div>
+      <div class="mc-d" id="cv2-m-solar2">aus Growatt / pv_entries</div>
     </div>
     <div class="mc" style="border-color:rgba(251,146,60,.3)">
       <div class="mc-l">🔥 Fernwärme Ø/Monat</div>
@@ -63,7 +63,7 @@ const HTML = `
       <div class="mc-d" id="cv2-m-evg2">Eigenverbr. / PV Ertrag</div>
     </div>
     <div class="mc gr">
-      <div class="mc-l">☀ Solar Ø/Tag</div>
+      <div class="mc-l">☀ PV Ertrag Ø/Tag</div>
       <div><span class="mc-v" id="cv2-d-solar">—</span><span class="mc-u">kWh</span></div>
     </div>
     <div class="mc" style="border-color:rgba(251,146,60,.2)">
@@ -376,7 +376,8 @@ function renderDashboard() {
   const from  = range.from || '';
   const to    = range.to   || '';
 
-  const allCons = calcConsumption(readings);
+  // getMeterPeriods() liefert Perioden mit PV Ertrag aus pv_entries (nicht solar_kwh-Zähler!)
+  const allCons = getMeterPeriods();
 
   // Filter: Periode gehört zum Bereich wenn c.to (Ende) im Zeitraum liegt
   // ODER c.from (Start) im Zeitraum liegt
@@ -416,13 +417,13 @@ function renderDashboard() {
   set('cv2-m-feed',  totalMonths>0 ? (sumFeed /totalMonths).toFixed(1) : '—');
   set('cv2-m-self',  totalMonths>0 ? (sumSelf /totalMonths).toFixed(1) : '—');
   set('cv2-m-evg',   evgPct != null ? String(evgPct) : '—');
-  set('cv2-m-solar2', `${sumSolar.toFixed(1)} kWh gesamt`);
+  set('cv2-m-solar2', `${sumSolar.toFixed(1)} kWh gesamt (Growatt)`);
   set('cv2-m-fw2',    `${sumFw.toFixed(1)} kWh gesamt`);
   set('cv2-m-water2', `${sumWater.toFixed(2)} m³ gesamt`);
   set('cv2-m-strom2', `${sumStrom.toFixed(1)} kWh gesamt`);
   set('cv2-m-feed2',  `${sumFeed.toFixed(1)} kWh gesamt`);
   set('cv2-m-self2',  `${sumSelf.toFixed(1)} kWh gesamt`);
-  set('cv2-m-evg2',   sumSolar>0 ? `${sumSelf.toFixed(1)} / ${sumSolar.toFixed(1)} kWh` : 'Solar − Einspeisung');
+  set('cv2-m-evg2',   sumSolar>0 ? `${sumSelf.toFixed(1)} / ${sumSolar.toFixed(1)} kWh PV` : 'PV Ertrag − Einspeisung');
 
   // Daily averages
   set('cv2-d-solar', totalDays>0 ? (sumSolar/totalDays).toFixed(2) : '—');
@@ -450,12 +451,12 @@ function drawEnergyChart(cons) {
   APP.charts['cv2-energy'] = new Chart(document.getElementById('cv2-c-energy'), {
     type:'bar',
     data:{ labels, datasets:[
-      { label:'Solar',       yAxisID:'y',  data:cons.map(c=>c.solar!=null  ? +c.solar.toFixed(2):null),  backgroundColor:'rgba(245,200,66,.8)',  borderRadius:3 },
+      { label:'PV Ertrag',   yAxisID:'y',  data:cons.map(c=>c.pvKwh!=null&&c.pvKwh>0 ? +c.pvKwh.toFixed(2):null), backgroundColor:'rgba(245,200,66,.8)',  borderRadius:3 },
       { label:'Fernwärme',   yAxisID:'y',  data:cons.map(c=>c.fw!=null     ? +c.fw.toFixed(2):null),     backgroundColor:'rgba(251,146,60,.75)', borderRadius:3 },
       { label:'Strom Bezug', yAxisID:'y',  data:cons.map(c=>c.strom!=null  ? +c.strom.toFixed(2):null),  backgroundColor:'rgba(91,156,246,.75)', borderRadius:3 },
       { label:'Eigenverbrauch', yAxisID:'y', data:cons.map(c=>{
-          if (c.solar==null||c.feed==null) return null;
-          return +Math.max(0,c.solar-c.feed).toFixed(2);
+          if (!c.pvKwh||c.feed==null) return null;
+          return +Math.max(0,c.pvKwh-c.feed).toFixed(2); // PV Ertrag − Einspeisung
         }), backgroundColor:'rgba(63,207,142,.65)', borderRadius:3 },
       { label:'Einspeisung', yAxisID:'y2', type:'line',
         data:cons.map(c=>c.feed!=null&&c.feed>0 ? +c.feed.toFixed(2):null),
@@ -902,8 +903,32 @@ function register() {
   });
 }
 
-// Öffentlicher Getter für readings + calcConsumption — für page-analyse.js
-function getMeterPeriods() { return calcConsumption(readings); }
+// Öffentlicher Getter — gibt Perioden mit PV-Ertrag aus pv_entries/growatt zurück.
+// Eigenverbrauch = PV Ertrag (growatt/pv_entries) − Einspeisung (Zählerdiff feed_kwh)
+// NICHT solar_kwh aus dem Zähler — das ist der Einspeisezähler der Anlage, nicht der Ertrag!
+function getMeterPeriods() {
+  const base = calcConsumption(readings);
+  // PV-Ertrag pro Monat aus APP.entries (pv_entries Supabase-Tabelle)
+  return base.map(p => {
+    // Periode kann mehrere Monate überspannen — alle betroffenen Monate summieren
+    const fromYM = p.from.substring(0, 7);
+    const toYM   = p.to.substring(0, 7);
+    let pvKwh = 0;
+    // Alle Monate von from bis to durchlaufen
+    let cur = new Date(fromYM + '-01');
+    const end = new Date(toYM  + '-01');
+    while (cur <= end) {
+      const ym = cur.toISOString().substring(0, 7);
+      pvKwh += APP.getMonthPv(ym);
+      cur.setMonth(cur.getMonth() + 1);
+    }
+    return {
+      ...p,
+      pvKwh,          // PV Ertrag aus Growatt/pv_entries (korrekt!)
+      solar: pvKwh,   // überschreibt solar_kwh-Zählerfeld für alle Consumer dieser Funktion
+    };
+  });
+}
 
 return { tab, recTab, renderDashboard, renderTable,
          toggleAll, prefillNow, addEntry, editEntry, copyEntry, importCSV,
