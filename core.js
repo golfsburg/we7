@@ -430,7 +430,7 @@ function registerPage(id, module) {
 }
 function registerPages() {
   // Called after all scripts load
-  [DASH, PV, SIM, CV, CV2, SETT].forEach(m => m.register());
+  [DASH, PV, SIM, CV, CV2, SETT, AU, AMOR, PROF].forEach(m => m.register());
 }
 
 // ── PW ───────────────────────────────────────────────────

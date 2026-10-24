@@ -247,6 +247,14 @@ tr:last-child td{border-bottom:none} tr:hover td{background:rgba(255,255,255,.02
         <button class="nav-btn" onclick="APP.nav('consumption2')"><span class="ni">📊</span>Verbrauchsbilanz</button>
       </div>
       <div class="nav-divider"></div>
+      <!-- Analyse -->
+      <div class="nav-group">
+        <span class="nav-group-label">Analyse</span>
+        <button class="nav-btn" onclick="APP.nav('autarkie')"><span class="ni">🌱</span>Autarkie</button>
+        <button class="nav-btn" onclick="APP.nav('amortisation')"><span class="ni">💰</span>Amortisation</button>
+        <button class="nav-btn" onclick="APP.nav('tagesprofile')"><span class="ni">📡</span>Tagesprofile</button>
+      </div>
+      <div class="nav-divider"></div>
       <!-- Einstellungen -->
       <div class="nav-group">
         <button class="nav-btn" onclick="APP.nav('settings')"><span class="ni">⚙</span>Einstellungen</button>
@@ -306,6 +314,7 @@ tr:last-child td{border-bottom:none} tr:hover td{background:rgba(255,255,255,.02
 <script src="page-consumption.js?v=1792836458"></script>
 <script src="page-consumption2.js?v=1792836458"></script>
 <script src="page-settings.js?v=1792836458"></script>
+<script src="page-analyse.js?v=1792836458"></script>
 <!-- BOOT -->
 <script>
   window.addEventListener('load', () => {
