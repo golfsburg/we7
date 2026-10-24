@@ -284,11 +284,23 @@ function drawAutarkyLine() {
   const months = [...new Set(APP.entries.map(e=>e.date.substring(0,7)))].sort();
   if (!months.length) return;
   const labels = months.map(m => APP.MONTHS[new Date(m+'-01').getMonth()]);
+  // Eigenverbrauch aus Zählermessung (CV2), nicht aus selfPct-Schätzung
+  const meterPeriods = (typeof CV2 !== 'undefined') ? CV2.getMeterPeriods() : [];
+  const selfByMonth = {};
+  meterPeriods.forEach(p => {
+    const ym = p.from.substring(0,7);
+    if (!selfByMonth[ym]) selfByMonth[ym] = { self:0, solar:0 };
+    selfByMonth[ym].self  += Math.max(0, (p.solar||0) - (p.feed||0));
+    selfByMonth[ym].solar += p.solar||0;
+  });
   const data = months.map(m => {
-    const pv   = APP.entries.filter(e=>e.date.startsWith(m)).reduce((s,e)=>s+e.kwh,0);
     const grid = APP.consumption.filter(c=>c.date.startsWith(m)&&c.direction==='grid').reduce((s,c)=>s+c.kwh,0);
-    const d = APP.calcDirect(pv, grid), tot = grid + d;
-    return tot > 0 ? Math.round(d/tot*100) : 0;
+    const mb = selfByMonth[m];
+    if (mb && mb.self > 0) {
+      const tot = grid + mb.self;
+      return tot > 0 ? Math.round(mb.self/tot*100) : 0;
+    }
+    return 0; // kein Schätzwert bei fehlender Zählermessung
   });
   APP.charts['db-au-line'] = new Chart(document.getElementById('db-autarky-chart'), {
     type:'line',
@@ -325,7 +337,15 @@ function drawMonthly() {
   const labels   = months.map(m => APP.MONTHS[new Date(m+'-01').getMonth()] + ' ' + m.substring(2,4));
   const pvArr    = months.map(m => +APP.entries.filter(e=>e.date.startsWith(m)).reduce((s,e)=>s+e.kwh,0).toFixed(2));
   const gridArr  = months.map(m => +APP.consumption.filter(c=>c.date.startsWith(m)&&c.direction==='grid').reduce((s,c)=>s+c.kwh,0).toFixed(2));
-  const directArr= months.map((_,i) => +APP.calcDirect(pvArr[i],gridArr[i]).toFixed(2));
+  // Eigenverbrauch aus Zählermessung (CV2)
+  const meterP2 = (typeof CV2 !== 'undefined') ? CV2.getMeterPeriods() : [];
+  const selfByM2 = {};
+  meterP2.forEach(p => {
+    const ym = p.from.substring(0,7);
+    if (!selfByM2[ym]) selfByM2[ym] = 0;
+    selfByM2[ym] += Math.max(0, (p.solar||0) - (p.feed||0));
+  });
+  const directArr= months.map(m => +(selfByM2[m] || 0).toFixed(2));
   const thArr    = months.map(m => APP.theory[new Date(m+'-01').getMonth()] || 0);
 
   APP.charts['db-mon'] = new Chart(document.getElementById('db-monthly'), {

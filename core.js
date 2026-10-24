@@ -105,18 +105,15 @@ function getTheory(e) {
 
 // ── CALCULATIONS ─────────────────────────────────────────
 function calcEuro(e) {
-  const s = e.self  != null ? e.self  : e.kwh * (cfg.selfPct/100);
+  const s = e.self  != null ? e.self  : 0; // kein selfPct-Schätzwert
   const f = e.feed  != null ? e.feed  : Math.max(0, e.kwh - s);
   return parseFloat(((s * cfg.price) + (f * cfg.feedRate)).toFixed(2));
 }
-// Direct PV use: portion of PV consumed on-site.
-// This is a pure percentage estimate (cfg.selfPct of PV yield) — there is no
-// independent measurement of actual self-consumption to validate it against,
-// so it is NOT capped/derived from gridKwh (a previous Math.min(assumed,
-// gridKwh+assumed) here was always a no-op, since gridKwh is never negative).
-function calcDirect(pvKwh, gridKwh) {
-  const assumed = pvKwh * (cfg.selfPct / 100);
-  return parseFloat(assumed.toFixed(2));
+// Eigenverbrauch: gemessener Wert aus Zählermessung (meterSelf) wird übergeben.
+// Kein selfPct-Schätzwert mehr — bei fehlendem Messwert wird 0 zurückgegeben.
+function calcDirect(pvKwh, gridKwh, meterSelf) {
+  if (meterSelf != null) return parseFloat(meterSelf.toFixed(2));
+  return 0;
 }
 function getDayGrid(date) {
   return consumption

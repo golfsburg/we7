@@ -38,7 +38,11 @@ const HTML = `
   <div class="fgrid">
     <div class="field"><label>Bezugspreis (€/kWh)</label><input type="number" id="s-price" step="0.01"></div>
     <div class="field"><label>Einspeisung (€/kWh)</label><input type="number" id="s-feedrate" step="0.001"></div>
-    <div class="field"><label>Eigenstromanteil (%)</label><input type="number" id="s-selfpct" step="5" min="0" max="100"></div>
+    <div class="field"><label>Eigenverbrauchsanteil</label>
+      <div style="padding:6px 10px;background:var(--bg3);border-radius:6px;border:1px solid var(--bg4);display:flex;align-items:center;gap:8px">
+        <span id="s-selfpct-val" style="font-weight:600;font-size:15px;color:var(--tx)">—</span>
+        <span id="s-selfpct-hint" style="font-size:11px;color:var(--tx3)">aus Zählermessung</span>
+      </div></div>
   </div>
   <button class="btn-p" onclick="SETT.save()">Speichern</button>
   <div class="note">🇦🇹 Österreich 2024: OeMAG Einspeisetarif ~8,2 ct/kWh · Haushalt Ø ~30 ct/kWh</div>
@@ -66,7 +70,22 @@ function loadUI() {
   set('s-inv',     c.inv);
   set('s-price',   c.price);
   set('s-feedrate',c.feedRate);
-  set('s-selfpct', c.selfPct);
+  // Eigenverbrauchsanteil aus Zählermessung berechnen (kein selfPct-Schätzwert)
+  const selfEl = document.getElementById('s-selfpct-val');
+  const hintEl = document.getElementById('s-selfpct-hint');
+  if (selfEl) {
+    const periods = (typeof CV2 !== 'undefined') ? CV2.getMeterPeriods() : [];
+    if (periods.length > 0) {
+      const totSolar = periods.reduce((s,p) => s+(p.solar||0), 0);
+      const totSelf  = periods.reduce((s,p) => s+Math.max(0,(p.solar||0)-(p.feed||0)), 0);
+      const pct = totSolar > 0 ? Math.round(totSelf/totSolar*100) : 0;
+      selfEl.textContent = pct + ' %';
+      if (hintEl) hintEl.textContent = '📊 aus Zählermessung (' + periods.length + ' Perioden)';
+    } else {
+      selfEl.textContent = '—';
+      if (hintEl) hintEl.textContent = '⚠ keine Zählermessungen vorhanden';
+    }
+  }
   const disp = document.getElementById('s-inv-display');
   if (disp) disp.textContent = c.inv;
   updateTheorySummary();
@@ -83,8 +102,7 @@ function save() {
     wp:      gn('s-wp',800),
     inv:     gv('s-inv')||'Growatt NEO 800M-X',
     price:   gn('s-price',0.30),
-    feedRate:gn('s-feedrate',0.082),
-    selfPct: gn('s-selfpct',50)
+    feedRate:gn('s-feedrate',0.082)
   });
   APP.computeTheory();
   APP.savePv(false);
