@@ -52,6 +52,16 @@ const HTML = `
       <div><span class="mc-v" id="cv2-m-feed">—</span><span class="mc-u">kWh</span></div>
       <div class="mc-d" id="cv2-m-feed2"></div>
     </div>
+    <div class="mc hi" style="border-color:rgba(63,207,142,.5)">
+      <div class="mc-l">♻ Eigenverbrauch Ø/Monat</div>
+      <div><span class="mc-v" id="cv2-m-self">—</span><span class="mc-u">kWh</span></div>
+      <div class="mc-d" id="cv2-m-self2">Solar − Einspeisung</div>
+    </div>
+    <div class="mc hi" style="border-color:rgba(63,207,142,.7);background:rgba(63,207,142,.07)">
+      <div class="mc-l">📊 Eigenverbrauchsgrad</div>
+      <div><span class="mc-v" id="cv2-m-evg">—</span><span class="mc-u">%</span></div>
+      <div class="mc-d" id="cv2-m-evg2">Eigenverbr. / PV Ertrag</div>
+    </div>
     <div class="mc gr">
       <div class="mc-l">☀ Solar Ø/Tag</div>
       <div><span class="mc-v" id="cv2-d-solar">—</span><span class="mc-u">kWh</span></div>
@@ -379,7 +389,7 @@ function renderDashboard() {
   });
 
   if (!cons.length) {
-    ['cv2-m-solar','cv2-m-fw','cv2-m-water','cv2-m-strom','cv2-m-feed',
+    ['cv2-m-solar','cv2-m-fw','cv2-m-water','cv2-m-strom','cv2-m-feed','cv2-m-self','cv2-m-evg',
      'cv2-d-solar','cv2-d-fw','cv2-d-water','cv2-d-strom','cv2-d-feed'].forEach(id => set(id,'—'));
     return;
   }
@@ -393,6 +403,10 @@ function renderDashboard() {
   const sumWater = cons.reduce((s,c) => s+(c.water??0), 0);
   const sumStrom = cons.reduce((s,c) => s+(c.strom??0), 0);
   const sumFeed  = cons.reduce((s,c) => s+(c.feed??0),  0);
+  // Eigenverbrauch = Solar − Einspeisung (exakt aus Zählermessung)
+  const sumSelf  = Math.max(0, sumSolar - sumFeed);
+  // Eigenverbrauchsgrad = Eigenverbrauch / Solar-Ertrag × 100
+  const evgPct   = sumSolar > 0 ? Math.round(sumSelf / sumSolar * 100) : null;
 
   // Monthly averages
   set('cv2-m-solar', totalMonths>0 ? (sumSolar/totalMonths).toFixed(1) : '—');
@@ -400,11 +414,15 @@ function renderDashboard() {
   set('cv2-m-water', totalMonths>0 ? (sumWater/totalMonths).toFixed(2) : '—');
   set('cv2-m-strom', totalMonths>0 ? (sumStrom/totalMonths).toFixed(1) : '—');
   set('cv2-m-feed',  totalMonths>0 ? (sumFeed /totalMonths).toFixed(1) : '—');
+  set('cv2-m-self',  totalMonths>0 ? (sumSelf /totalMonths).toFixed(1) : '—');
+  set('cv2-m-evg',   evgPct != null ? String(evgPct) : '—');
   set('cv2-m-solar2', `${sumSolar.toFixed(1)} kWh gesamt`);
   set('cv2-m-fw2',    `${sumFw.toFixed(1)} kWh gesamt`);
   set('cv2-m-water2', `${sumWater.toFixed(2)} m³ gesamt`);
   set('cv2-m-strom2', `${sumStrom.toFixed(1)} kWh gesamt`);
   set('cv2-m-feed2',  `${sumFeed.toFixed(1)} kWh gesamt`);
+  set('cv2-m-self2',  `${sumSelf.toFixed(1)} kWh gesamt`);
+  set('cv2-m-evg2',   sumSolar>0 ? `${sumSelf.toFixed(1)} / ${sumSolar.toFixed(1)} kWh` : 'Solar − Einspeisung');
 
   // Daily averages
   set('cv2-d-solar', totalDays>0 ? (sumSolar/totalDays).toFixed(2) : '—');
@@ -418,7 +436,7 @@ function renderDashboard() {
   drawEnergyChart(cons);
   drawWaterChart(cons);
   drawTempChart(cons);
-  drawDonut(sumSolar, sumFw, sumStrom, sumFeed);
+  drawDonut(sumSolar, sumFw, sumStrom, sumFeed, sumSelf);
 }
 
 function periodLabel(c) {
@@ -435,6 +453,10 @@ function drawEnergyChart(cons) {
       { label:'Solar',       yAxisID:'y',  data:cons.map(c=>c.solar!=null  ? +c.solar.toFixed(2):null),  backgroundColor:'rgba(245,200,66,.8)',  borderRadius:3 },
       { label:'Fernwärme',   yAxisID:'y',  data:cons.map(c=>c.fw!=null     ? +c.fw.toFixed(2):null),     backgroundColor:'rgba(251,146,60,.75)', borderRadius:3 },
       { label:'Strom Bezug', yAxisID:'y',  data:cons.map(c=>c.strom!=null  ? +c.strom.toFixed(2):null),  backgroundColor:'rgba(91,156,246,.75)', borderRadius:3 },
+      { label:'Eigenverbrauch', yAxisID:'y', data:cons.map(c=>{
+          if (c.solar==null||c.feed==null) return null;
+          return +Math.max(0,c.solar-c.feed).toFixed(2);
+        }), backgroundColor:'rgba(63,207,142,.65)', borderRadius:3 },
       { label:'Einspeisung', yAxisID:'y2', type:'line',
         data:cons.map(c=>c.feed!=null&&c.feed>0 ? +c.feed.toFixed(2):null),
         borderColor:'rgba(63,207,142,.9)', backgroundColor:'rgba(63,207,142,.15)',
@@ -463,16 +485,16 @@ function drawEnergyChart(cons) {
   });
 }
 
-function drawDonut(solar, fw, strom, feed=0) {
+function drawDonut(solar, fw, strom, feed=0, self=0) {
   APP.destroyChart('cv2-donut');
   const total = solar + fw + strom;
   if (total <= 0) return;
   const netStrom = Math.max(0, strom - feed); // Netto-Bezug nach Einspeisung
   APP.charts['cv2-donut'] = new Chart(document.getElementById('cv2-c-donut'), {
     type:'doughnut',
-    data:{ labels:['Solar','Fernwärme','Strom Bezug','Einspeisung'],
-      datasets:[{ data:[solar, fw, netStrom, feed>0?feed:null],
-        backgroundColor:['rgba(245,200,66,.85)','rgba(251,146,60,.8)','rgba(91,156,246,.8)','rgba(63,207,142,.85)'],
+    data:{ labels:['Solar gesamt','Fernwärme','Strom Bezug','Einspeisung','Eigenverbrauch'],
+      datasets:[{ data:[solar, fw, netStrom, feed>0?feed:null, self>0?self:null],
+        backgroundColor:['rgba(245,200,66,.85)','rgba(251,146,60,.8)','rgba(91,156,246,.8)','rgba(63,207,142,.6)','rgba(63,207,142,.9)'],
         borderWidth:0 }]},
     options:{ responsive:true, maintainAspectRatio:false,
       plugins:{ legend:{ position:'bottom', labels:{ color:APP.TC, font:{size:10}, boxWidth:10 } } } }
