@@ -101,27 +101,28 @@ function render() {
     }
   }
 
-  // Summen berechnen
+  // Summen berechnen — EXAKT dieselbe Logik wie Dashboard (renderCore):
+  // PV-Ertrag: pv_entries (Growatt), Netzbezug: consumption_15min, Eigenverbrauch: CV2 Zähler
   let totPv=0, totGrid=0, totSelf=0, totFeed=0;
 
+  // PV-Ertrag aus pv_entries (Doppelzählung vermeiden: Monatseintrag hat Vorrang)
+  let pvD = APP.entries.filter(e => e.date >= fromD && e.date <= toD);
+  const monthsWithAggregate = new Set(pvD.filter(e => e.type==='month').map(e => e.date.substring(0,7)));
+  pvD = pvD.filter(e => !(e.type==='day' && monthsWithAggregate.has(e.date.substring(0,7))));
+  totPv = pvD.reduce((s,e) => s+e.kwh, 0);
+
+  // Netzbezug aus consumption_15min (gleiche Quelle wie Dashboard)
+  APP.consumption.filter(c => c.direction==='grid' && c.date >= fromD && c.date <= toD)
+    .forEach(c => { totGrid += parseFloat(c.kwh)||0; });
+
+  // Eigenverbrauch + Einspeisung aus CV2 Zählerablesungen (exakt gemessen)
   if (hasMeter) {
-    // Aus Zählerperioden: solar=PV Ertrag, strom=Bezug, feed=Einspeisung
     filtPeriods.forEach(p => {
-      totPv   += p.solar || 0;
-      totGrid += p.strom || 0;
-      totFeed += p.feed  || 0;
+      totFeed += p.feed || 0;
     });
     totSelf = Math.max(0, totPv - totFeed); // Eigenverbrauch = PV − Einspeisung
-  } else {
-    // Kein selfPct-Schätzwert — ohne Zählerdaten nur PV-Ertrag und Netzbezug anzeigen
-    const entries = APP.entries;
-    const consumption = APP.consumption;
-    entries.filter(e => e.type==='day' && e.date >= fromD && e.date <= toD)
-      .forEach(e => { totPv += e.kwh; });
-    consumption.filter(c => c.direction==='grid' && c.date >= fromD && c.date <= toD)
-      .forEach(c => { totGrid += parseFloat(c.kwh); });
-    // totSelf und totFeed bleiben 0 — keine Schätzung
   }
+  // ohne Zählerdaten: totSelf und totFeed bleiben 0 — keine Schätzung
 
   const totTotal   = totSelf + totGrid; // Gesamtverbrauch = Eigenverbr. + Netzbezug
   const avgAutarky = totTotal > 0 ? Math.min(100, (totSelf / totTotal) * 100) : 0;
@@ -146,12 +147,22 @@ function render() {
   // Für Verlaufsgrafik: Perioden als Datenpunkte
   const periods4chart = hasMeter ? filtPeriods : [];
   const labels  = periods4chart.map(p => p.from.substring(5)+' – '+p.to.substring(5));
-  const pvArr   = periods4chart.map(p => +(p.solar||0).toFixed(1));
-  const gridArr = periods4chart.map(p => +(p.strom||0).toFixed(1));
-  const selfArr = periods4chart.map(p => +Math.max(0,(p.solar||0)-(p.feed||0)).toFixed(1));
-  const autPct  = periods4chart.map(p => {
-    const self = Math.max(0,(p.solar||0)-(p.feed||0));
-    const tot  = self + (p.strom||0);
+  // PV-Ertrag pro Periode: aus pv_entries aggregieren
+  const pvArr   = periods4chart.map(p => {
+    let pv = APP.entries.filter(e => e.date >= p.from && e.date <= p.to);
+    const mwa = new Set(pv.filter(e=>e.type==='month').map(e=>e.date.substring(0,7)));
+    pv = pv.filter(e => !(e.type==='day' && mwa.has(e.date.substring(0,7))));
+    return +pv.reduce((s,e)=>s+e.kwh,0).toFixed(1);
+  });
+  // Netzbezug pro Periode: aus consumption_15min (gleiche Quelle wie Dashboard)
+  const gridArr = periods4chart.map(p => {
+    return +APP.consumption.filter(c => c.direction==='grid' && c.date >= p.from && c.date <= p.to)
+      .reduce((s,c)=>s+(parseFloat(c.kwh)||0),0).toFixed(1);
+  });
+  const selfArr = periods4chart.map((p,i) => +Math.max(0, pvArr[i]-(p.feed||0)).toFixed(1));
+  const autPct  = periods4chart.map((p,i) => {
+    const self = selfArr[i];
+    const tot  = self + gridArr[i];
     return tot > 0 ? +((self/tot)*100).toFixed(1) : 0;
   });
 
