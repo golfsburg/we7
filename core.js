@@ -573,6 +573,10 @@ function closeModal() {
 
 const FilterBar = (() => {
   const instances = {};
+  // Globaler Zeitraum — wird von allen FilterBars geteilt und synchronisiert.
+  // Wenn eine Seite den Zeitraum ändert, übernimmt ihn die nächste Seite automatisch.
+  let globalFrom = null; // '2026-06-01' nach erstem Setzen
+  let globalTo   = null;
 
   const MONTHS_DE = ['','Jän','Feb','Mär','Apr','Mai','Jun',
                      'Jul','Aug','Sep','Okt','Nov','Dez'];
@@ -623,10 +627,24 @@ const FilterBar = (() => {
     const rangeMs  = Math.max(1, maxMs - minMs);
     const prefix   = containerId;
 
-    // Initial selection — opts.defaultFrom setzt Startdatum (z.B. PV-Installationsdatum)
+    // Initial selection:
+    // 1. Globaler Zeitraum hat Vorrang (Synchronisation über alle Seiten)
+    // 2. opts.defaultFrom als Fallback-Minimum (z.B. PV-Installationsdatum)
+    // 3. minDate als letzter Fallback
     const defaultFromMs = opts.defaultFrom ? dateToMs(opts.defaultFrom) : null;
-    let selFrom = (defaultFromMs && defaultFromMs > minMs) ? defaultFromMs : minMs;
-    let selTo = maxMs;
+    const globalFromMs  = globalFrom ? dateToMs(globalFrom) : null;
+    const globalToMs    = globalTo   ? dateToMs(globalTo)   : null;
+
+    let selFrom, selTo;
+    if (globalFromMs && globalFromMs >= minMs && globalFromMs <= maxMs) {
+      // Globalen Zeitraum übernehmen — Seiten-übergreifende Synchronisation
+      selFrom = globalFromMs;
+      selTo   = (globalToMs && globalToMs <= maxMs) ? globalToMs : maxMs;
+    } else {
+      // Kein globaler Zeitraum gesetzt → defaultFrom oder minDate verwenden
+      selFrom = (defaultFromMs && defaultFromMs > minMs) ? defaultFromMs : minMs;
+      selTo   = maxMs;
+    }
 
     // Unique months and years from data
     const monthSet = [...new Set(allDates.map(d=>d.substring(0,7)))].sort().reverse();
@@ -747,7 +765,10 @@ const FilterBar = (() => {
     }
 
     function fire() {
-      if (opts.onRange) opts.onRange(msToDate(selFrom), msToDate(selTo));
+      // Globalen Zeitraum synchronisieren — alle anderen Seiten übernehmen ihn
+      globalFrom = msToDate(selFrom);
+      globalTo   = msToDate(selTo);
+      if (opts.onRange) opts.onRange(globalFrom, globalTo);
     }
 
     // ── Timeline drag
