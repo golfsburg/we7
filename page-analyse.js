@@ -166,7 +166,7 @@ function render() {
         data: autPct,
         borderColor: '#3fcf8e',
         backgroundColor: 'rgba(63,207,142,.15)',
-        fill: true, tension: 0.3, pointRadius: days.length > 60 ? 0 : 3, borderWidth: 2
+        fill: true, tension: 0.3, pointRadius: periods4chart.length > 60 ? 0 : 3, borderWidth: 2
       }]},
       options: {
         responsive: true, maintainAspectRatio: false,
