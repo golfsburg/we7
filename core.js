@@ -24,7 +24,7 @@ const TC = '#6b7080';
 // ── STATE ────────────────────────────────────────────────
 let cfg = {
   lat:47.52, lon:16.03, tilt:35, az:-45, wp:800,
-  inv:'Growatt NEO 800M-X', price:0.30, feedRate:0.082, selfPct:50
+  inv:'Growatt NEO 800M-X', price:0.30, feedRate:0.082
 };
 let theory = [];
 let entries = [];      // PV daily/monthly records (pv_entries)
