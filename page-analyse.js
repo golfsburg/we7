@@ -62,7 +62,11 @@ const HTML = `
 let _from = null, _to = null;
 
 function onEnter() {
-  const fb = APP.FilterBar.create('au-timeline', { onRange: (f,t) => { _from=f; _to=t; render(); } });
+  // defaultFrom = PV-Installationsdatum: Autarkie erst ab 1.6.2026 sinnvoll
+  const fb = APP.FilterBar.create('au-timeline', {
+    defaultFrom: '2026-06-01',
+    onRange: (f,t) => { _from=f; _to=t; render(); }
+  });
   render();
 }
 

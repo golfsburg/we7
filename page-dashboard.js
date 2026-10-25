@@ -81,6 +81,7 @@ const HTML = `
 // ── FILTER LOGIC ─────────────────────────────────────────
 function render() {
   APP.FilterBar.create('db-timeline', {
+    defaultFrom: '2026-06-01',
     onRange: (from, to) => renderCore(from, to)
   });
   const { from, to } = APP.FilterBar.getRange('db-timeline');

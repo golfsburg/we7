@@ -396,17 +396,22 @@ async function initialLoad() {
         }
       }
     }
-    // CV2: Zählerablesungen laden (meter_readings) — nötig für Eigenverbrauch/Autarkie
-    // auf dem Dashboard, auch wenn die Verbrauchsbilanz-Seite noch nie besucht wurde.
-    if (typeof CV2 !== 'undefined') {
-      try { await CV2.loadReadings(false); } catch(e) { console.warn('CV2 load:', e.message); }
-    }
-
     syncInd('ok');
-    // Immer Sidebar + aktuelle Seite aktualisieren — CV2-Daten stehen jetzt zur Verfügung
-    updateSidebar();
-    refreshCurrentPage();
+    if (changed) { updateSidebar(); refreshCurrentPage(); }
   } catch(e) { syncInd('error'); console.warn('Initial load:', e.message); }
+
+  // CV2: Zählerablesungen laden (meter_readings) — NACH dem Haupt-try/catch,
+  // damit ein Fehler dort nicht den CV2-Load verhindert.
+  // Nötig für Eigenverbrauch/Autarkie auf Dashboard/Autarkie-Seite,
+  // auch wenn Verbrauchsbilanz noch nie besucht wurde.
+  if (typeof CV2 !== 'undefined') {
+    try {
+      await CV2.loadReadings(false);
+      // Sidebar + aktuelle Seite nochmal rendern — CV2-Daten jetzt verfügbar
+      updateSidebar();
+      refreshCurrentPage();
+    } catch(e) { console.warn('CV2 load:', e.message); }
+  }
 }
 // Legacy wrappers — kept for compatibility
 async function syncConsumption() { scheduleSync(); }
@@ -618,8 +623,10 @@ const FilterBar = (() => {
     const rangeMs  = Math.max(1, maxMs - minMs);
     const prefix   = containerId;
 
-    // Initial selection
-    let selFrom = minMs, selTo = maxMs;
+    // Initial selection — opts.defaultFrom setzt Startdatum (z.B. PV-Installationsdatum)
+    const defaultFromMs = opts.defaultFrom ? dateToMs(opts.defaultFrom) : null;
+    let selFrom = (defaultFromMs && defaultFromMs > minMs) ? defaultFromMs : minMs;
+    let selTo = maxMs;
 
     // Unique months and years from data
     const monthSet = [...new Set(allDates.map(d=>d.substring(0,7)))].sort().reverse();
