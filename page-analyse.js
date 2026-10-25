@@ -93,7 +93,7 @@ function render() {
     if (hasMeter) {
       dsEl.innerHTML = `📊 <strong>Zählermessung</strong> — Eigenverbrauch aus Zählerstandsdifferenzen (${filtPeriods.length} Ablesungen), exakter Wert ohne Schätzung.`;
     } else {
-      dsEl.innerHTML = `⚠️ <strong>Schätzung</strong> — Keine Zählerdaten vorhanden. Eigenverbrauch geschätzt (${cfg.selfPct}% des PV-Ertrags). Bitte Ablesungen in der Verbrauchsbilanz eintragen.`;
+      dsEl.innerHTML = `⚠️ <strong>Keine Zählerdaten</strong> — Bitte Ablesungen in der Verbrauchsbilanz eintragen. Eigenverbrauch kann ohne Zählerdaten nicht berechnet werden.`;
     }
   }
 
@@ -128,7 +128,7 @@ function render() {
   set('au-v-autarky',  avgAutarky.toFixed(1));
   set('au-v-autarky2', hasMeter
     ? `${filtPeriods.length} Ablesungsperioden · Ø ${avgAutarky.toFixed(1)}%`
-    : `Schätzung (${cfg.selfPct}% Eigenverbr.)`);
+    : 'Keine Zählerdaten — bitte Ablesungen eintragen');
   set('au-v-pv',   totPv.toFixed(1));
   set('au-v-pv2',  hasMeter ? `${filtPeriods.length} Zählerablesungsperioden` : 'PV-Ertragsdaten');
   set('au-v-grid', totGrid.toFixed(1));

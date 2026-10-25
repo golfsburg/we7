@@ -95,7 +95,11 @@ function renderCore(from, to) {
   const labelEl = document.getElementById('db-range-label');
   if (labelEl) labelEl.style.display = 'none';
 
-  let pvD = entries.filter(e => (!from || e.date >= from) && (!to || e.date <= to));
+  // PV-Anlage installiert am 1.6.2026 — keine PV-Daten davor
+  const INSTALL = '2026-06-01';
+  const effectiveFrom = from && from > INSTALL ? from : INSTALL;
+
+  let pvD = entries.filter(e => e.date >= effectiveFrom && (!to || e.date <= to));
   // Vermeide Doppelzählung: wenn für einen Monat sowohl Tages- als auch ein
   // Monats-Sammeleintrag existiert, zählt nur der Monatseintrag — gleiche
   // Priorität wie APP.getMonthPv() und drawMonthly()/drawOverlay() weiter unten.

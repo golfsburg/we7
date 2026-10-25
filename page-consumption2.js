@@ -906,22 +906,35 @@ function register() {
 // Öffentlicher Getter — gibt Perioden mit PV-Ertrag aus pv_entries/growatt zurück.
 // Eigenverbrauch = PV Ertrag (growatt/pv_entries) − Einspeisung (Zählerdiff feed_kwh)
 // NICHT solar_kwh aus dem Zähler — das ist der Einspeisezähler der Anlage, nicht der Ertrag!
+// Start: frühestens 1.6.2026 (PV-Installationsdatum) — davor war keine Anlage vorhanden.
+const INSTALL_DATE = '2026-06-01';
+
 function getMeterPeriods() {
   const base = calcConsumption(readings);
   // PV-Ertrag pro Monat aus APP.entries (pv_entries Supabase-Tabelle)
   return base.map(p => {
-    // Periode kann mehrere Monate überspannen — alle betroffenen Monate summieren
-    const fromYM = p.from.substring(0, 7);
+    // Periode kann mehrere Monate überspannen — alle betroffenen Monate summieren.
+    // Nur ab INSTALL_DATE zählen (PV existiert erst ab 1.6.2026).
+    // Effektiver Start = max(p.from, INSTALL_DATE) auf Monatsebene
+    const effectiveFrom = p.from > INSTALL_DATE ? p.from : INSTALL_DATE;
+    const fromYM = effectiveFrom.substring(0, 7);
     const toYM   = p.to.substring(0, 7);
+
     let pvKwh = 0;
-    // Alle Monate von from bis to durchlaufen
-    let cur = new Date(fromYM + '-01');
-    const end = new Date(toYM  + '-01');
-    while (cur <= end) {
-      const ym = cur.toISOString().substring(0, 7);
-      pvKwh += APP.getMonthPv(ym);
-      cur.setMonth(cur.getMonth() + 1);
+    // Periode liegt komplett vor Installation → pvKwh = 0, feed = 0
+    if (p.to >= INSTALL_DATE) {
+      let cur = new Date(fromYM + '-01');
+      const end = new Date(toYM  + '-01');
+      while (cur <= end) {
+        const ym = cur.toISOString().substring(0, 7);
+        pvKwh += APP.getMonthPv(ym);
+        cur.setMonth(cur.getMonth() + 1);
+      }
     }
+
+    // feed (Einspeisung) ebenfalls nur ab INSTALL_DATE sinnvoll;
+    // falls Periode vor Installation beginnt, trotzdem feed behalten
+    // (Wert aus Zähler ist 0 wenn keine Anlage vorhanden).
     return {
       ...p,
       pvKwh,          // PV Ertrag aus Growatt/pv_entries (korrekt!)

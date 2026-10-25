@@ -172,9 +172,23 @@ function copyCode(id) {
 
 // ── SIDEBAR KPIs ─────────────────────────────────────────
 function updateSidebar() {
-  const pvT  = entries.reduce((s,e)=>s+e.kwh, 0);
-  const cvT  = consumption.filter(c=>c.direction==='grid').reduce((s,c)=>s+c.kwh, 0);
-  const dir  = calcDirect(pvT, cvT);
+  // PV Ertrag ab Installationsdatum 1.6.2026
+  const INSTALL = '2026-06-01';
+  const pvT  = entries.filter(e => e.date >= INSTALL).reduce((s,e)=>s+e.kwh, 0);
+  const cvT  = consumption.filter(c=>c.direction==='grid'&&c.date>=INSTALL).reduce((s,c)=>s+c.kwh, 0);
+  // Eigenverbrauch aus Zählermessungen (CV2) — kein selfPct-Schätzwert
+  let dir = 0;
+  if (typeof CV2 !== 'undefined') {
+    try {
+      const periods = CV2.getMeterPeriods();
+      periods.forEach(p => {
+        if (p.to >= INSTALL) {
+          dir += Math.max(0, (p.pvKwh||0) - (p.feed||0));
+        }
+      });
+      dir = parseFloat(dir.toFixed(2));
+    } catch(e) {}
+  }
   const tot  = cvT + dir;
   const au   = tot > 0 ? Math.round(dir/tot*100) : 0;
   const setV = (id, v, u) => {
