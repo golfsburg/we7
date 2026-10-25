@@ -858,7 +858,9 @@ function initDefaults() {
   if (dt && !dt.value) dt.value = today;
 }
 
-async function loadReadings() {
+// Nur Daten laden (kein UI-Render) — wird auch von core.js initialLoad() aufgerufen,
+// damit Eigenverbrauch/Autarkie auf dem Dashboard schon beim ersten Seitenaufruf korrekt sind.
+async function loadReadings(renderUI = true) {
   // Load from localStorage as initial fallback only
   try {
     const v = localStorage.getItem('cv2_readings');
@@ -882,8 +884,11 @@ async function loadReadings() {
   }
 
   initDefaults();
-  renderDashboard();
-  renderTable();
+  // UI nur rendern wenn die Seite aktiv ist (nicht beim Boot von core.js)
+  if (renderUI) {
+    renderDashboard();
+    renderTable();
+  }
 }
 
 function register() {
@@ -946,5 +951,5 @@ function getMeterPeriods() {
 return { tab, recTab, renderDashboard, renderTable,
          toggleAll, prefillNow, addEntry, editEntry, copyEntry, importCSV,
          deleteSingle, deleteSelected, deleteRange, clearAll, register,
-         getMeterPeriods };
+         getMeterPeriods, loadReadings };
 })();

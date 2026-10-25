@@ -396,8 +396,16 @@ async function initialLoad() {
         }
       }
     }
+    // CV2: Zählerablesungen laden (meter_readings) — nötig für Eigenverbrauch/Autarkie
+    // auf dem Dashboard, auch wenn die Verbrauchsbilanz-Seite noch nie besucht wurde.
+    if (typeof CV2 !== 'undefined') {
+      try { await CV2.loadReadings(false); } catch(e) { console.warn('CV2 load:', e.message); }
+    }
+
     syncInd('ok');
-    if (changed) { updateSidebar(); refreshCurrentPage(); }
+    // Immer Sidebar + aktuelle Seite aktualisieren — CV2-Daten stehen jetzt zur Verfügung
+    updateSidebar();
+    refreshCurrentPage();
   } catch(e) { syncInd('error'); console.warn('Initial load:', e.message); }
 }
 // Legacy wrappers — kept for compatibility
