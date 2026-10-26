@@ -320,9 +320,12 @@ const HTML = `
     <div class="field"><label>Anschaffungskosten (€)</label>
       <input type="number" id="am-cost" value="1200" step="50" onchange="AMOR.calc()"></div>
     <div class="field"><label>Bezugspreis (€/kWh)</label>
-      <input type="number" id="am-price" step="0.01" onchange="AMOR.calc()"></div>
+      <input type="number" id="am-price" step="0.01" readonly style="background:var(--bg3);color:var(--tx2);cursor:not-allowed" title="Aus Einstellungen → Energiepreise"></div>
     <div class="field"><label>Einspeisevergütung (€/kWh)</label>
-      <input type="number" id="am-feed" step="0.001" onchange="AMOR.calc()"></div>
+      <input type="number" id="am-feed" step="0.001" readonly style="background:var(--bg3);color:var(--tx2);cursor:not-allowed" title="Aus Einstellungen → Energiepreise"></div>
+    <div class="field" style="grid-column:1/-1">
+      <div class="note" style="margin:0">🔗 Bezugspreis und Einspeisevergütung werden aus <strong>Einstellungen → Energiepreise</strong> übernommen und hier schreibgeschützt angezeigt.</div>
+    </div>
     <div class="field"><label>Eigenverbrauchsanteil (%)</label>
       <div style="padding:6px 10px;background:var(--bg3);border-radius:6px;font-size:13px;color:var(--tx2);display:flex;align-items:center;gap:8px">
         <span id="am-selfpct" style="font-weight:600;font-size:16px;color:var(--tx)">—</span>
@@ -377,9 +380,10 @@ function loadSaved() {
 }
 function saveParams() {
   const get = id => document.getElementById(id)?.value;
+  // Nur Anlagenkosten, Inflation und Degradation lokal speichern.
+  // Bezugspreis und Einspeisung kommen immer aus Einstellungen (APP.cfg).
   const data = {
-    cost: get('am-cost'), price: get('am-price'), feed: get('am-feed'),
-    // selfpct wird aus Zählerdaten berechnet, nicht gespeichert
+    cost: get('am-cost'),
     inflation: get('am-inflation'), degradation: get('am-degradation')
   };
   try { localStorage.setItem(LS_KEY, JSON.stringify(data)); } catch(e) {}
@@ -390,11 +394,11 @@ function onEnter() {
   const cfg    = APP.cfg;
   const saved  = loadSaved();
   const set = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
-  // Gespeicherte Werte haben Vorrang, sonst APP.cfg
   set('am-cost',        saved.cost        ?? 1200);
-  set('am-price',       saved.price       ?? cfg.price);
-  set('am-feed',        saved.feed        ?? cfg.feedRate);
-  // am-selfpct: kein Eingabefeld — wird in calc() aus Zählerdaten berechnet
+  // Bezugspreis + Einspeisung: IMMER aus APP.cfg (Einstellungen), nie aus lokalem Speicher
+  set('am-price',       cfg.price);
+  set('am-feed',        cfg.feedRate);
+  // am-selfpct: kein Eingabefeld — wird in calc() aus AU.getSelfUseGrad() geholt
   set('am-inflation',   saved.inflation   ?? 3);
   set('am-degradation', saved.degradation ?? 0.5);
   calc();
