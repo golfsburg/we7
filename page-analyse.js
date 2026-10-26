@@ -60,6 +60,7 @@ const HTML = `
 `;
 
 let _from = null, _to = null;
+let _selfUseGrad = null; // Eigenverbrauchsgrad aus letzter Berechnung (für AMOR)
 
 function onEnter() {
   // defaultFrom = PV-Installationsdatum: Autarkie erst ab 1.6.2026 sinnvoll
@@ -127,6 +128,7 @@ function render() {
   const totTotal   = totSelf + totGrid; // Gesamtverbrauch = Eigenverbr. + Netzbezug
   const avgAutarky = totTotal > 0 ? Math.min(100, (totSelf / totTotal) * 100) : 0;
   const avgSelfUse = totPv    > 0 ? Math.min(100, (totSelf / totPv)   * 100) : 0;
+  _selfUseGrad = hasMeter ? avgSelfUse : null; // für AMOR.calc() zugänglich machen
 
   // KPIs
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
@@ -277,8 +279,29 @@ function render() {
   }
 }
 
+// Gibt den zuletzt berechneten Eigenverbrauchsgrad zurück (null = keine Zählerdaten).
+// Wird von AMOR.calc() verwendet, damit beide denselben Wert zeigen.
+function getSelfUseGrad() {
+  // Falls noch nie gerendert (Seite noch nicht besucht): live berechnen
+  if (_selfUseGrad === null && typeof CV2 !== 'undefined') {
+    const INSTALL = '2026-06-01';
+    const periods = CV2.getMeterPeriods().filter(p => p.to >= INSTALL);
+    if (periods.length > 0) {
+      let totPv = 0, totFeed = 0;
+      let pvD = APP.entries.filter(e => e.date >= INSTALL);
+      const mwa = new Set(pvD.filter(e=>e.type==='month').map(e=>e.date.substring(0,7)));
+      pvD = pvD.filter(e => !(e.type==='day' && mwa.has(e.date.substring(0,7))));
+      totPv = pvD.reduce((s,e)=>s+e.kwh,0);
+      periods.forEach(p => { totFeed += p.feed||0; });
+      const totSelf = Math.max(0, totPv - totFeed);
+      _selfUseGrad = totPv > 0 ? Math.min(100, (totSelf/totPv)*100) : null;
+    }
+  }
+  return _selfUseGrad;
+}
+
 function register() { APP.registerPage('autarkie', { html: HTML, onEnter }); }
-return { register };
+return { register, getSelfUseGrad };
 })();
 
 // ── AMORTISATION ────────────────────────────────────────────
@@ -386,34 +409,17 @@ function calc() {
   const inflation   = parseFloat(document.getElementById('am-inflation')?.value)   || 3;
   const degradation = parseFloat(document.getElementById('am-degradation')?.value) || 0.5;
 
-  // ── Eigenverbrauch IMMER aus Zählermessung — niemals schätzen ──
-  const periods = (typeof CV2 !== 'undefined') ? CV2.getMeterPeriods() : [];
-  const hasMeter = periods.length > 0;
-
-  // Monatsweise aggregieren: self = solar − feed (exakt gemessen)
-  const meterByMonth = {};
-  periods.forEach(p => {
-    const ym = p.from.substring(0,7);
-    if (!meterByMonth[ym]) meterByMonth[ym] = { solar:0, feed:0, self:0, strom:0 };
-    meterByMonth[ym].solar += p.solar||0;
-    meterByMonth[ym].feed  += p.feed||0;
-    meterByMonth[ym].self  += Math.max(0,(p.solar||0)-(p.feed||0)); // Eigenverbr. = PV − Einspeisung
-    meterByMonth[ym].strom += p.strom||0;
-  });
-
-  // selfPct aus Zähler berechnen — KEINE andere Quelle
-  const totSolar = Object.values(meterByMonth).reduce((s,v)=>s+(v.solar||0),0);
-  const totSelf  = Object.values(meterByMonth).reduce((s,v)=>s+(v.self||0),0);
-  const selfPct  = (hasMeter && totSolar > 0)
-    ? Math.min(100, (totSelf / totSolar) * 100)
-    : 0; // 0 = keine Daten, Hochrechnung ergibt 0
+  // ── Eigenverbrauchsgrad direkt aus AU.getSelfUseGrad() — identische Berechnung ──
+  const selfUseGrad = (typeof AU !== 'undefined') ? AU.getSelfUseGrad() : null;
+  const selfPct = selfUseGrad ?? 0;
+  const hasMeter = selfPct > 0;
 
   // Anzeige Eigenverbrauchsanteil-Feld (read-only)
   const spEl = document.getElementById('am-selfpct');
   const hint = document.getElementById('am-selfpct-hint');
   if (spEl) spEl.textContent = selfPct > 0 ? selfPct.toFixed(1)+'%' : '—';
   if (hint) hint.textContent = selfPct > 0
-    ? `aus ${periods.length} Zählerablesungen (${totSolar.toFixed(0)} kWh PV, ${totSelf.toFixed(0)} kWh Eigenverbr.)`
+    ? `aus Autarkie-Analyse (Zählermessung)`
     : 'keine Zählerablesungen — bitte in der Verbrauchsbilanz erfassen';
 
   // Startdatum der Anlage — fix 1.6.2026 (Installationsdatum)
