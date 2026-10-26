@@ -106,7 +106,7 @@ function renderCore(from, to) {
   // Priorität wie APP.getMonthPv() und drawMonthly()/drawOverlay() weiter unten.
   const monthsWithAggregate = new Set(pvD.filter(e => e.type === 'month').map(e => e.date.substring(0,7)));
   pvD = pvD.filter(e => !(e.type === 'day' && monthsWithAggregate.has(e.date.substring(0,7))));
-  let cvD = consumption.filter(c => c.direction==='grid' && (!from||c.date>=from) && (!to||c.date<=to));
+  let cvD = consumption.filter(c => c.direction==='grid' && c.date >= effectiveFrom && (!to||c.date<=to));
 
   const pvTotal  = pvD.reduce((s,e) => s+e.kwh, 0);
   const thTotal  = pvD.reduce((s,e) => s+APP.getTheory(e), 0);
@@ -114,24 +114,17 @@ function renderCore(from, to) {
 
   // Eigenverbrauch aus Zählermessungen (CV2): pvKwh − Einspeisung
   // Nur Perioden die den gewählten Zeitraum überlappen
-  let direct = 0;
+  let direct = 0, feedTotal = 0;
   if (typeof CV2 !== 'undefined') {
     const meterPeriods = CV2.getMeterPeriods();
     meterPeriods.forEach(p => {
-      const pFrom = p.from ? p.from.substring(0,7) : null;
-      const pTo   = p.to   ? p.to.substring(0,7)   : null;
-      const rangeFrom = from ? from.substring(0,7) : null;
-      const rangeTo   = to   ? to.substring(0,7)   : null;
-      // Periode überschneidet Auswahl?
-      const overlaps = (!rangeFrom || !pTo   || pTo   >= rangeFrom) &&
-                       (!rangeTo   || !pFrom || pFrom <= rangeTo);
+      // Periode überschneidet [effectiveFrom, to]? — volles Datum, kein Monatstruncating
+      const overlaps = p.to >= effectiveFrom && (!to || p.from <= to);
       if (overlaps) {
-        const pvKwh = p.pvKwh || 0;
-        const feed  = p.feed  || 0;
-        direct += Math.max(0, pvKwh - feed);
+        feedTotal += p.feed || 0;
       }
     });
-    direct = parseFloat(direct.toFixed(2));
+    direct = parseFloat(Math.max(0, pvTotal - feedTotal).toFixed(2));
   }
 
   const totalC   = gridTotal + direct;
