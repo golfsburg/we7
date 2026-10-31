@@ -7,6 +7,16 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>PV Tracker — Pinggau</title>
+<script>
+  /* Anti-Flash: Theme sofort aus localStorage oder System lesen */
+  (function(){
+    var t=localStorage.getItem('pv_theme');
+    if(t==='light'||t==='dark'){document.documentElement.setAttribute('data-theme',t);}
+    else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme:light)').matches){
+      document.documentElement.setAttribute('data-theme','light');
+    }
+  })();
+</script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -21,6 +31,33 @@
   --rd:#f25c5c; --bl:#5b9cf6; --pu:#a78bfa;
   --fd:'Syne',sans-serif; --fm:'DM Mono',monospace;
   --r:10px; --rl:16px;
+}
+/* ── LIGHT MODE ─────────────────────────────────────────── */
+@media(prefers-color-scheme:light){
+  :root:not([data-theme="dark"]){
+    --bg:#f4f5f7; --bg2:#ffffff; --bg3:#eef0f3; --bg4:#e2e5ea;
+    --b1:rgba(0,0,0,.08); --b2:rgba(0,0,0,.14);
+    --tx:#111314; --tx2:#4a5060; --tx3:#8a9099;
+    --ac:#d4a017; --ac2:#b88010;
+    --gr:#1e9e6b; --gr2:#0e5c3d;
+    --rd:#d94040; --bl:#2d6fd4; --pu:#7c5ce8;
+  }
+}
+:root[data-theme="light"]{
+  --bg:#f4f5f7; --bg2:#ffffff; --bg3:#eef0f3; --bg4:#e2e5ea;
+  --b1:rgba(0,0,0,.08); --b2:rgba(0,0,0,.14);
+  --tx:#111314; --tx2:#4a5060; --tx3:#8a9099;
+  --ac:#d4a017; --ac2:#b88010;
+  --gr:#1e9e6b; --gr2:#0e5c3d;
+  --rd:#d94040; --bl:#2d6fd4; --pu:#7c5ce8;
+}
+:root[data-theme="dark"]{
+  --bg:#08090a; --bg2:#111314; --bg3:#1a1d20; --bg4:#21252a;
+  --b1:rgba(255,255,255,.08); --b2:rgba(255,255,255,.16);
+  --tx:#f5f5f2; --tx2:#a8acb5; --tx3:#6b7080;
+  --ac:#f5c842; --ac2:#e8a020;
+  --gr:#3fcf8e; --gr2:#1a7a52;
+  --rd:#f25c5c; --bl:#5b9cf6; --pu:#a78bfa;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html{font-size:15px}
@@ -277,6 +314,16 @@ tr:last-child td{border-bottom:none} tr:hover td{background:rgba(255,255,255,.02
         <span id="sync-dot"></span>
         <span id="sync-txt">—</span>
       </div>
+      <button id="theme-toggle" onclick="APP.toggleTheme()"
+        style="margin-top:10px;width:100%;display:flex;align-items:center;gap:8px;
+               background:var(--bg3);border:1px solid var(--b1);border-radius:var(--r);
+               padding:7px 12px;cursor:pointer;font-family:var(--fm);font-size:11px;
+               color:var(--tx2);transition:all .15s"
+        onmouseover="this.style.borderColor='var(--b2)';this.style.color='var(--tx)'"
+        onmouseout="this.style.borderColor='var(--b1)';this.style.color='var(--tx2)'">
+        <span id="theme-icon">🌙</span>
+        <span id="theme-label">Dunkelmodus</span>
+      </button>
     </div>
   </nav>
 
@@ -317,9 +364,31 @@ tr:last-child td{border-bottom:none} tr:hover td{background:rgba(255,255,255,.02
 <script src="page-analyse.js?v=1793446286"></script>
 <!-- BOOT -->
 <script>
+  /* ── Theme Toggle ─────────────────────────────────────── */
+  function updateThemeUI() {
+    var current = document.documentElement.getAttribute('data-theme');
+    var isLight = current === 'light';
+    var icon  = document.getElementById('theme-icon');
+    var label = document.getElementById('theme-label');
+    if (icon)  icon.textContent  = isLight ? '☀️' : '🌙';
+    if (label) label.textContent = isLight ? 'Hellmodus' : 'Dunkelmodus';
+  }
+  APP.toggleTheme = function() {
+    var current = document.documentElement.getAttribute('data-theme');
+    // Wenn kein explizites Attribut gesetzt: System-Präferenz ermitteln
+    if (!current) {
+      current = (window.matchMedia && window.matchMedia('(prefers-color-scheme:light)').matches) ? 'light' : 'dark';
+    }
+    var next = current === 'light' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('pv_theme', next);
+    updateThemeUI();
+  };
+
   window.addEventListener('load', () => {
     APP.registerPages();  // injects all page HTML into DOM first
     APP.boot();           // loads storage, connects supabase
+    updateThemeUI();      // Theme-Button-Status setzen
     // Beim Start: Hash aus URL lesen, sonst Dashboard
     const startPage = (location.hash || '').replace('#', '') || 'dashboard';
     APP.nav(startPage);   // navigate AFTER pages exist in DOM
