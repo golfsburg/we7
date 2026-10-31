@@ -469,6 +469,24 @@ function calc() {
   const CHART_END = '2030-12';
   const projMonths= 15 * 12;
 
+  // meterByMonth: Zählerdaten pro Kalendermonat für reale Ersparnis-Berechnung
+  // Aufgebaut aus CV2.getMeterPeriods() — Perioden auf Monatsbasis aufteilen
+  const meterByMonth = {};
+  if (typeof CV2 !== 'undefined') {
+    const INSTALL = '2026-06-01';
+    CV2.getMeterPeriods().filter(p => p.to >= INSTALL).forEach(p => {
+      // Periode [p.from, p.to]: feed und pvKwh pro Periode
+      // Da Perioden oft monatsübergreifend sind: wir ordnen sie dem Endmonat zu
+      const ym = p.to.substring(0, 7);
+      if (!meterByMonth[ym]) meterByMonth[ym] = { self: 0, feed: 0 };
+      const pFeed = p.feed || 0;
+      // pvKwh aus getMeterPeriods() ist der PV-Ertrag dieser Periode
+      const pvKwh = byMonthPv[ym] || 0; // Fallback auf byMonthPv für diesen Monat
+      meterByMonth[ym].feed += pFeed;
+      meterByMonth[ym].self += Math.max(0, pvKwh - pFeed);
+    });
+  }
+
   const real    = [];
   const proj    = [];
   const invest  = [];
