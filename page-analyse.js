@@ -281,23 +281,32 @@ function render() {
 
 // Gibt den zuletzt berechneten Eigenverbrauchsgrad zurück (null = keine Zählerdaten).
 // Wird von AMOR.calc() verwendet, damit beide denselben Wert zeigen.
+// Berechnet immer live aus Zählerdaten — kein dauerhaftes Caching,
+// damit auch ohne Autarkie-Seite korrekte Werte kommen.
 function getSelfUseGrad() {
-  // Falls noch nie gerendert (Seite noch nicht besucht): live berechnen
-  if (_selfUseGrad === null && typeof CV2 !== 'undefined') {
-    const INSTALL = '2026-06-01';
-    const periods = CV2.getMeterPeriods().filter(p => p.to >= INSTALL);
-    if (periods.length > 0) {
-      let totPv = 0, totFeed = 0;
-      let pvD = APP.entries.filter(e => e.date >= INSTALL);
-      const mwa = new Set(pvD.filter(e=>e.type==='month').map(e=>e.date.substring(0,7)));
-      pvD = pvD.filter(e => !(e.type==='day' && mwa.has(e.date.substring(0,7))));
-      totPv = pvD.reduce((s,e)=>s+e.kwh,0);
-      periods.forEach(p => { totFeed += p.feed||0; });
-      const totSelf = Math.max(0, totPv - totFeed);
-      _selfUseGrad = totPv > 0 ? Math.min(100, (totSelf/totPv)*100) : null;
-    }
-  }
-  return _selfUseGrad;
+  // Gecachter Wert aus letztem render() bevorzugen (Autarkie-Seite war aktiv)
+  // Nur verwenden wenn Daten vorhanden — sonst live berechnen.
+  if (_selfUseGrad !== null) return _selfUseGrad;
+
+
+  // Fallback: live berechnen aus CV2-Zählerdaten + APP.entries
+  if (typeof CV2 === 'undefined') return null;
+  const INSTALL = '2026-06-01';
+  const periods = CV2.getMeterPeriods().filter(p => p.to >= INSTALL);
+  if (periods.length === 0) return null;
+
+  let totFeed = 0;
+  periods.forEach(p => { totFeed += p.feed||0; });
+
+  // PV-Ertrag aus pv_entries (Doppelzählung monatl./tägl. vermeiden)
+  let pvD = APP.entries.filter(e => e.date >= INSTALL);
+  const mwa = new Set(pvD.filter(e=>e.type==='month').map(e=>e.date.substring(0,7)));
+  pvD = pvD.filter(e => !(e.type==='day' && mwa.has(e.date.substring(0,7))));
+  const totPv = pvD.reduce((s,e)=>s+e.kwh, 0);
+
+  if (totPv <= 0) return null;
+  const totSelf = Math.max(0, totPv - totFeed);
+  return Math.min(100, (totSelf / totPv) * 100);
 }
 
 function register() { APP.registerPage('autarkie', { html: HTML, onEnter }); }
