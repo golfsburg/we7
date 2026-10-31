@@ -411,6 +411,12 @@ function onEnter() {
   set('am-inflation',   saved.inflation   ?? 3);
   set('am-degradation', saved.degradation ?? 0.5);
   calc();
+  // Wenn CV2-Daten noch nicht geladen: nach kurzer Wartezeit erneut berechnen
+  // (core.js lädt CV2.loadReadings() async — refreshCurrentPage() folgt, aber erst nach Supabase-Round-Trip)
+  if (AU.getSelfUseGrad() === null) {
+    setTimeout(() => { if (document.getElementById('am-selfpct')) calc(); }, 2000);
+    setTimeout(() => { if (document.getElementById('am-selfpct')) calc(); }, 5000);
+  }
 }
 
 function calc() {

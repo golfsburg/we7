@@ -243,6 +243,9 @@ create policy "allow_all" on meter_readings
 
 // ── STATE ─────────────────────────────────────────────────
 let readings = []; // sorted by date ascending
+// readings sofort aus localStorage laden — damit getMeterPeriods() auch ohne loadReadings() funktioniert
+// (z.B. beim ersten Render von Amortisation/Autarkie vor dem Supabase-Load)
+try { const v = localStorage.getItem('cv2_readings'); if (v) readings = JSON.parse(v); } catch(e){}
 let cv2Tombstones = new Set(); // locally-deleted reading IDs — must never resurrect from Supabase
 try { const t = localStorage.getItem('cv2_tombstones'); if (t) cv2Tombstones = new Set(JSON.parse(t)); } catch(e){}
 function saveCv2Tombstones() {
