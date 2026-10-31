@@ -557,7 +557,8 @@ function calc() {
     ? annualKwh * (selfPct/100) * price + annualKwh * (1-selfPct/100) * feedRate
     : annualKwh * feedRate; // ohne Zählerdaten nur Einspeisevergütung
   const roi10    = annualKwh > 0 ? ((annSave * 10 - cost) / cost * 100) : 0;
-  const dataSource = hasMeter ? `${periods.length} Zählerablesungen` : `${monthCount} Monat${monthCount!==1?'e':''} Ertragsdaten`;
+  const meterPeriodCount = Object.keys(meterByMonth).length;
+  const dataSource = hasMeter ? `${meterPeriodCount} Zählerablesungen` : `${monthCount} Monat${monthCount!==1?'e':''} Ertragsdaten`;
 
   set('am-breakeven',  beYears);
   set('am-breakeven2', breakEvenMonth ? `ca. ${startYear + Math.floor(breakEvenMonth)} erreicht` : 'Noch nicht erreicht');
