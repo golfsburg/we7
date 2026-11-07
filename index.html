@@ -353,6 +353,8 @@ tr:last-child td{border-bottom:none} tr:hover td{background:rgba(255,255,255,.02
 
 <div class="toast" id="toast"></div>
 
+<!-- LIZENZ (RIEMER Toolbox – Schlüssel-Abfrage vor dem Start) -->
+<script src="lizenz-gate.js?v=1794020522"></script>
 <!-- CORE MODULE (shared state, supabase, utils) -->
 <script src="core.js?v=1794020522"></script>
 <!-- PAGE MODULES -->
@@ -385,14 +387,14 @@ tr:last-child td{border-bottom:none} tr:hover td{background:rgba(255,255,255,.02
     updateThemeUI();
   };
 
-  window.addEventListener('load', () => {
+  window.addEventListener('load', () => LIZENZ.gate(() => {
     APP.registerPages();  // injects all page HTML into DOM first
     APP.boot();           // loads storage, connects supabase
     updateThemeUI();      // Theme-Button-Status setzen
     // Beim Start: Hash aus URL lesen, sonst Dashboard
     const startPage = (location.hash || '').replace('#', '') || 'dashboard';
     APP.nav(startPage);   // navigate AFTER pages exist in DOM
-  });
+  }));
 </script>
 
 </body>
