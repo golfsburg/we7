@@ -13,6 +13,14 @@ var LIZENZ = (function () {
   "use strict";
 
   var API = "https://hcluxhlvshydnncprpbl.supabase.co/functions/v1/license-check";
+  var TOOLBOX_API = "https://hcluxhlvshydnncprpbl.supabase.co/functions/v1/toolbox";
+  var TOOLBOX_URL = "https://golfsburg.github.io/riemer-toolbox/";
+  function tbLogo(px) {
+    return '<svg width="' + px + '" height="' + px + '" viewBox="0 0 48 48" aria-hidden="true">' +
+      '<rect x="4" y="4" width="18" height="18" rx="5" fill="#C9DAF5"/><rect x="26" y="4" width="18" height="18" rx="5" fill="#8FB0E3"/>' +
+      '<rect x="4" y="26" width="18" height="18" rx="5" fill="#8FB0E3"/><rect x="26" y="26" width="18" height="18" rx="5" fill="#1F5FC2"/>' +
+      '<rect x="31" y="33.5" width="8" height="3" rx="1.5" fill="#FFFFFF"/><rect x="33.5" y="31" width="3" height="8" rx="1.5" fill="#FFFFFF"/></svg>';
+  }
   var TOOL = "pv-tracker";
   var NAME = "PV Tracker";
   var KEY_STORE = "riemer-lizenz:" + TOOL;
@@ -101,6 +109,8 @@ var LIZENZ = (function () {
       "background:rgba(242,92,92,.15);color:var(--rd,#f25c5c);font-size:.9rem}" +
       "#lz-gate .lz-foot{margin-top:1.5rem;font-size:.78rem;color:var(--tx3,#6b7080);text-align:center}" +
       "#lz-gate .lz-foot a{color:inherit}" +
+      "#lz-gate .lz-tb{display:inline-flex;line-height:0;border-radius:10px;margin-bottom:16px}" +
+      "#lz-gate .lz-tb:focus-visible{outline:2px solid var(--ac,#f5c842);outline-offset:2px}" +
       "#lz-gate .lz-wait{color:var(--tx3,#6b7080)}";
     document.head.appendChild(s);
   }
@@ -118,6 +128,7 @@ var LIZENZ = (function () {
   function renderForm(msg, typed, typedEmail) {
     show(
       '<form class="lz-card" id="lz-f" method="post" action="#">' +
+      '<a class="lz-tb" href="' + TOOLBOX_URL + '" title="RIEMER Toolbox – alle Tools" aria-label="Zur RIEMER Toolbox">' + tbLogo(44) + '</a>' +
       "<h1>🔒 " + NAME + "</h1>" +
       '<p class="lz-sub">Für dieses Tool ist eine gültige Lizenz erforderlich.</p>' +
       '<label for="lz-em">E-Mail-Adresse</label>' +
@@ -170,7 +181,7 @@ var LIZENZ = (function () {
           var fn = onUnlock; onUnlock = null;
           // App-Start außerhalb der Promise-Kette: Fehler der App sollen nicht
           // als Verbindungsfehler der Lizenzprüfung erscheinen.
-          if (fn) setTimeout(function () { fn(res); }, 0);
+          if (fn) setTimeout(function () { mountLogout(); fn(res); }, 0);
         } else {
           var code = (res && res.error) || "server_error";
           if (["invalid_key", "revoked", "expired", "tool_not_licensed"].indexOf(code) >= 0) store(KEY_STORE, null);
@@ -197,9 +208,53 @@ var LIZENZ = (function () {
     }
   }
 
+  /* Abmelden: Schlüssel entfernen, Geräteplatz freigeben, Abfrage wieder zeigen */
   function logout() {
-    store(KEY_STORE, null);
-    location.reload();
+    var email = store(EMAIL_STORE) || "";
+    if (!window.confirm("Abmelden" + (email ? " (" + email + ")" : "") + "?\n\nDer Lizenzschlüssel wird aus diesem Browser entfernt und der Geräteplatz freigegeben.")) return;
+    var key = store(KEY_STORE), finished = false;
+    var done = function () {
+      if (finished) return; finished = true;
+      store(KEY_STORE, null);
+      location.reload();
+    };
+    try {
+      fetch(TOOLBOX_API, { method: "POST", headers: { "Content-Type": "application/json" }, keepalive: true,
+        body: JSON.stringify({ action: "logout", key: key, email: email, device: deviceId(), tool: TOOL }) }).then(done, done);
+    } catch (e) { done(); }
+    setTimeout(done, 2500);
+  }
+
+  function mountLogout() {
+    if (document.getElementById("lz-logout")) return;
+    var email = store(EMAIL_STORE) || "";
+    var b = document.createElement("button");
+    b.type = "button"; b.id = "lz-logout"; b.onclick = logout;
+    b.title = "Abmelden" + (email ? " – angemeldet als " + email : "");
+    b.setAttribute("aria-label", "Abmelden");
+    b.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg><span>Abmelden</span>';
+    var st = document.createElement("style");
+    st.textContent =
+      "#lz-logout{display:flex;align-items:center;gap:8px;width:100%;margin-top:10px;padding:9px 12px;border-radius:var(--r,10px);" +
+      "border:1px solid var(--b1,rgba(255,255,255,.08));background:transparent;color:var(--tx2,#a8acb5);" +
+      "font:600 13px var(--fd,system-ui,sans-serif);cursor:pointer;text-align:left}" +
+      "#lz-logout:hover{color:var(--tx,#f5f5f2);border-color:var(--b2,rgba(255,255,255,.16))}" +
+      "#lz-logout:focus-visible{outline:2px solid var(--ac,#f5c842);outline-offset:2px}" +
+      "#lz-logout svg{width:16px;height:16px;flex:none}" +
+      "#lz-logout.lz-float{position:fixed;left:14px;bottom:14px;width:auto;z-index:9999;background:var(--bg2,#111314)}";
+    document.head.appendChild(st);
+    var tb = document.createElement("a");
+    tb.id = "lz-toolbox"; tb.href = TOOLBOX_URL; tb.title = "RIEMER Toolbox – alle Tools";
+    tb.innerHTML = tbLogo(22) + "<span>RIEMER Toolbox</span>";
+    st.textContent +=
+      "#lz-toolbox{display:flex;align-items:center;gap:8px;margin-top:14px;padding:7px 12px;border-radius:var(--r,10px);" +
+      "color:var(--tx2,#a8acb5);font:600 13px var(--fd,system-ui,sans-serif);text-decoration:none}" +
+      "#lz-toolbox:hover{color:var(--tx,#f5f5f2);background:var(--bg3,rgba(255,255,255,.05))}" +
+      "#lz-toolbox:focus-visible{outline:2px solid var(--ac,#f5c842);outline-offset:2px}" +
+      "#lz-toolbox svg{flex:none}#lz-toolbox+#lz-logout{margin-top:6px}";
+    var slot = document.querySelector(".sidebar .sb-bottom") || document.querySelector(".sidebar");
+    if (slot) { slot.appendChild(tb); slot.appendChild(b); }
+    else { b.className = "lz-float"; document.body.appendChild(b); }
   }
 
   return { gate: gate, logout: logout };
