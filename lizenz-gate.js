@@ -127,7 +127,7 @@ var LIZENZ = (function () {
       '<button class="lz-eye" id="lz-eye" type="button" aria-label="Lizenzschlüssel anzeigen" aria-pressed="false" title="Anzeigen">' + EYE + '</button></div>' +
       '<button id="lz-b" type="submit">Freischalten</button>' +
       (msg ? '<div class="lz-err">' + msg + "</div>" : "") +
-      '<div class="lz-foot">Lizenz anfragen: <a href="https://riemer.co">riemer.co</a> · ' +
+      '<div class="lz-foot">Lizenz anfragen: <a href="mailto:toolbox@riemer.co">toolbox@riemer.co</a> · ' +
       '<a href="https://golfsburg.github.io/riemer-toolbox/">RIEMER Toolbox</a></div></form>'
     );
     var input = document.getElementById("lz-k");
