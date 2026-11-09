@@ -16,10 +16,13 @@ var LIZENZ = (function () {
   var TOOL = "pv-tracker";
   var NAME = "PV Tracker";
   var KEY_STORE = "riemer-lizenz:" + TOOL;
+  var EMAIL_STORE = "riemer-email";
   var DEVICE_STORE = "riemer-geraet";
 
   var MESSAGES = {
     invalid_key: "Dieser Lizenzschlüssel ist ungültig.",
+    invalid_login: "Lizenzschlüssel und E-Mail-Adresse passen nicht zusammen.",
+    email_required: "Bitte gib die E-Mail-Adresse ein, auf die diese Lizenz ausgestellt ist.",
     revoked: "Diese Lizenz wurde deaktiviert.",
     expired: "Diese Lizenz ist abgelaufen.",
     tool_not_licensed: "Diese Lizenz gilt nicht für den " + NAME + ".",
@@ -56,10 +59,10 @@ var LIZENZ = (function () {
   }
 
   /* Passwortmanager (Chrome/Edge): Speichern anbieten */
-  function offerSave(key) {
+  function offerSave(email, key) {
     try {
       if (window.PasswordCredential && navigator.credentials && navigator.credentials.store) {
-        var c = new PasswordCredential({ id: "RIEMER Tools Lizenz", password: key, name: "RIEMER Tools – " + NAME });
+        var c = new PasswordCredential({ id: email, password: key, name: "RIEMER Tools – " + NAME });
         return Promise.race([navigator.credentials.store(c).catch(function () {}), new Promise(function (r) { setTimeout(r, 1500); })]);
       }
     } catch (e) {}
@@ -84,6 +87,7 @@ var LIZENZ = (function () {
       "#lz-gate input{width:100%;box-sizing:border-box;padding:.75rem .9rem;font:500 1.05rem var(--fm,ui-monospace,monospace);" +
       "letter-spacing:.06em;text-transform:uppercase;border:1px solid var(--b2,rgba(255,255,255,.16));" +
       "border-radius:var(--r,10px);background:var(--bg3,#1a1d20);color:inherit}" +
+      "#lz-gate #lz-em{text-transform:none;letter-spacing:0;font:400 1rem var(--fd,system-ui,sans-serif)}" +
       "#lz-gate input:focus{outline:2px solid var(--ac,#f5c842);outline-offset:1px}" +
       "#lz-gate .lz-field{position:relative}#lz-gate .lz-field input{padding-right:52px}" +
       "#lz-gate .lz-eye{position:absolute;top:50%;right:6px;transform:translateY(-50%);margin:0;width:40px;height:40px;padding:0;" +
@@ -111,22 +115,25 @@ var LIZENZ = (function () {
     overlay.innerHTML = html;
   }
 
-  function renderForm(msg, typed) {
+  function renderForm(msg, typed, typedEmail) {
     show(
       '<form class="lz-card" id="lz-f" method="post" action="#">' +
       "<h1>🔒 " + NAME + "</h1>" +
       '<p class="lz-sub">Für dieses Tool ist eine gültige Lizenz erforderlich.</p>' +
-      '<input class="lz-vh" type="text" name="username" autocomplete="username" value="RIEMER Tools Lizenz" readonly tabindex="-1" aria-hidden="true">' +
-      '<label for="lz-k">Lizenzschlüssel</label>' +
+      '<label for="lz-em">E-Mail-Adresse</label>' +
+      '<input id="lz-em" type="email" name="email" autocomplete="username" placeholder="name@firma.at" spellcheck="false" autocapitalize="off" required>' +
+      '<label for="lz-k" style="margin-top:14px">Lizenzschlüssel</label>' +
       '<div class="lz-field"><input id="lz-k" type="password" name="password" autocomplete="current-password" placeholder="RITL-XXXX-XXXX-XXXX-XXXX" spellcheck="false" autocapitalize="characters" required>' +
       '<button class="lz-eye" id="lz-eye" type="button" aria-label="Lizenzschlüssel anzeigen" aria-pressed="false" title="Anzeigen">' + EYE + '</button></div>' +
       '<button id="lz-b" type="submit">Freischalten</button>' +
       (msg ? '<div class="lz-err">' + msg + "</div>" : "") +
       '<div class="lz-foot">Lizenz anfragen: <a href="https://riemer.co">riemer.co</a> · ' +
-      '<a href="https://tools.riemer.co/">RIEMER Toolbox</a></div></form>'
+      '<a href="https://golfsburg.github.io/riemer-toolbox/">RIEMER Toolbox</a></div></form>'
     );
     var input = document.getElementById("lz-k");
+    var em = document.getElementById("lz-em");
     input.value = formatKey(typed || "");
+    em.value = typedEmail || store(EMAIL_STORE) || "";
     input.addEventListener("input", function () { input.value = formatKey(input.value); });
     var eye = document.getElementById("lz-eye");
     eye.addEventListener("click", function () {
@@ -140,24 +147,25 @@ var LIZENZ = (function () {
     });
     document.getElementById("lz-f").addEventListener("submit", function (e) {
       e.preventDefault();
-      check(formatKey(input.value), true);
+      check(formatKey(input.value), em.value.trim(), true);
     });
-    input.focus();
+    (em.value ? input : em).focus();
   }
 
-  function check(key, fromForm) {
+  function check(key, email, fromForm) {
     var btn = document.getElementById("lz-b");
     if (btn) { btn.disabled = true; btn.textContent = "Prüfe Lizenz …"; }
     fetch(API, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key: key, tool: TOOL, device: deviceId() })
+      body: JSON.stringify({ key: key, tool: TOOL, device: deviceId(), email: email || null })
     })
       .then(function (r) { return r.json(); })
       .then(function (res) {
         if (res && res.ok) {
           store(KEY_STORE, key);
-          if (fromForm) offerSave(key);
+          if (email) store(EMAIL_STORE, email);
+          if (fromForm && email) offerSave(email, key);
           if (overlay) { overlay.remove(); overlay = null; }
           var fn = onUnlock; onUnlock = null;
           // App-Start außerhalb der Promise-Kette: Fehler der App sollen nicht
@@ -165,11 +173,12 @@ var LIZENZ = (function () {
           if (fn) setTimeout(function () { fn(res); }, 0);
         } else {
           var code = (res && res.error) || "server_error";
-          if (code !== "device_limit" && code !== "server_error") store(KEY_STORE, null);
-          renderForm(MESSAGES[code] || MESSAGES.server_error, fromForm ? key : "");
+          if (["invalid_key", "revoked", "expired", "tool_not_licensed"].indexOf(code) >= 0) store(KEY_STORE, null);
+          var keep = fromForm || code === "email_required" || code === "invalid_login" || code === "device_limit";
+          renderForm(MESSAGES[code] || MESSAGES.server_error, keep ? key : "", email);
         }
       })
-      .catch(function () { renderForm(MESSAGES.network, key); });
+      .catch(function () { renderForm(MESSAGES.network, key, email); });
   }
 
   function gate(callback) {
@@ -182,7 +191,7 @@ var LIZENZ = (function () {
     if (saved && formatKey(saved) !== saved) { saved = formatKey(saved); store(KEY_STORE, saved); }
     if (saved) {
       show('<div class="lz-wait">Lizenz wird geprüft …</div>');
-      check(saved, false);
+      check(saved, store(EMAIL_STORE), false);
     } else {
       renderForm("", "");
     }
