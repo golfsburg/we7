@@ -106,7 +106,7 @@ function renderCore(from, to) {
   const pvTotal  = pvD.reduce((s,e) => s+e.kwh, 0);
   const thTotal  = pvD.reduce((s,e) => s+APP.getTheory(e), 0);
   const gridTotal= cvD.reduce((s,c) => s+c.kwh, 0);
-  const direct   = APP.calcDirect(pvTotal, gridTotal);
+  const direct   = APP.calcDirect(pvTotal, APP.getFeedKwh(from, to));
   const totalC   = gridTotal + direct;
   const autarky  = totalC > 0 ? Math.round(direct/totalC*100) : 0;
   const selfUse  = pvTotal > 0 ? Math.round(direct/pvTotal*100) : 0;
@@ -199,10 +199,13 @@ function drawOverlay(from, to, gran='month') {
   const entries = APP.entries, consumption = APP.consumption;
 
   // Filter by date range
-  const pvFiltered = entries.filter(e => (!from||e.date>=from)&&(!to||e.date<=to));
-  const cvFiltered = consumption.filter(c => c.direction==='grid'&&(!from||c.date>=from)&&(!to||c.date<=to));
+  const pvFiltered   = entries.filter(e => (!from||e.date>=from)&&(!to||e.date<=to));
+  const cvFiltered   = consumption.filter(c => c.direction==='grid'&&(!from||c.date>=from)&&(!to||c.date<=to));
+  const feedFiltered = consumption.filter(c => c.direction==='feed'&&(!from||c.date>=from)&&(!to||c.date<=to));
+  // null = keine Einspeisemessung für diesen Bucket → calcDirect() nutzt die %-Schätzung
+  const sumFeed = rows => rows.length ? +rows.reduce((s,c)=>s+c.kwh,0).toFixed(2) : null;
 
-  let labels=[], pvArr=[], gridArr=[], thArr=[];
+  let labels=[], pvArr=[], gridArr=[], feedArr=[], thArr=[];
 
   if (gran === '15min') {
     // 15-minute smart meter values — only CV data
@@ -210,6 +213,7 @@ function drawOverlay(from, to, gran='month') {
     labels   = sorted.map(c=>`${c.date} ${String(c.hour).padStart(2,'0')}:${String(c.minute).padStart(2,'0')}`);
     gridArr  = sorted.map(c=>+c.kwh.toFixed(4));
     pvArr    = sorted.map(()=>0);
+    feedArr  = sorted.map(()=>null);
     thArr    = [];
   } else if (gran === 'day') {
     // Daily values
@@ -223,6 +227,7 @@ function drawOverlay(from, to, gran='month') {
     });
     pvArr    = allDays.map(d => +pvFiltered.filter(e=>e.date===d).reduce((s,e)=>s+e.kwh,0).toFixed(2));
     gridArr  = allDays.map(d => +cvFiltered.filter(c=>c.date===d).reduce((s,c)=>s+c.kwh,0).toFixed(2));
+    feedArr  = allDays.map(d => sumFeed(feedFiltered.filter(c=>c.date===d)));
     thArr    = allDays.map(d => +(APP.theory[new Date(d+'T00:00:00').getMonth()] / 30).toFixed(2));
   } else if (gran === 'month') {
     // Monthly values (default)
@@ -237,6 +242,7 @@ function drawOverlay(from, to, gran='month') {
       return +pvFiltered.filter(e=>e.date.startsWith(m)).reduce((s,e)=>s+e.kwh,0).toFixed(2);
     });
     gridArr  = allM.map(m=>+cvFiltered.filter(c=>c.date.startsWith(m)).reduce((s,c)=>s+c.kwh,0).toFixed(2));
+    feedArr  = allM.map(m=>sumFeed(feedFiltered.filter(c=>c.date.startsWith(m))));
     thArr    = allM.map(m=>APP.theory[new Date(m+'-01').getMonth()]||0);
   } else if (gran === 'year') {
     // Yearly values
@@ -247,12 +253,13 @@ function drawOverlay(from, to, gran='month') {
     labels   = allY;
     pvArr    = allY.map(y=>+pvFiltered.filter(e=>e.date.startsWith(y)).reduce((s,e)=>s+e.kwh,0).toFixed(1));
     gridArr  = allY.map(y=>+cvFiltered.filter(c=>c.date.startsWith(y)).reduce((s,c)=>s+c.kwh,0).toFixed(1));
+    feedArr  = allY.map(y=>sumFeed(feedFiltered.filter(c=>c.date.startsWith(y))));
     thArr    = allY.map(y=>+APP.theory.reduce((s,v)=>s+v,0).toFixed(0));
   }
 
   if (!labels.length) return;
 
-  const directArr = pvArr.map((_,i) => +APP.calcDirect(pvArr[i], gridArr[i]).toFixed(2));
+  const directArr = pvArr.map((_,i) => +APP.calcDirect(pvArr[i], feedArr[i]).toFixed(2));
   const datasets = [
     { type:'bar',  label:'PV Ertrag',  data:pvArr,    backgroundColor:'rgba(245,200,66,.8)',  borderRadius:2, order:2 },
     { type:'bar',  label:'Netzbezug',  data:gridArr,  backgroundColor:'rgba(91,156,246,.65)', borderRadius:2, order:3 },
@@ -287,7 +294,9 @@ function drawAutarkyLine() {
   const data = months.map(m => {
     const pv   = APP.entries.filter(e=>e.date.startsWith(m)).reduce((s,e)=>s+e.kwh,0);
     const grid = APP.consumption.filter(c=>c.date.startsWith(m)&&c.direction==='grid').reduce((s,c)=>s+c.kwh,0);
-    const d = APP.calcDirect(pv, grid), tot = grid + d;
+    const feedRows = APP.consumption.filter(c=>c.date.startsWith(m)&&c.direction==='feed');
+    const feed = feedRows.length ? feedRows.reduce((s,c)=>s+c.kwh,0) : null;
+    const d = APP.calcDirect(pv, feed), tot = grid + d;
     return tot > 0 ? Math.round(d/tot*100) : 0;
   });
   APP.charts['db-au-line'] = new Chart(document.getElementById('db-autarky-chart'), {
@@ -325,7 +334,11 @@ function drawMonthly() {
   const labels   = months.map(m => APP.MONTHS[new Date(m+'-01').getMonth()] + ' ' + m.substring(2,4));
   const pvArr    = months.map(m => +APP.entries.filter(e=>e.date.startsWith(m)).reduce((s,e)=>s+e.kwh,0).toFixed(2));
   const gridArr  = months.map(m => +APP.consumption.filter(c=>c.date.startsWith(m)&&c.direction==='grid').reduce((s,c)=>s+c.kwh,0).toFixed(2));
-  const directArr= months.map((_,i) => +APP.calcDirect(pvArr[i],gridArr[i]).toFixed(2));
+  const feedArr  = months.map(m => {
+    const rows = APP.consumption.filter(c=>c.date.startsWith(m)&&c.direction==='feed');
+    return rows.length ? +rows.reduce((s,c)=>s+c.kwh,0).toFixed(2) : null;
+  });
+  const directArr= months.map((_,i) => +APP.calcDirect(pvArr[i],feedArr[i]).toFixed(2));
   const thArr    = months.map(m => APP.theory[new Date(m+'-01').getMonth()] || 0);
 
   APP.charts['db-mon'] = new Chart(document.getElementById('db-monthly'), {

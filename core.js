@@ -110,13 +110,31 @@ function calcEuro(e) {
   return parseFloat(((s * cfg.price) + (f * cfg.feedRate)).toFixed(2));
 }
 // Direct PV use: portion of PV consumed on-site.
-// This is a pure percentage estimate (cfg.selfPct of PV yield) — there is no
-// independent measurement of actual self-consumption to validate it against,
-// so it is NOT capped/derived from gridKwh (a previous Math.min(assumed,
-// gridKwh+assumed) here was always a no-op, since gridKwh is never negative).
-function calcDirect(pvKwh, gridKwh) {
-  const assumed = pvKwh * (cfg.selfPct / 100);
-  return parseFloat(assumed.toFixed(2));
+// Liegt eine gemessene Netzeinspeisung vor (Smart-Meter, consumption_15min
+// mit direction:'feed'), wird der Eigenverbrauch EXAKT daraus abgeleitet:
+// Direktverbrauch = PV-Ertrag − Einspeisung. Nur wenn für den Zeitraum keine
+// Einspeisemessung existiert (feedKwh === null), wird auf die reine
+// %-Schätzung (cfg.selfPct) zurückgefallen — die dann bewusst nicht weiter
+// "gecappt" wird, da es ohne Einspeisemessung keine unabhängige Messgröße
+// gibt, an der man sie validieren könnte.
+function calcDirect(pvKwh, feedKwh = null) {
+  if (feedKwh != null) {
+    return parseFloat(Math.max(0, Math.min(pvKwh, pvKwh - feedKwh)).toFixed(2));
+  }
+  return parseFloat((pvKwh * (cfg.selfPct / 100)).toFixed(2));
+}
+// Gemessene Netzeinspeisung für einen Zeitraum (consumption_15min,
+// direction:'feed'). from/to weglassen = gesamter Datenbestand.
+// Rückgabe null (nicht 0!) wenn für den Zeitraum keine Einspeisezeilen
+// vorhanden sind — das unterscheidet "0 kWh gemessen" von "gar nicht gemessen"
+// und steuert damit den Fallback in calcDirect().
+function getFeedKwh(from, to) {
+  const rows = consumption.filter(c =>
+    c.direction === 'feed' &&
+    (!from || String(c.date).substring(0,10) >= from) &&
+    (!to   || String(c.date).substring(0,10) <= to)
+  );
+  return rows.length ? rows.reduce((s,c) => s + parseFloat(c.kwh), 0) : null;
 }
 function getDayGrid(date) {
   return consumption
@@ -177,7 +195,7 @@ function copyCode(id) {
 function updateSidebar() {
   const pvT  = entries.reduce((s,e)=>s+e.kwh, 0);
   const cvT  = consumption.filter(c=>c.direction==='grid').reduce((s,c)=>s+c.kwh, 0);
-  const dir  = calcDirect(pvT, cvT);
+  const dir  = calcDirect(pvT, getFeedKwh());
   const tot  = cvT + dir;
   const au   = tot > 0 ? Math.round(dir/tot*100) : 0;
   const setV = (id, v, u) => {
@@ -925,7 +943,7 @@ return {
   Timeline: FilterBar, // backwards compat alias
   // utils
   esc, genId, getWeekNum, getTheory, calcEuro, calcDirect,
-  getDayGrid, getMonthGrid, getDayPv, getMonthPv,
+  getDayGrid, getMonthGrid, getFeedKwh, getDayPv, getMonthPv,
   computeTheory, dailyTheory, weeklyTheory,
   destroyChart, toast, copyCode, updateSidebar,
   savePv, saveCv, syncConsumption, scheduleSync,
