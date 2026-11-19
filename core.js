@@ -104,9 +104,35 @@ function getTheory(e) {
 }
 
 // ── CALCULATIONS ─────────────────────────────────────────
+// Datumsspanne eines pv_entries-Eintrags (Tag/Woche/Monat) als [from, to].
+function periodRange(e) {
+  if (e.type === 'week') {
+    const d = new Date(e.date); d.setDate(d.getDate() + 6);
+    return [e.date, d.toISOString().split('T')[0]];
+  }
+  if (e.type === 'month') {
+    const ym = e.date.substring(0,7);
+    const [y, m] = ym.split('-').map(Number);
+    const last = new Date(y, m, 0).getDate();
+    return [ym+'-01', ym+'-'+String(last).padStart(2,'0')];
+  }
+  return [e.date, e.date]; // day
+}
+// Ersparnis für einen PV-Eintrag. Priorität pro Feld: 1) explizit am Eintrag
+// gepflegter Wert (self_kwh/feed_kwh) 2) gemessene Einspeisung für den
+// Zeitraum des Eintrags (getFeedKwh — wie calcDirect) 3) %-Schätzung
+// (cfg.selfPct). Sind self und feed beide explizit gesetzt, bleibt alles wie
+// bisher unverändert.
 function calcEuro(e) {
-  const s = e.self  != null ? e.self  : e.kwh * (cfg.selfPct/100);
-  const f = e.feed  != null ? e.feed  : Math.max(0, e.kwh - s);
+  const [from, to] = periodRange(e);
+  const measuredFeed = e.feed == null ? getFeedKwh(from, to) : null;
+
+  let f = e.feed != null ? e.feed : measuredFeed;
+  let s = e.self != null ? e.self
+        : f != null       ? Math.max(0, e.kwh - f)
+        :                   e.kwh * (cfg.selfPct / 100);
+  if (f == null) f = Math.max(0, e.kwh - s);
+
   return parseFloat(((s * cfg.price) + (f * cfg.feedRate)).toFixed(2));
 }
 // Direct PV use: portion of PV consumed on-site.
