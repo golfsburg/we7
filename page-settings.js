@@ -51,7 +51,7 @@ const HTML = `
 <div class="fcard" style="border-color:rgba(91,156,246,.2)">
   <div class="fcard-t" style="font-size:13px;color:var(--tx2)">🔑 App-Info</div>
   <div style="font-size:12px;color:var(--tx2);line-height:2">
-    Version: <strong style="color:var(--tx)">v4.0</strong><br>
+    Version: <strong style="color:var(--tx)">v4.8 · 20.11.2026</strong><br>
     Wechselrichter: <strong style="color:var(--tx)" id="s-inv-display">—</strong><br>
     Supabase: <strong style="color:var(--gr)">✓ Verbunden (automatisch)</strong><br>
     Passwort: <strong style="color:var(--tx)">We7-Tracker-P!nggau</strong>

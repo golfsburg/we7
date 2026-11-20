@@ -104,17 +104,6 @@ function getTheory(e) {
 }
 
 // ── CALCULATIONS ─────────────────────────────────────────
-function calcEuro(e) {
-  const s = e.self  != null ? e.self  : 0; // kein selfPct-Schätzwert
-  const f = e.feed  != null ? e.feed  : Math.max(0, e.kwh - s);
-  return parseFloat(((s * cfg.price) + (f * cfg.feedRate)).toFixed(2));
-}
-// Eigenverbrauch: gemessener Wert aus Zählermessung (meterSelf) wird übergeben.
-// Kein selfPct-Schätzwert mehr — bei fehlendem Messwert wird 0 zurückgegeben.
-function calcDirect(pvKwh, gridKwh, meterSelf) {
-  if (meterSelf != null) return parseFloat(meterSelf.toFixed(2));
-  return 0;
-}
 function getDayGrid(date) {
   return consumption
     .filter(c => String(c.date).substring(0,10) === date && c.direction==='grid')
@@ -976,7 +965,7 @@ return {
   FilterBar,
   Timeline: FilterBar, // backwards compat alias
   // utils
-  esc, genId, getWeekNum, getTheory, calcEuro, calcDirect,
+  esc, genId, getWeekNum, getTheory,
   getDayGrid, getMonthGrid, getDayPv, getMonthPv,
   computeTheory, dailyTheory, weeklyTheory,
   destroyChart, toast, copyCode, updateSidebar,
